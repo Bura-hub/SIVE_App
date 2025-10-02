@@ -705,8 +705,12 @@ class ProfileImageView(APIView):
                         print(f"Error obteniendo dimensiones: {dim_error}")
                         width, height = None, None
                 
+                # Construir URL correcta para archivos media
+                base_url = f"{request.scheme}://{request.get_host()}"
+                media_url = f"{base_url}/media/{profile.avatar.name}"
+                
                 response_data = {
-                    'profile_image_url': request.build_absolute_uri(profile.avatar.url),
+                    'profile_image_url': media_url,
                     'profile_image_name': profile.avatar.name,
                     'uploaded_at': profile.updated_at,
                     'file_size': profile.avatar.size,
@@ -718,8 +722,10 @@ class ProfileImageView(APIView):
             except Exception as response_error:
                 print(f"Error construyendo respuesta: {response_error}")
                 # Respuesta básica si hay error obteniendo dimensiones
+                base_url = f"{request.scheme}://{request.get_host()}"
+                media_url = f"{base_url}/media/{profile.avatar.name}"
                 response_data = {
-                    'profile_image_url': request.build_absolute_uri(profile.avatar.url),
+                    'profile_image_url': media_url,
                     'profile_image_name': profile.avatar.name,
                     'uploaded_at': profile.updated_at,
                     'file_size': profile.avatar.size,

@@ -74,6 +74,22 @@ urlpatterns = [
     path('api/external-energy/', include('external_energy.urls')),
 ]
 
-# Configuración para archivos media en desarrollo
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Configuración para archivos media (habilitado para producción)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Vista específica para servir archivos media en producción
+from django.http import FileResponse, Http404
+from django.views import View
+import os
+
+class MediaFileView(View):
+    def get(self, request, path):
+        file_path = os.path.join(settings.MEDIA_ROOT, path)
+        if os.path.exists(file_path):
+            return FileResponse(open(file_path, 'rb'))
+        raise Http404("File not found")
+
+# Agregar ruta para servir archivos media
+urlpatterns += [
+    path('media/<path:path>', MediaFileView.as_view(), name='media_file'),
+]

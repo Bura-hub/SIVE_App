@@ -29,3 +29,6 @@ celerybeat.pid
 .cursor
 celery.log
 reports/
+
+# Backups
+backups/
