@@ -161,26 +161,16 @@ Sistema de alertas para eventos importantes del mercado.
 
 ## Servicios
 
-### OpenWeatherEnergyService
-- Obtiene datos climáticos de OpenWeatherMap
-- Datos de radiación solar y cobertura de nubes
-- Fallback a datos simulados si no hay API key
-- Manejo de errores y reintentos
+### XMRealAPIService
+- Obtiene datos reales de la API de XM (Sistema Interconectado Nacional)
+- Datos de precios de energía, generación, demanda y emisiones
+- Integración con la librería pydataxm
+- Fallback a datos simulados si no está disponible la API
 
-### ElectricityMapsService
-- Obtiene datos de energía desde Electricity Maps
-- Fallback a datos simulados si no hay API key
-- Datos del mercado energético
-
-### EnergyCalculationService
-- Calcula ahorros y métricas de eficiencia
-- Integra con modelos existentes del sistema
-- Procesa datos históricos
-
-### PriceForecastService
-- Genera pronósticos de precios
-- Utiliza datos históricos y tendencias
-- Configurable para diferentes algoritmos
+### XMEnergyService
+- Servicio principal que encapsula XMRealAPIService
+- Proporciona métodos para obtener todos los tipos de datos de XM
+- Manejo de errores y sincronización de datos
 
 ## Comandos de Gestión
 
@@ -211,8 +201,9 @@ Para desarrollo, la aplicación puede usar datos simulados que incluyen:
 - **Variaciones diarias de precios** (±5%)
 - **Patrones semanales** (precios más altos en días laborales)
 - **Patrones estacionales** (verano/invierno en Colombia)
-- **Datos solares realistas** basados en ubicación geográfica
-- **Fluctuaciones del mercado** realistas
+- **Datos de generación** realistas del mercado colombiano
+- **Datos de demanda** típicos del SIN
+- **Factores de emisión** promedio del sistema eléctrico
 
 ### Logging
 ```python

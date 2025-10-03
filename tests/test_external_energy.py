@@ -21,9 +21,7 @@ from external_energy.models import (
     EnergyAlert
 )
 from external_energy.services import (
-    OpenWeatherEnergyService, 
-    ElectricityMapsService, 
-    EnergyCalculationService
+    XMEnergyService
 )
 
 
@@ -100,36 +98,27 @@ def test_services():
     print("\n🔌 Probando servicios...")
     
     try:
-        # Probar servicio OpenWeather
-        weather_service = OpenWeatherEnergyService()
-        print(f"  ✅ Servicio OpenWeather creado: {weather_service}")
+        # Probar servicio XM
+        xm_service = XMEnergyService()
+        print(f"  ✅ Servicio XM creado: {xm_service}")
         
-        # Probar servicio ElectricityMaps
-        electricity_service = ElectricityMapsService()
-        print(f"  ✅ Servicio ElectricityMaps creado: {electricity_service}")
-        
-        # Probar servicio de cálculos
-        calc_service = EnergyCalculationService()
-        print(f"  ✅ Servicio de cálculos creado: {calc_service}")
-        
-        # Probar obtención de datos solares simulados
+        # Probar obtención de precios desde XM
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=7)
-        solar_data = weather_service.fetch_solar_data(start_date, end_date)
-        print(f"  ✅ Datos solares simulados obtenidos: {len(solar_data)} registros")
+        prices = xm_service.fetch_energy_prices(start_date, end_date)
+        print(f"  ✅ Precios XM obtenidos: {len(prices)} registros")
         
-        # Mostrar ejemplo de datos solares
-        if solar_data:
-            sample = solar_data[0]
-            print(f"     - Ejemplo: {sample['date']} - Radiación: {sample['solar_radiation']} W/m²")
+        # Probar datos de generación
+        generation_data = xm_service.fetch_generation_data(start_date, end_date)
+        print(f"  ✅ Datos de generación obtenidos: {len(generation_data)} registros")
         
-        # Probar obtención de precios simulados
-        prices = electricity_service.fetch_energy_prices(start_date, end_date)
-        print(f"  ✅ Precios simulados obtenidos: {len(prices)} registros")
+        # Probar datos de demanda
+        demand_data = xm_service.fetch_demand_data(start_date, end_date)
+        print(f"  ✅ Datos de demanda obtenidos: {len(demand_data)} registros")
         
-        # Probar datos del mercado simulados
-        market_data = electricity_service.fetch_market_data(end_date)
-        print(f"  ✅ Datos del mercado simulados: {market_data}")
+        # Probar datos de emisiones
+        emissions_data = xm_service.fetch_emissions_data(start_date, end_date)
+        print(f"  ✅ Datos de emisiones obtenidos: {len(emissions_data)} registros")
         
         print("  🎉 Todos los servicios funcionan correctamente")
         
@@ -186,49 +175,47 @@ def test_api_endpoints():
     return True
 
 
-def test_solar_data_generation():
-    """Prueba la generación de datos solares simulados"""
-    print("\n☀️ Probando generación de datos solares...")
+def test_xm_data_generation():
+    """Prueba la generación de datos desde XM"""
+    print("\n⚡ Probando datos de XM...")
     
     try:
-        from external_energy.services import OpenWeatherEnergyService
+        xm_service = XMEnergyService()
         
-        weather_service = OpenWeatherEnergyService()
-        
-        # Probar diferentes ubicaciones
-        locations = [
-            ('Bogota', 4.7110, -74.0721),
-            ('Medellin', 6.2442, -75.5812),
-            ('Cali', 3.4516, -76.5320)
+        # Probar diferentes períodos
+        periods = [
+            ('Última semana', 7),
+            ('Último mes', 30),
+            ('Últimos 3 meses', 90)
         ]
         
-        for location_name, lat, lon in locations:
-            print(f"  📍 Probando {location_name}...")
+        for period_name, days in periods:
+            print(f"  📅 Probando {period_name}...")
             
             end_date = datetime.now().date()
-            start_date = end_date - timedelta(days=3)
+            start_date = end_date - timedelta(days=days)
             
-            solar_data = weather_service.fetch_solar_data(start_date, end_date, lat, lon)
+            # Probar precios
+            prices = xm_service.fetch_energy_prices(start_date, end_date)
+            print(f"    ✅ Precios obtenidos: {len(prices)} registros")
             
-            if solar_data:
-                print(f"    ✅ Datos generados: {len(solar_data)} registros")
-                
-                # Mostrar estadísticas
-                radiations = [d['solar_radiation'] for d in solar_data]
-                clouds = [d['cloud_coverage'] for d in solar_data]
-                temps = [d['temperature'] for d in solar_data]
-                
-                print(f"    📊 Radiación: {min(radiations):.1f} - {max(radiations):.1f} W/m²")
-                print(f"    ☁️  Nubes: {min(clouds):.1f} - {max(clouds):.1f}%")
-                print(f"    🌡️  Temperatura: {min(temps):.1f} - {max(temps):.1f}°C")
-            else:
-                print(f"    ❌ No se generaron datos para {location_name}")
+            # Probar generación
+            generation = xm_service.fetch_generation_data(start_date, end_date)
+            print(f"    ✅ Generación obtenida: {len(generation)} registros")
+            
+            # Probar demanda
+            demand = xm_service.fetch_demand_data(start_date, end_date)
+            print(f"    ✅ Demanda obtenida: {len(demand)} registros")
+            
+            # Probar emisiones
+            emissions = xm_service.fetch_emissions_data(start_date, end_date)
+            print(f"    ✅ Emisiones obtenidas: {len(emissions)} registros")
         
-        print("  🎉 Generación de datos solares funcionando correctamente")
+        print("  🎉 Datos de XM funcionando correctamente")
         return True
         
     except Exception as e:
-        print(f"  ❌ Error en generación de datos solares: {e}")
+        print(f"  ❌ Error en datos de XM: {e}")
         return False
 
 
@@ -258,7 +245,7 @@ def main():
     models_ok = test_models()
     services_ok = test_services()
     api_ok = test_api_endpoints()
-    solar_ok = test_solar_data_generation()
+    xm_ok = test_xm_data_generation()
     
     # Limpiar datos de prueba
     cleanup_test_data()
@@ -268,9 +255,9 @@ def main():
     print(f"  Modelos: {'✅ OK' if models_ok else '❌ FALLO'}")
     print(f"  Servicios: {'✅ OK' if services_ok else '❌ FALLO'}")
     print(f"  API: {'✅ OK' if api_ok else '❌ FALLO'}")
-    print(f"  Datos Solares: {'✅ OK' if solar_ok else '❌ FALLO'}")
+    print(f"  Datos XM: {'✅ OK' if xm_ok else '❌ FALLO'}")
     
-    if all([models_ok, services_ok, api_ok, solar_ok]):
+    if all([models_ok, services_ok, api_ok, xm_ok]):
         print("\n🎉 Todas las pruebas pasaron exitosamente!")
         return 0
     else:

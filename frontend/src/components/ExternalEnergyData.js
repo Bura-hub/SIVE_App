@@ -4,17 +4,20 @@ import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import { buildApiUrl, getDefaultFetchOptions } from '../utils/apiConfig';
 
-// Componente para datos externos de energía
+// Componente para datos externos de energía - Integración XM
 const ExternalEnergyData = () => {
   const [loading, setLoading] = useState(true);
   const [energyData, setEnergyData] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
   const [savingsData, setSavingsData] = useState(null);
   const [error, setError] = useState(null);
+  const [xmApiStatus, setXmApiStatus] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
-  // Estados para las diferentes pestañas
-  const [activeTab, setActiveTab] = useState('prices');
+  // Estados para las diferentes secciones
+  const [activeSection, setActiveSection] = useState('overview');
   const [dateRange, setDateRange] = useState('month');
+  const [dataSource, setDataSource] = useState('xm'); // 'xm' o 'error'
 
   useEffect(() => {
     fetchExternalEnergyData();
@@ -31,7 +34,7 @@ const ExternalEnergyData = () => {
 
       const options = getDefaultFetchOptions(authToken);
       
-      // Obtener datos de precios de energía
+      // Obtener datos de precios de energía desde XM
       const pricesResponse = await fetch(
         buildApiUrl('/api/external-energy/prices/', { range: dateRange }),
         options
@@ -55,14 +58,100 @@ const ExternalEnergyData = () => {
       
       const savingsData = await savingsResponse.json();
       
-      setEnergyData(pricesData);
+      // Obtener datos de generación desde XM
+      const generationResponse = await fetch(
+        buildApiUrl('/api/external-energy/generation/', { range: dateRange }),
+        options
+      );
+      
+      let generationData = null;
+      if (generationResponse.ok) {
+        generationData = await generationResponse.json();
+      }
+      
+      // Obtener datos de demanda desde XM
+      const demandResponse = await fetch(
+        buildApiUrl('/api/external-energy/demand/', { range: dateRange }),
+        options
+      );
+      
+      let demandData = null;
+      if (demandResponse.ok) {
+        demandData = await demandResponse.json();
+      }
+      
+      // Obtener datos de emisiones desde XM
+      const emissionsResponse = await fetch(
+        buildApiUrl('/api/external-energy/emissions/', { range: dateRange }),
+        options
+      );
+      
+      let emissionsData = null;
+      if (emissionsResponse.ok) {
+        emissionsData = await emissionsResponse.json();
+      }
+      
+      // Obtener datos de exportaciones desde XM
+      const exportsResponse = await fetch(
+        buildApiUrl('/api/external-energy/exports/', { range: dateRange }),
+        options
+      );
+      
+      let exportsData = null;
+      if (exportsResponse.ok) {
+        exportsData = await exportsResponse.json();
+      }
+      
+      // Obtener datos de importaciones desde XM
+      const importsResponse = await fetch(
+        buildApiUrl('/api/external-energy/imports/', { range: dateRange }),
+        options
+      );
+      
+      let importsData = null;
+      if (importsResponse.ok) {
+        importsData = await importsResponse.json();
+      }
+      
+      // Combinar todos los datos
+      const combinedData = {
+        ...pricesData,
+        generation: generationData,
+        demand: demandData,
+        emissions: emissionsData,
+        exports: exportsData,
+        imports: importsData
+      };
+      
+      // Determinar fuente de datos y estado de la API
+      const isXmData = pricesData.source === 'XM' || generationData?.source === 'XM';
+      setDataSource(isXmData ? 'xm' : 'error');
+      setXmApiStatus({
+        connected: isXmData,
+        lastSync: new Date().toISOString(),
+        dataPoints: {
+          prices: pricesData.price_history?.length || 0,
+          generation: generationData?.generation_history?.length || 0,
+          demand: demandData?.demand_history?.length || 0,
+          emissions: emissionsData?.emissions_history?.length || 0
+        }
+      });
+      
+      setEnergyData(combinedData);
       setPriceHistory(pricesData.price_history || []);
       setSavingsData(savingsData);
+      setLastUpdate(new Date());
       setError(null);
       
     } catch (err) {
       console.error('Error fetching external energy data:', err);
       setError(err.message);
+      setXmApiStatus({
+        connected: false,
+        error: err.message,
+        lastSync: null,
+        dataPoints: { prices: 0, generation: 0, demand: 0, emissions: 0 }
+      });
     } finally {
       setLoading(false);
     }
@@ -97,7 +186,7 @@ const ExternalEnergyData = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg font-medium">Cargando datos de energía...</p>
+          <p className="text-gray-600 text-lg font-medium">Conectando con XM...</p>
         </div>
       </div>
     );
@@ -117,8 +206,8 @@ const ExternalEnergyData = () => {
                 </div>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900">Error al cargar datos</h3>
-                <p className="text-gray-600 mt-1">No se pudieron obtener los datos de energía externa</p>
+                <h3 className="text-xl font-semibold text-gray-900">Error de Conexión XM</h3>
+                <p className="text-gray-600 mt-1">No se pudo conectar con el Sistema Interconectado Nacional</p>
               </div>
             </div>
             <div className="bg-red-50 rounded-xl p-6 border border-red-100 mb-6">
@@ -129,13 +218,13 @@ const ExternalEnergyData = () => {
                 onClick={fetchExternalEnergyData}
                 className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl font-medium hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
-                Reintentar
+                🔄 Reintentar Conexión
               </button>
               <button
                 onClick={() => window.location.reload()}
                 className="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
               >
-                Recargar página
+                🔄 Recargar Página
               </button>
             </div>
           </div>
@@ -145,148 +234,269 @@ const ExternalEnergyData = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header mejorado */}
-        <div className="mb-10">
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/30 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 px-8 py-8">
-              <div className="flex items-center space-x-6">
-                <div className="p-4 bg-white/20 rounded-2xl backdrop-blur-sm">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="min-h-screen bg-gray-100">
+      {/* Header con banner profesional */}
+      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg -mx-4 -mt-4">
+        <div className="px-6 py-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-white/20 rounded-xl">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold text-white mb-2">Datos Externos de Energía</h1>
-                  <p className="text-blue-100 text-lg">Análisis avanzado de precios, ahorros y mercado energético</p>
-                  <div className="flex items-center space-x-4 mt-3">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/20 text-white">
-                      🌍 Pasto, Nariño, Colombia
-                    </span>
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/20 text-white">
-                      ⚡ Datos en tiempo real
-                    </span>
+                <h1 className="text-4xl font-bold text-white">Datos Energéticos Externos</h1>
+                <p className="text-blue-100 mt-1">Integración con Sistema Interconectado Nacional (XM)</p>
                   </div>
                 </div>
+            
+            {/* Estado de conexión XM */}
+            <div className="flex flex-col items-end space-y-2">
+              <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${
+                xmApiStatus?.connected 
+                  ? 'bg-green-500/20 text-green-100 border border-green-400/30' 
+                  : 'bg-red-500/20 text-red-100 border border-red-400/30'
+              }`}>
+                <div className={`w-2 h-2 rounded-full mr-2 ${
+                  xmApiStatus?.connected ? 'bg-green-400' : 'bg-red-400'
+                }`}></div>
+                {xmApiStatus?.connected ? 'XM Conectado' : 'XM Desconectado'}
+              </div>
+              {lastUpdate && (
+                <p className="text-blue-200 text-xs">
+                  Última actualización: {lastUpdate.toLocaleTimeString()}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Panel de control superpuesto */}
+      <section className="-mt-6 mb-6">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden relative">
+          <div className="p-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              {/* Selector de período */}
+              <div className="flex items-center space-x-4">
+                <label className="text-sm font-medium text-gray-700">Período:</label>
+                <div className="flex space-x-2">
+                  {['week', 'month', 'quarter', 'year'].map((period) => (
+                <button
+                      key={period}
+                      onClick={() => setDateRange(period)}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                        dateRange === period
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {period === 'week' && 'Semana'}
+                      {period === 'month' && 'Mes'}
+                      {period === 'quarter' && 'Trimestre'}
+                      {period === 'year' && 'Año'}
+                </button>
+              ))}
+                </div>
+              </div>
+
+              {/* Botón de actualización */}
+              <button
+                onClick={fetchExternalEnergyData}
+                disabled={loading}
+                className="inline-flex items-center px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                    Actualizando...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Actualizar Datos
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Selector de sección */}
+      <section className="mb-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-center space-x-4">
+            {[
+              { key: 'overview', label: 'Resumen General', icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              )},
+              { key: 'market', label: 'Datos de Mercado', icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+              )},
+              { key: 'environment', label: 'Análisis Ambiental', icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+            ].map((section) => (
+              <button
+                key={section.key}
+                onClick={() => setActiveSection(section.key)}
+                className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                  activeSection === section.key
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {section.icon}
+                <span>{section.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* KPIs principales */}
+      <section className="mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* KPI: Precio Promedio */}
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 hover:shadow-xl transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Precio Promedio</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {energyData?.average_price ? `${Number(energyData.average_price).toFixed(2)}` : '0.00'}
+                </p>
+                <p className="text-sm text-gray-500">COP/kWh</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-xl">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Selector de rango de fechas mejorado */}
-        <div className="mb-8">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Período de Análisis</h3>
-              <div className="text-sm text-gray-500">Selecciona el rango de fechas para analizar</div>
+            <div className="mt-4 flex items-center">
+              <div className={`w-2 h-2 rounded-full mr-2 ${
+                dataSource === 'xm' ? 'bg-green-500' : 'bg-yellow-500'
+              }`}></div>
+              <span className="text-xs text-gray-500">
+                {dataSource === 'xm' ? 'Datos XM' : 'Error de conexión'}
+              </span>
             </div>
-            <div className="flex space-x-3">
-              {[
-                { key: 'week', label: 'Semana', icon: '📅' },
-                { key: 'month', label: 'Mes', icon: '📊' },
-                { key: 'quarter', label: 'Trimestre', icon: '📈' },
-                { key: 'year', label: 'Año', icon: '🎯' }
-              ].map((range) => (
-                <button
-                  key={range.key}
-                  onClick={() => setDateRange(range.key)}
-                  className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
-                    dateRange === range.key
-                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md border border-gray-200'
-                  }`}
-                >
-                  <span className="text-lg">{range.icon}</span>
-                  <span>{range.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* KPIs principales mejorados */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-xl p-6 text-white">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-2xl">💰</div>
-              <div className="text-blue-100 text-sm">COP/kWh</div>
-            </div>
-            <div className="text-2xl font-bold mb-1">
-              {energyData?.average_price ? formatCurrency(energyData.average_price) : 'N/A'}
-            </div>
-            <div className="text-blue-100 text-sm">Precio Promedio</div>
           </div>
           
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-xl p-6 text-white">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-2xl">💚</div>
-              <div className="text-green-100 text-sm">COP</div>
+          {/* KPI: Exportaciones */}
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 hover:shadow-xl transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Exportaciones</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {energyData?.exports?.average_exports ? `${(energyData.exports.average_exports / 1000).toFixed(1)}K` : '0.0K'}
+                </p>
+                <p className="text-sm text-gray-500">MWh</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-xl">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                </svg>
+              </div>
             </div>
-            <div className="text-2xl font-bold mb-1">
-              {savingsData?.total_savings ? formatCurrency(savingsData.total_savings) : 'N/A'}
+            <div className="mt-4 flex items-center">
+              <div className={`w-2 h-2 rounded-full mr-2 ${
+                dataSource === 'xm' ? 'bg-green-500' : 'bg-yellow-500'
+              }`}></div>
+              <span className="text-xs text-gray-500">
+                {dataSource === 'xm' ? 'Datos XM' : 'Error de conexión'}
+              </span>
             </div>
-            <div className="text-green-100 text-sm">Ahorro Total</div>
           </div>
           
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-xl p-6 text-white">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-2xl">☀️</div>
-              <div className="text-orange-100 text-sm">kWh</div>
+          {/* KPI: Importaciones */}
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 hover:shadow-xl transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Importaciones</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {energyData?.imports?.average_imports ? `${(energyData.imports.average_imports / 1000).toFixed(1)}K` : '0.0K'}
+                </p>
+                <p className="text-sm text-gray-500">MWh</p>
+              </div>
+              <div className="p-3 bg-orange-100 rounded-xl">
+                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </div>
             </div>
-            <div className="text-2xl font-bold mb-1">
-              {savingsData?.total_generated ? formatEnergy(savingsData.total_generated) : 'N/A'}
+            <div className="mt-4 flex items-center">
+              <div className={`w-2 h-2 rounded-full mr-2 ${
+                dataSource === 'xm' ? 'bg-green-500' : 'bg-yellow-500'
+              }`}></div>
+              <span className="text-xs text-gray-500">
+                {dataSource === 'xm' ? 'Datos XM' : 'Error de conexión'}
+              </span>
             </div>
-            <div className="text-orange-100 text-sm">Energía Generada</div>
           </div>
           
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-xl p-6 text-white">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-2xl">📊</div>
-              <div className="text-purple-100 text-sm">%</div>
+          {/* KPI: Generación Promedio */}
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 hover:shadow-xl transition-shadow duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Generación Promedio</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {energyData?.generation?.average_generation ? `${(energyData.generation.average_generation / 1000000).toFixed(1)}M` : '0.0M'}
+                </p>
+                <p className="text-sm text-gray-500">MW</p>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-xl">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
             </div>
-            <div className="text-2xl font-bold mb-1">
-              {savingsData?.savings_percentage ? `${Number(savingsData.savings_percentage).toFixed(1)}%` : 'N/A'}
+            <div className="mt-4 flex items-center">
+              <div className={`w-2 h-2 rounded-full mr-2 ${
+                dataSource === 'xm' ? 'bg-green-500' : 'bg-yellow-500'
+              }`}></div>
+              <span className="text-xs text-gray-500">
+                {dataSource === 'xm' ? 'Datos XM' : 'Error de conexión'}
+              </span>
             </div>
-            <div className="text-purple-100 text-sm">Porcentaje de Ahorro</div>
           </div>
         </div>
+      </section>
 
-        {/* Tabs de navegación mejorados */}
-        <div className="mb-8">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 overflow-hidden">
-            <nav className="flex">
-              {[
-                { id: 'prices', name: 'Precios de Energía', icon: '💰', color: 'blue' },
-                { id: 'savings', name: 'Análisis de Ahorro', icon: '💚', color: 'green' },
-                { id: 'comparison', name: 'Comparación', icon: '⚖️', color: 'purple' },
-                { id: 'forecast', name: 'Pronóstico', icon: '🔮', color: 'indigo' }
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 flex items-center justify-center space-x-3 px-6 py-4 text-sm font-medium transition-all duration-300 ${
-                    activeTab === tab.id
-                      ? `bg-gradient-to-r from-${tab.color}-500 to-${tab.color}-600 text-white shadow-lg`
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="text-lg">{tab.icon}</span>
-                  <span>{tab.name}</span>
-                </button>
-              ))}
-            </nav>
+      {/* Contenido dinámico basado en la sección seleccionada */}
+      <div className="space-y-6">
+        {/* Sección de Resumen */}
+        {activeSection === 'overview' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Gráfico de precios */}
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+                  <svg className="w-6 h-6 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  </svg>
+                  Precios de Energía
+                </h3>
+                <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  dataSource === 'xm' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {dataSource === 'xm' ? 'Datos XM' : 'Error de conexión'}
           </div>
         </div>
-
-        {/* Contenido de las pestañas mejorado */}
-        <div className="space-y-8">
-          {/* Pestaña de Precios */}
-          {activeTab === 'prices' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
                 <ChartCard
-                  title="Historial de Precios de Energía"
+                  title=""
                   type="line"
                   data={{
                     labels: priceHistory.map(item => item.date),
@@ -300,8 +510,8 @@ const ExternalEnergyData = () => {
                       pointBackgroundColor: 'rgb(59, 130, 246)',
                       pointBorderColor: '#ffffff',
                       pointBorderWidth: 2,
-                      pointRadius: 6,
-                      pointHoverRadius: 8
+                      pointRadius: 4,
+                      pointHoverRadius: 6
                     }]
                   }}
                   options={{
@@ -319,17 +529,9 @@ const ExternalEnergyData = () => {
                           display: true,
                           text: 'Precio (COP/kWh)',
                           font: {
-                            size: 14,
+                            size: 12,
                             weight: '600'
                           }
-                        },
-                        grid: {
-                          color: 'rgba(0, 0, 0, 0.05)'
-                        }
-                      },
-                      x: {
-                        grid: {
-                          color: 'rgba(0, 0, 0, 0.05)'
                         }
                       }
                     }
@@ -337,30 +539,45 @@ const ExternalEnergyData = () => {
                 />
               </div>
               
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                  <span className="text-2xl mr-3">📊</span>
-                  Información de Precios
+            {/* Resumen de datos XM */}
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <svg className="w-6 h-6 text-indigo-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Estado de Integración XM
                 </h3>
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center p-4 bg-red-50 rounded-xl border border-red-100">
-                    <span className="text-gray-700 font-medium">Precio más alto:</span>
-                    <span className="font-bold text-red-600 text-lg">
-                      {energyData?.max_price ? formatCurrency(energyData.max_price) : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl border border-green-100">
-                    <span className="text-gray-700 font-medium">Precio más bajo:</span>
-                    <span className="font-bold text-green-600 text-lg">
-                      {energyData?.min_price ? formatCurrency(energyData.min_price) : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-blue-50 rounded-xl border border-blue-100">
-                    <span className="text-gray-700 font-medium">Variación:</span>
-                    <span className={`font-bold text-lg ${
-                      energyData?.price_variation > 0 ? 'text-red-600' : 'text-green-600'
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <span className="text-gray-700 font-medium">Estado de conexión:</span>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      xmApiStatus?.connected 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
                     }`}>
-                      {energyData?.price_variation ? `${energyData.price_variation > 0 ? '+' : ''}${Number(energyData.price_variation).toFixed(2)}%` : 'N/A'}
+                      {xmApiStatus?.connected ? 'Conectado' : 'Desconectado'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <span className="text-gray-700 font-medium">Última sincronización:</span>
+                    <span className="text-gray-900 font-medium">
+                      {lastUpdate ? lastUpdate.toLocaleString() : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <span className="text-gray-700 font-medium">Total de datos:</span>
+                    <span className="text-gray-900 font-medium">
+                      {Object.values(xmApiStatus?.dataPoints || {}).reduce((a, b) => a + b, 0)} registros
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <span className="text-gray-700 font-medium">Fuente actual:</span>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      dataSource === 'xm' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {dataSource === 'xm' ? 'API XM' : 'Error de conexión'}
                     </span>
                   </div>
                 </div>
@@ -368,23 +585,44 @@ const ExternalEnergyData = () => {
             </div>
           )}
 
-          {/* Pestaña de Ahorro */}
-          {activeTab === 'savings' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
+        {/* Sección de Mercado */}
+        {activeSection === 'market' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Generación */}
+            {energyData?.generation && (
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+                    <svg className="w-6 h-6 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Generación Nacional
+                  </h3>
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    dataSource === 'xm' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {dataSource === 'xm' ? 'Datos XM' : 'Error de conexión'}
+                  </div>
+                </div>
                 <ChartCard
-                  title="Ahorro Mensual"
-                  type="bar"
+                    title=""
+                    type="line"
                   data={{
-                    labels: savingsData?.monthly_savings?.map(item => item.month) || [],
+                      labels: energyData.generation.generation_history?.map(item => item.date) || [],
                     datasets: [{
-                      label: 'Ahorro (COP)',
-                      data: savingsData?.monthly_savings?.map(item => item.savings) || [],
-                      backgroundColor: 'rgba(34, 197, 94, 0.8)',
-                      borderColor: 'rgb(34, 197, 94)',
-                      borderWidth: 2,
-                      borderRadius: 8,
-                      borderSkipped: false
+                        label: 'Generación (MW)',
+                        data: energyData.generation.generation_history?.map(item => item.value) || [],
+                        borderColor: 'rgb(234, 179, 8)',
+                        backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                        tension: 0.4,
+                        borderWidth: 3,
+                        pointBackgroundColor: 'rgb(234, 179, 8)',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
                     }]
                   }}
                   options={{
@@ -400,85 +638,54 @@ const ExternalEnergyData = () => {
                         beginAtZero: true,
                         title: {
                           display: true,
-                          text: 'Ahorro (COP)',
+                            text: 'Generación (MW)',
                           font: {
-                            size: 14,
+                              size: 12,
                             weight: '600'
-                          }
-                        },
-                        grid: {
-                          color: 'rgba(0, 0, 0, 0.05)'
-                        }
-                      },
-                      x: {
-                        grid: {
-                          color: 'rgba(0, 0, 0, 0.05)'
+                            }
                         }
                       }
                     }
                   }}
                 />
               </div>
-              
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                  <span className="text-2xl mr-3">💚</span>
-                  Resumen de Ahorro
+              )}
+
+            {/* Demanda */}
+            {energyData?.demand && (
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+                    <svg className="w-6 h-6 text-indigo-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Demanda Nacional
                 </h3>
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-gray-700 font-medium">Energía consumida:</span>
-                    <span className="font-bold text-gray-900 text-lg">
-                      {savingsData?.total_consumed ? formatEnergy(savingsData.total_consumed) : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl border border-green-100">
-                    <span className="text-gray-700 font-medium">Energía generada:</span>
-                    <span className="font-bold text-green-600 text-lg">
-                      {savingsData?.total_generated ? formatEnergy(savingsData.total_generated) : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-blue-50 rounded-xl border border-blue-100">
-                    <span className="text-gray-700 font-medium">Costo evitado:</span>
-                    <span className="font-bold text-blue-600 text-lg">
-                      {savingsData?.avoided_cost ? formatCurrency(savingsData.avoided_cost) : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-purple-50 rounded-xl border border-purple-100">
-                    <span className="text-gray-700 font-medium">ROI estimado:</span>
-                    <span className="font-bold text-purple-600 text-lg">
-                      {savingsData?.roi ? `${Number(savingsData.roi).toFixed(1)}%` : 'N/A'}
-                    </span>
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    dataSource === 'xm' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {dataSource === 'xm' ? 'Datos XM' : 'Error de conexión'}
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Pestaña de Comparación */}
-          {activeTab === 'comparison' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
                 <ChartCard
-                  title="Comparación: Consumo vs Generación"
-                  type="doughnut"
+                    title=""
+                    type="line"
                   data={{
-                    labels: ['Energía Consumida', 'Energía Generada'],
+                      labels: energyData.demand.demand_history?.map(item => item.date) || [],
                     datasets: [{
-                      data: [
-                        savingsData?.total_consumed || 0,
-                        savingsData?.total_generated || 0
-                      ],
-                      backgroundColor: [
-                        'rgba(239, 68, 68, 0.8)',
-                        'rgba(34, 197, 94, 0.8)'
-                      ],
-                      borderColor: [
-                        'rgb(239, 68, 68)',
-                        'rgb(34, 197, 94)'
-                      ],
+                        label: 'Demanda (MW)',
+                        data: energyData.demand.demand_history?.map(item => item.value) || [],
+                        borderColor: 'rgb(249, 115, 22)',
+                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                        tension: 0.4,
                       borderWidth: 3,
-                      hoverOffset: 4
+                        pointBackgroundColor: 'rgb(249, 115, 22)',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
                     }]
                   }}
                   options={{
@@ -486,72 +693,67 @@ const ExternalEnergyData = () => {
                     maintainAspectRatio: false,
                     plugins: {
                       legend: {
-                        position: 'bottom',
-                        labels: {
-                          padding: 20,
-                          usePointStyle: true,
+                          display: false
+                        }
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          title: {
+                            display: true,
+                            text: 'Demanda (MW)',
                           font: {
-                            size: 14,
+                              size: 12,
                             weight: '600'
-                          }
+                            }
                         }
                       }
                     }
                   }}
                 />
-              </div>
-              
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                  <span className="text-2xl mr-3">⚖️</span>
-                  Análisis de Eficiencia
-                </h3>
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl border border-green-100">
-                    <span className="text-gray-700 font-medium">Autoconsumo:</span>
-                    <span className="font-bold text-green-600 text-lg">
-                      {savingsData?.self_consumption ? `${Number(savingsData.self_consumption).toFixed(1)}%` : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-blue-50 rounded-xl border border-blue-100">
-                    <span className="text-gray-700 font-medium">Excedentes:</span>
-                    <span className="font-bold text-blue-600 text-lg">
-                      {savingsData?.excess_energy ? formatEnergy(savingsData.excess_energy) : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-purple-50 rounded-xl border border-purple-100">
-                    <span className="text-gray-700 font-medium">Factor de capacidad:</span>
-                    <span className="font-bold text-purple-600 text-lg">
-                      {savingsData?.capacity_factor ? `${Number(savingsData.capacity_factor).toFixed(1)}%` : 'N/A'}
-                    </span>
-                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
-          {/* Pestaña de Pronóstico */}
-          {activeTab === 'forecast' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
+        {/* Sección Ambiental */}
+        {activeSection === 'environment' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Emisiones */}
+            {energyData?.emissions && (
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+                    <svg className="w-6 h-6 text-orange-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Factor de Emisión CO₂
+                  </h3>
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    dataSource === 'xm' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {dataSource === 'xm' ? 'Datos XM' : 'Error de conexión'}
+                  </div>
+                </div>
                 <ChartCard
-                  title="Pronóstico de Precios (Próximos 30 días)"
+                    title=""
                   type="line"
                   data={{
-                    labels: energyData?.price_forecast?.map(item => item.date) || [],
+                      labels: energyData.emissions.emissions_history?.map(item => item.date) || [],
                     datasets: [{
-                      label: 'Precio Pronosticado',
-                      data: energyData?.price_forecast?.map(item => item.price) || [],
-                      borderColor: 'rgb(168, 85, 247)',
-                      backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                      borderDash: [5, 5],
+                        label: 'Factor de Emisión (gCO₂e/kWh)',
+                        data: energyData.emissions.emissions_history?.map(item => item.value) || [],
+                        borderColor: 'rgb(16, 185, 129)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
                       tension: 0.4,
                       borderWidth: 3,
-                      pointBackgroundColor: 'rgb(168, 85, 247)',
+                        pointBackgroundColor: 'rgb(16, 185, 129)',
                       pointBorderColor: '#ffffff',
                       pointBorderWidth: 2,
-                      pointRadius: 6,
-                      pointHoverRadius: 8
+                        pointRadius: 4,
+                        pointHoverRadius: 6
                     }]
                   }}
                   options={{
@@ -567,74 +769,83 @@ const ExternalEnergyData = () => {
                         beginAtZero: true,
                         title: {
                           display: true,
-                          text: 'Precio (COP/kWh)',
+                            text: 'Factor de Emisión (gCO₂e/kWh)',
                           font: {
-                            size: 14,
+                              size: 12,
                             weight: '600'
+                            }
                           }
-                        },
-                        grid: {
-                          color: 'rgba(0, 0, 0, 0.05)'
-                        }
-                      },
-                      x: {
-                        grid: {
-                          color: 'rgba(0, 0, 0, 0.05)'
                         }
                       }
+                    }}
+                  />
+                </div>
+              )}
+
+            {/* Gráfico de Exportaciones e Importaciones */}
+            {energyData?.exports && energyData?.imports && (
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                  <svg className="w-6 h-6 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                  Comercio Internacional de Energía
+                </h3>
+                <ChartCard
+                  title=""
+                  type="line"
+                  data={{
+                    labels: energyData.exports.exports_history?.map(item => item.date) || [],
+                    datasets: [
+                      {
+                        label: 'Exportaciones (MWh)',
+                        data: energyData.exports.exports_history?.map(item => item.value) || [],
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                      },
+                      {
+                        label: 'Importaciones (MWh)',
+                        data: energyData.imports.imports_history?.map(item => item.value) || [],
+                        borderColor: 'rgb(249, 115, 22)',
+                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                      }
+                    ]
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        display: true,
+                        position: 'top'
+                      }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          callback: function(value) {
+                            return value + ' MWh';
+                          }
+                        }
+                      }
+                    },
+                    interaction: {
+                      intersect: false,
+                      mode: 'index'
                     }
                   }}
                 />
               </div>
-              
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                  <span className="text-2xl mr-3">🔮</span>
-                  Recomendaciones
-                </h3>
-                <div className="space-y-6">
-                  <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                    <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
-                      <span className="text-xl mr-2">📈</span>
-                      Tendencias de Precios
-                    </h4>
-                    <p className="text-blue-800 text-sm leading-relaxed">
-                      {energyData?.price_trend === 'increasing' 
-                        ? 'Los precios muestran tendencia alcista. Considere aumentar el autoconsumo y optimizar el uso de energía durante las horas de menor costo.'
-                        : energyData?.price_trend === 'decreasing'
-                        ? 'Los precios muestran tendencia bajista. Puede ser momento de vender excedentes y aprovechar los precios favorables.'
-                        : 'Los precios se mantienen estables. Continúe con su estrategia actual de consumo y generación.'}
-                    </p>
-                  </div>
-                  
-                  <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
-                    <h4 className="font-semibold text-green-900 mb-3 flex items-center">
-                      <span className="text-xl mr-2">💡</span>
-                      Optimización
-                    </h4>
-                    <p className="text-green-800 text-sm leading-relaxed">
-                      Basado en el análisis actual, se recomienda optimizar el consumo en horas pico,
-                      maximizar el uso de energía generada durante el día y considerar el almacenamiento
-                      de excedentes para uso nocturno.
-                    </p>
-                  </div>
-                  
-                  <div className="p-5 bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl border border-yellow-200">
-                    <h4 className="font-semibold text-yellow-900 mb-3 flex items-center">
-                      <span className="text-xl mr-2">⚠️</span>
-                      Alertas
-                    </h4>
-                    <p className="text-yellow-800 text-sm leading-relaxed">
-                      {energyData?.alerts?.length > 0 
-                        ? energyData.alerts.join(', ')
-                        : 'No hay alertas activas en este momento. El sistema está funcionando de manera óptima.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+          )}
             </div>
           )}
-        </div>
       </div>
     </div>
   );

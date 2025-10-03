@@ -20,9 +20,7 @@ from .serializers import (
     EnergySavingsSummarySerializer
 )
 from .services import (
-    XMEnergyService,
-    EnergyCalculationService,
-    PriceForecastService
+    XMEnergyService
 )
 
 logger = logging.getLogger(__name__)
@@ -62,12 +60,22 @@ def energy_prices(request):
             
             # Crear registros en la base de datos
             for price_data in prices_data:
-                EnergyPrice.objects.create(
-                    date=price_data['date'],
-                    price_per_kwh=price_data['price'],
-                    source='ElectricityMaps',
-                    region='Colombia'
-                )
+                try:
+                    # Convertir string de fecha a objeto date si es necesario
+                    if isinstance(price_data['date'], str):
+                        price_date = datetime.strptime(price_data['date'], '%Y-%m-%d').date()
+                    else:
+                        price_date = price_data['date']
+                    
+                    EnergyPrice.objects.create(
+                        date=price_date,
+                        price_per_kwh=price_data['price'],
+                        source='XM',
+                        region='Colombia'
+                    )
+                except Exception as e:
+                    logger.warning(f"Error creando registro de precio: {str(e)}")
+                    continue
             
             prices = EnergyPrice.objects.filter(
                 date__range=[start_date, end_date]
@@ -106,9 +114,8 @@ def energy_prices(request):
             price_variation = 0
             price_trend = 'stable'
         
-        # Obtener pronósticos
-        forecast_service = PriceForecastService()
-        price_forecast = forecast_service.get_price_forecast(end_date, 30)
+        # Obtener pronósticos (simulados)
+        price_forecast = []
         
         # Obtener alertas activas
         active_alerts = EnergyAlert.objects.filter(
@@ -121,6 +128,9 @@ def energy_prices(request):
         market_data = EnergyMarketData.objects.filter(
             date__range=[start_date, end_date]
         ).order_by('-date').first()
+        
+        # Determinar fuente de datos
+        data_source = 'XM' if prices.exists() and prices.first().source == 'XM' else 'Error'
         
         response_data = {
             'average_price': average_price,
@@ -139,7 +149,8 @@ def energy_prices(request):
             'alerts': alerts,
             'market_demand': float(market_data.demand_mw) if market_data else 0,
             'market_supply': float(market_data.supply_mw) if market_data else 0,
-            'renewable_percentage': float(market_data.renewable_percentage) if market_data else 0
+            'renewable_percentage': float(market_data.renewable_percentage) if market_data else 0,
+            'source': data_source
         }
         
         serializer = ExternalEnergySummarySerializer(response_data)
@@ -180,23 +191,8 @@ def energy_savings(request):
             date__range=[start_date, end_date]
         ).order_by('date')
         
-        if not savings.exists():
-            # Si no hay datos, calcularlos
-            calculation_service = EnergyCalculationService()
-            savings_data = calculation_service.calculate_energy_savings(start_date, end_date)
-            
-            # Crear registros en la base de datos
-            for saving_data in savings_data:
-                EnergySavings.objects.create(
-                    date=saving_data['date'],
-                    total_consumed_kwh=saving_data['consumed'],
-                    total_generated_kwh=saving_data['generated'],
-                    average_price_kwh=saving_data['price']
-                )
-            
-            savings = EnergySavings.objects.filter(
-                date__range=[start_date, end_date]
-            ).order_by('date')
+        # Los datos de ahorro deben existir en la base de datos
+        # Si no hay datos, retornar valores por defecto
         
         # Calcular totales
         total_consumed = sum(float(s.total_consumed_kwh) for s in savings)
@@ -357,5 +353,314 @@ def market_overview(request):
         logger.error(f"Error en market_overview: {str(e)}")
         return Response(
             {'error': 'Error al obtener vista del mercado'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def generation_data(request):
+    """
+    Obtiene datos de generación de energía desde XM
+    """
+    try:
+        range_param = request.GET.get('range', 'month')
+        
+        # Calcular fechas según el rango
+        end_date = timezone.now().date()
+        if range_param == 'week':
+            start_date = end_date - timedelta(days=7)
+        elif range_param == 'month':
+            start_date = end_date - timedelta(days=30)
+        elif range_param == 'quarter':
+            start_date = end_date - timedelta(days=90)
+        elif range_param == 'year':
+            start_date = end_date - timedelta(days=365)
+        else:
+            start_date = end_date - timedelta(days=30)
+        
+        # Obtener datos de generación desde XM
+        xm_service = XMEnergyService()
+        generation_data = xm_service.fetch_generation_data(start_date, end_date)
+        
+        # Calcular estadísticas
+        if generation_data:
+            values = [item['value'] for item in generation_data if item['value'] > 0]
+            if values:
+                avg_generation = sum(values) / len(values)
+                max_generation = max(values)
+                min_generation = min(values)
+                total_generation = sum(values)
+            else:
+                avg_generation = max_generation = min_generation = total_generation = 0
+        else:
+            avg_generation = max_generation = min_generation = total_generation = 0
+        
+        response_data = {
+            'average_generation': avg_generation,
+            'max_generation': max_generation,
+            'min_generation': min_generation,
+            'total_generation': total_generation,
+            'generation_history': generation_data,
+            'source': 'XM' if generation_data else 'Error',
+            'period': {
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d'),
+                'range': range_param
+            }
+        }
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error en generation_data: {str(e)}")
+        return Response(
+            {'error': 'Error al obtener datos de generación'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def demand_data(request):
+    """
+    Obtiene datos de demanda de energía desde XM
+    """
+    try:
+        range_param = request.GET.get('range', 'month')
+        
+        # Calcular fechas según el rango
+        end_date = timezone.now().date()
+        if range_param == 'week':
+            start_date = end_date - timedelta(days=7)
+        elif range_param == 'month':
+            start_date = end_date - timedelta(days=30)
+        elif range_param == 'quarter':
+            start_date = end_date - timedelta(days=90)
+        elif range_param == 'year':
+            start_date = end_date - timedelta(days=365)
+        else:
+            start_date = end_date - timedelta(days=30)
+        
+        # Obtener datos de demanda desde XM
+        xm_service = XMEnergyService()
+        demand_data = xm_service.fetch_demand_data(start_date, end_date)
+        
+        # Calcular estadísticas
+        if demand_data:
+            values = [item['value'] for item in demand_data if item['value'] > 0]
+            if values:
+                avg_demand = sum(values) / len(values)
+                max_demand = max(values)
+                min_demand = min(values)
+                total_demand = sum(values)
+            else:
+                avg_demand = max_demand = min_demand = total_demand = 0
+        else:
+            avg_demand = max_demand = min_demand = total_demand = 0
+        
+        response_data = {
+            'average_demand': avg_demand,
+            'max_demand': max_demand,
+            'min_demand': min_demand,
+            'total_demand': total_demand,
+            'demand_history': demand_data,
+            'source': 'XM' if demand_data else 'Error',
+            'period': {
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d'),
+                'range': range_param
+            }
+        }
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error en demand_data: {str(e)}")
+        return Response(
+            {'error': 'Error al obtener datos de demanda'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def emissions_data(request):
+    """
+    Obtiene datos de emisiones de CO2 desde XM
+    """
+    try:
+        range_param = request.GET.get('range', 'month')
+        
+        # Calcular fechas según el rango
+        end_date = timezone.now().date()
+        if range_param == 'week':
+            start_date = end_date - timedelta(days=7)
+        elif range_param == 'month':
+            start_date = end_date - timedelta(days=30)
+        elif range_param == 'quarter':
+            start_date = end_date - timedelta(days=90)
+        elif range_param == 'year':
+            start_date = end_date - timedelta(days=365)
+        else:
+            start_date = end_date - timedelta(days=30)
+        
+        # Obtener datos de emisiones desde XM
+        xm_service = XMEnergyService()
+        emissions_data = xm_service.fetch_emissions_data(start_date, end_date)
+        
+        # Calcular estadísticas
+        if emissions_data:
+            values = [item['value'] for item in emissions_data if item['value'] > 0]
+            if values:
+                avg_emissions = sum(values) / len(values)
+                max_emissions = max(values)
+                min_emissions = min(values)
+                total_emissions = sum(values)
+            else:
+                avg_emissions = max_emissions = min_emissions = total_emissions = 0
+        else:
+            avg_emissions = max_emissions = min_emissions = total_emissions = 0
+        
+        response_data = {
+            'average_emissions': avg_emissions,
+            'max_emissions': max_emissions,
+            'min_emissions': min_emissions,
+            'total_emissions': total_emissions,
+            'emissions_history': emissions_data,
+            'source': 'XM' if emissions_data else 'Error',
+            'period': {
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d'),
+                'range': range_param
+            }
+        }
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error en emissions_data: {str(e)}")
+        return Response(
+            {'error': 'Error al obtener datos de emisiones'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def exports_data(request):
+    """Obtiene datos de exportaciones de energía desde XM"""
+    try:
+        range_param = request.GET.get('range', 'week')
+        end_date = timezone.now().date()
+        
+        # Calcular fecha de inicio según el rango
+        if range_param == 'week':
+            start_date = end_date - timedelta(days=7)
+        elif range_param == 'month':
+            start_date = end_date - timedelta(days=30)
+        elif range_param == 'quarter':
+            start_date = end_date - timedelta(days=90)
+        elif range_param == 'year':
+            start_date = end_date - timedelta(days=365)
+        else:
+            start_date = end_date - timedelta(days=30)
+        
+        # Obtener datos de exportaciones desde XM
+        xm_service = XMEnergyService()
+        exports_data = xm_service.fetch_exports_data(start_date, end_date)
+        
+        # Calcular estadísticas
+        if exports_data:
+            values = [item['value'] for item in exports_data if item['value'] > 0]
+            if values:
+                avg_exports = sum(values) / len(values)
+                max_exports = max(values)
+                min_exports = min(values)
+                total_exports = sum(values)
+            else:
+                avg_exports = max_exports = min_exports = total_exports = 0
+        else:
+            avg_exports = max_exports = min_exports = total_exports = 0
+        
+        response_data = {
+            'average_exports': avg_exports,
+            'max_exports': max_exports,
+            'min_exports': min_exports,
+            'total_exports': total_exports,
+            'exports_history': exports_data,
+            'source': 'XM' if exports_data else 'Error',
+            'period': {
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d'),
+                'range': range_param
+            }
+        }
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error en exports_data: {str(e)}")
+        return Response(
+            {'error': 'Error al obtener datos de exportaciones'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def imports_data(request):
+    """Obtiene datos de importaciones de energía desde XM"""
+    try:
+        range_param = request.GET.get('range', 'week')
+        end_date = timezone.now().date()
+        
+        # Calcular fecha de inicio según el rango
+        if range_param == 'week':
+            start_date = end_date - timedelta(days=7)
+        elif range_param == 'month':
+            start_date = end_date - timedelta(days=30)
+        elif range_param == 'quarter':
+            start_date = end_date - timedelta(days=90)
+        elif range_param == 'year':
+            start_date = end_date - timedelta(days=365)
+        else:
+            start_date = end_date - timedelta(days=30)
+        
+        # Obtener datos de importaciones desde XM
+        xm_service = XMEnergyService()
+        imports_data = xm_service.fetch_imports_data(start_date, end_date)
+        
+        # Calcular estadísticas
+        if imports_data:
+            values = [item['value'] for item in imports_data if item['value'] > 0]
+            if values:
+                avg_imports = sum(values) / len(values)
+                max_imports = max(values)
+                min_imports = min(values)
+                total_imports = sum(values)
+            else:
+                avg_imports = max_imports = min_imports = total_imports = 0
+        else:
+            avg_imports = max_imports = min_imports = total_imports = 0
+        
+        response_data = {
+            'average_imports': avg_imports,
+            'max_imports': max_imports,
+            'min_imports': min_imports,
+            'total_imports': total_imports,
+            'imports_history': imports_data,
+            'source': 'XM' if imports_data else 'Error',
+            'period': {
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d'),
+                'range': range_param
+            }
+        }
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error en imports_data: {str(e)}")
+        return Response(
+            {'error': 'Error al obtener datos de importaciones'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
