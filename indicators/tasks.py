@@ -13,6 +13,7 @@ import tempfile
 import csv
 
 from scada_proxy.models import Measurement, Device, Institution, DeviceCategory, TaskProgress
+from .energy import energy_kwh_from_power_sum, SAMPLE_INTERVAL_HOURS
 from .models import (
     ElectricMeterEnergyConsumption, 
     MonthlyConsumptionKPI, 
@@ -90,67 +91,57 @@ def calculate_monthly_consumption_kpi(self):
         # --- Cálculo de Consumo Total (Medidores Eléctricos) ---
         logger.info("Calculando consumo total (medidores eléctricos)...")
         # Cambiar el cálculo de consumo para que sea consistente
-        current_month_consumption_sum = Measurement.objects.filter(
-            device__in=electric_meters,
-            date__date__range=(start_current_month, end_current_month),
-            data__totalActivePower__isnull=False
-        ).aggregate(
-            total_sum=Sum(Cast(F('data__totalActivePower'), FloatField()))
-        )['total_sum'] or 0.0
+        # Energía consumida = Σ(potencia activa) · Δt / 1000 (ver indicators/energy.py).
+        # ANTES: se guardaba la SUMA cruda de la potencia como si fuera kWh (sin integrar
+        # Δt y, en el mensual, sin dividir /1000), inflando el consumo enormemente y
+        # dejándolo incoherente con el cálculo diario.
+        current_month_consumption_sum = energy_kwh_from_power_sum(
+            Measurement.objects.filter(
+                device__in=electric_meters,
+                date__date__range=(start_current_month, end_current_month),
+                data__totalActivePower__isnull=False
+            ).aggregate(
+                total_sum=Sum(Cast(F('data__totalActivePower'), FloatField()))
+            )['total_sum']
+        )
 
-        previous_month_consumption_sum = Measurement.objects.filter(
-            device__in=electric_meters,
-            date__date__range=(start_previous_month, end_previous_month),
-            data__totalActivePower__isnull=False
-        ).aggregate(
-            total_sum=Sum(Cast(F('data__totalActivePower'), FloatField()))
-        )['total_sum'] or 0.0
+        previous_month_consumption_sum = energy_kwh_from_power_sum(
+            Measurement.objects.filter(
+                device__in=electric_meters,
+                date__date__range=(start_previous_month, end_previous_month),
+                data__totalActivePower__isnull=False
+            ).aggregate(
+                total_sum=Sum(Cast(F('data__totalActivePower'), FloatField()))
+            )['total_sum']
+        )
         logger.info(f"Consumo total - Mes actual: {current_month_consumption_sum:.2f} kWh, Mes anterior: {previous_month_consumption_sum:.2f} kWh")
 
         # --- Cálculo de Generación Total (Inversores) ---
         logger.info("Calculando generación total (inversores)...")
+        # Energía generada = Σ(acPower de TODOS los inversores) · Δt / 1000, misma fórmula
+        # canónica que el consumo (ver indicators/energy.py).
+        # ANTES: se agrupaba por día y se calculaba (Σ acPower / nº mediciones de la flota) · 24,
+        # es decir, la potencia media POR MUESTRA de la flota × 24 h → energía de UN inversor
+        # "promedio", no la suma de los N inversores. Eso dividía la generación total por N.
+        current_month_generation_sum = energy_kwh_from_power_sum(
+            Measurement.objects.filter(
+                device__in=inverters,
+                date__date__range=(start_current_month, end_current_month),
+                data__acPower__isnull=False
+            ).aggregate(
+                total_sum=Sum(Cast(F('data__acPower'), FloatField()))
+            )['total_sum']
+        )
 
-        # Cálculo para el mes actual
-        current_month_generation = Measurement.objects.filter(
-            device__in=inverters,
-            date__date__range=(start_current_month, end_current_month),
-            data__acPower__isnull=False
-        ).annotate(
-            day=TruncDay('date')
-        ).values('day').annotate(
-            total_power=Sum(Cast(F('data__acPower'), FloatField())),
-            measurements_count=Count('id')
-        ).order_by('day')
-
-        current_month_generation_sum = 0
-        for day_data in current_month_generation:
-            hours_in_day = 24
-            daily_energy_wh = (day_data['total_power'] / day_data['measurements_count']) * hours_in_day
-            current_month_generation_sum += daily_energy_wh
-
-        # Convertir a kWh
-        current_month_generation_sum = current_month_generation_sum / 1000.0
-
-        # Cálculo para el mes anterior
-        previous_month_generation = Measurement.objects.filter(
-            device__in=inverters,
-            date__date__range=(start_previous_month, end_previous_month),
-            data__acPower__isnull=False
-        ).annotate(
-            day=TruncDay('date')
-        ).values('day').annotate(
-            total_power=Sum(Cast(F('data__acPower'), FloatField())),
-            measurements_count=Count('id')
-        ).order_by('day')
-
-        previous_month_generation_sum = 0
-        for day_data in previous_month_generation:
-            hours_in_day = 24
-            daily_energy_wh = (day_data['total_power'] / day_data['measurements_count']) * hours_in_day
-            previous_month_generation_sum += daily_energy_wh
-
-        # Convertir a kWh
-        previous_month_generation_sum = previous_month_generation_sum / 1000.0
+        previous_month_generation_sum = energy_kwh_from_power_sum(
+            Measurement.objects.filter(
+                device__in=inverters,
+                date__date__range=(start_previous_month, end_previous_month),
+                data__acPower__isnull=False
+            ).aggregate(
+                total_sum=Sum(Cast(F('data__acPower'), FloatField()))
+            )['total_sum']
+        )
 
         logger.info(f"Generación total - Mes actual: {current_month_generation_sum:.2f} kWh, Mes anterior: {previous_month_generation_sum:.2f} kWh")
 
@@ -373,30 +364,19 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
                 avg_irradiance=Avg(Cast(F('data__irradiance'), FloatField()))
             )
             
-            daily_consumption_sum = daily_aggregation.get('daily_consumption') or 0.0
-            daily_generation_sum = daily_aggregation.get('daily_generation') or 0.0
+            daily_consumption_sum = daily_aggregation.get('daily_consumption')
+            daily_generation_sum = daily_aggregation.get('daily_generation')
             daily_temp_avg = daily_temp_aggregation.get('avg_daily_temp') or 0.0
             avg_wind_speed = daily_wind_aggregation.get('avg_wind_speed') or 0.0
             avg_irradiance = daily_irradiance_aggregation.get('avg_irradiance') or 0.0
-            
-            # Convertir consumo de Wh a kWh
-            daily_consumption_kwh = daily_consumption_sum / 1000.0
 
-            # Calcular generación correctamente (convertir potencia promedio a energía)
-            # Primero obtener el número de mediciones para calcular el promedio
-            inverter_measurements_count = Measurement.objects.filter(
-                date__date=single_date,
-                device__in=inverter_ids,
-                data__acPower__isnull=False
-            ).count()
-
-            if inverter_measurements_count > 0:
-                # Calcular potencia promedio del día
-                avg_power_w = daily_generation_sum / inverter_measurements_count
-                # Convertir a energía (24 horas)
-                daily_generation_kwh = (avg_power_w * 24) / 1000.0
-            else:
-                daily_generation_kwh = 0.0
+            # Consumo y generación con la MISMA fórmula canónica Σ(P)·Δt/1000
+            # (ver indicators/energy.py), idéntica a la del KPI mensual.
+            # ANTES: el consumo solo dividía /1000 (sin integrar Δt → ~30× alto) y la
+            # generación promediaba sobre la flota (avg_power_w · 24), dividiendo por el
+            # nº de inversores. Ahora ambos son coherentes entre sí y con el mensual.
+            daily_consumption_kwh = energy_kwh_from_power_sum(daily_consumption_sum)
+            daily_generation_kwh = energy_kwh_from_power_sum(daily_generation_sum)
 
             # Calcular balance energético (ambos en kWh)
             daily_balance_sum = daily_generation_kwh - daily_consumption_kwh
@@ -1290,13 +1270,15 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
                 temperature_values.append(temperature)
         
         # Calcular indicadores
-        
+
+        # Δt (h) de la integración de potencia. Se define SIEMPRE al inicio para que
+        # esté disponible aunque solo haya irradiancia (antes se definía dentro del
+        # if de ac/dc y provocaba NameError al calcular la irradiancia acumulada).
+        delta_t = SAMPLE_INTERVAL_HOURS
+
         # 4.1. Eficiencia de Conversión DC-AC
         if ac_power_values and dc_power_values:
             # Calcular energía total (integral de potencia * tiempo)
-            # Como tenemos datos cada 2 minutos, Δt = 2/60 horas
-            delta_t = 2/60  # horas
-            
             energy_ac_daily_kwh = sum(ac_power_values) * delta_t / 1000  # Convertir W*h a kWh
             energy_dc_daily_kwh = sum(dc_power_values) * delta_t / 1000  # Convertir W*h a kWh
             
@@ -2021,11 +2003,19 @@ def calculate_single_month_weather_indicators(measurements):
     # Calcular promedios mensuales
     monthly_indicators = {}
     
-    # Promedios de valores diarios
-    for field in ['daily_irradiance_kwh_m2', 'daily_hsp_hours', 'avg_wind_speed_kmh', 'daily_precipitation_cm', 'avg_temperature_c', 'avg_humidity_pct']:
+    # Promedios de valores diarios (magnitudes intensivas: irradiancia media diaria,
+    # HSP, viento, temperatura, humedad)
+    for field in ['daily_irradiance_kwh_m2', 'daily_hsp_hours', 'avg_wind_speed_kmh', 'avg_temperature_c', 'avg_humidity_pct']:
         values = [ind.get(field, 0) for ind in daily_indicators if ind.get(field) is not None]
         if values:
             monthly_indicators[field] = sum(values) / len(values)
+
+    # Precipitación mensual = ACUMULADA (suma de los diarios), no promedio
+    # (indicators.md la define como acumulada). Antes se promediaba, subestimándola.
+    precip_values = [ind.get('daily_precipitation_cm', 0) for ind in daily_indicators
+                     if ind.get('daily_precipitation_cm') is not None]
+    if precip_values:
+        monthly_indicators['daily_precipitation_cm'] = sum(precip_values)
     
     # Valores máximos y mínimos
     for field in ['max_temperature_c', 'min_temperature_c']:

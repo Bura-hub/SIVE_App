@@ -30,7 +30,8 @@ from .views import (
     GenerateReportView,
     ReportStatusView,
     DownloadReportView,
-    ReportHistoryView
+    ReportHistoryView,
+    DeleteReportView
 )
 
 router = DefaultRouter()
@@ -71,6 +72,7 @@ urlpatterns = [
     path('reports/status/', ReportStatusView.as_view(), name='report-status'),
     path('reports/download/', DownloadReportView.as_view(), name='download-report'),
     path('reports/history/', ReportHistoryView.as_view(), name='report-history'),
+    path('reports/delete/', DeleteReportView.as_view(), name='delete-report'),
     
     path('', include(router.urls)),
 ]

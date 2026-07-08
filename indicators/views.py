@@ -2583,6 +2583,52 @@ class DownloadReportView(APIView):
             )
 
 
+class DeleteReportView(APIView):
+    """
+    Vista para eliminar un reporte generado. Endpoint que el frontend
+    (ExportReports.js) ya consumía (DELETE /api/reports/delete/) pero que no existía
+    en el backend, provocando 404.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Eliminar reporte",
+        description="Elimina un reporte generado por el usuario autenticado (incluye su archivo).",
+        parameters=[
+            OpenApiParameter(name='task_id', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                             description='ID de la tarea de generación del reporte', required=True),
+        ],
+        responses={
+            200: {"description": "Reporte eliminado"},
+            400: {"description": "task_id requerido"},
+            404: {"description": "Reporte no encontrado"},
+        },
+        tags=["Reportes"]
+    )
+    def delete(self, request, *args, **kwargs):
+        """DELETE /api/reports/delete/?task_id=..."""
+        task_id = request.query_params.get('task_id') or request.data.get('task_id')
+        if not task_id:
+            return Response({"detail": "task_id es requerido"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .models import GeneratedReport
+        # Solo se puede borrar un reporte PROPIO (filtrado por user_id evita IDOR).
+        report = GeneratedReport.objects.filter(task_id=task_id, user_id=request.user.id).first()
+        if not report:
+            return Response({"detail": "Reporte no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Borrar el archivo físico si existe.
+        import os
+        if report.file_path and os.path.isfile(report.file_path):
+            try:
+                os.remove(report.file_path)
+            except OSError:
+                logger.warning("No se pudo eliminar el archivo del reporte %s", task_id)
+
+        report.delete()
+        return Response({"detail": "Reporte eliminado exitosamente"}, status=status.HTTP_200_OK)
+
+
 class ReportHistoryView(APIView):
     """
     Vista para obtener el historial de reportes generados
