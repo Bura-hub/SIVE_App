@@ -88,6 +88,17 @@ CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if os.ge
 # Restringe CORS a orígenes definidos explícitamente
 CORS_ALLOW_ALL_ORIGINS = False
 
+# ========================= CSRF =========================
+
+# Orígenes de confianza para CSRF (Django >= 4 los exige para POST cross-origin,
+# p. ej. el login del /admin desde una IP/puerto distintos). Se leen del entorno
+# (definidos en .env / docker-compose) igual que CORS.
+CSRF_TRUSTED_ORIGINS = (
+    os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if os.getenv('CSRF_TRUSTED_ORIGINS')
+    else []
+)
+
 # ========================= Enrutamiento =========================
 
 ROOT_URLCONF = 'core.urls'

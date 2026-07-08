@@ -11,11 +11,17 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production --silent
+# Install dependencies (incluye devDependencies: tailwindcss/postcss/autoprefixer
+# son necesarias para el build de CRA, por eso NO se usa --only=production)
+RUN npm ci --silent
 
 # Copy source code
 COPY . .
+
+# URL del backend inyectada en build-time. CRA incrusta las variables REACT_APP_*
+# en el bundle durante `npm run build`; sin esto, API_BASE_URL queda undefined.
+ARG REACT_APP_API_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
 # Build the application
 RUN npm run build
@@ -45,9 +51,9 @@ RUN addgroup -g 1001 -S nodejs && \
 # Switch to non-root user
 USER nextjs
 
-# Health check
+# Health check (usa /health, servido por nginx.conf; consistente con el healthcheck del compose)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/ || exit 1
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Expose port
 EXPOSE 3000

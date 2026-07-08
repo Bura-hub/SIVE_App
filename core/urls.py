@@ -80,12 +80,20 @@ urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 # Vista específica para servir archivos media en producción
 from django.http import FileResponse, Http404
 from django.views import View
+from django.core.exceptions import SuspiciousFileOperation
+from django.utils._os import safe_join
 import os
 
 class MediaFileView(View):
     def get(self, request, path):
-        file_path = os.path.join(settings.MEDIA_ROOT, path)
-        if os.path.exists(file_path):
+        # safe_join impide path traversal (../, rutas absolutas, %2e%2e codificado):
+        # lanza SuspiciousFileOperation si la ruta resuelta escapa de MEDIA_ROOT.
+        try:
+            file_path = safe_join(settings.MEDIA_ROOT, path)
+        except SuspiciousFileOperation:
+            raise Http404("File not found")
+        # isfile (no exists) evita intentar abrir un directorio.
+        if os.path.isfile(file_path):
             return FileResponse(open(file_path, 'rb'))
         raise Http404("File not found")
 

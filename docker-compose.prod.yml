@@ -78,7 +78,7 @@ services:
     ports:
       - "${BACKEND_PORT:-3504}:8000"
     environment:
-      - DEBUG=True
+      - DEBUG=False
       - SECRET_KEY=${SECRET_KEY}
       - name_db=${name_db}
       - user_postgres=${user_postgres}
@@ -246,6 +246,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: production
+      args:
+        # Inyecta la URL del backend en build-time (CRA la incrusta en el bundle).
+        # Usa DOMAIN_NAME y BACKEND_PORT (variables simples del .env) para evitar
+        # interpolación anidada.
+        REACT_APP_API_URL: "http://${DOMAIN_NAME}:${BACKEND_PORT}"
     image: mtesive_app-frontend:latest
     container_name: mte_frontend_prod
     ports:
