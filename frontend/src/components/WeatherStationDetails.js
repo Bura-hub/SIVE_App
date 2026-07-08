@@ -1,10 +1,9 @@
 // Importaciones necesarias de React y componentes personalizados
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { KpiCard } from "./KPI/KpiCard";
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import WeatherStationFilters from './WeatherStationFilters';
-import { ENDPOINTS, buildApiUrl, getDefaultFetchOptions, handleApiResponse } from '../utils/apiConfig';
+import { ENDPOINTS, buildApiUrl } from '../utils/apiConfig';
 
 // Importaciones desde Chart.js y el plugin de zoom
 import {
@@ -128,6 +127,69 @@ const SectionHeader = ({ title, icon, infoText }) => (
     </div>
   </div>
 );
+
+// Función para calcular potencia fotovoltaica teórica (pura, fuera del componente
+// para poder usarla en hooks sin añadir dependencias inestables)
+const calculateTheoreticalPVPower = (irradiance, temperature = 25) => {
+  // Verificar que irradiance sea un número válido
+  if (!irradiance || isNaN(irradiance) || irradiance < 0) {
+              return 0;
+  }
+
+  // Verificar que temperature sea un número válido
+  if (!temperature || isNaN(temperature)) {
+    temperature = 25; // Usar temperatura estándar si no es válida
+  }
+
+  // Parámetros estándar de un panel solar (pueden ser configurables)
+  const panelEfficiency = 0.20; // 20% eficiencia estándar
+  const panelArea = 1.6; // 1.6 m² por panel
+  const temperatureCoefficient = -0.004; // -0.4% por °C
+  const standardTemperature = 25; // Temperatura estándar de prueba
+
+  // Calcular potencia teórica
+  let power = irradiance * panelArea * panelEfficiency;
+
+  // Ajustar por temperatura si está disponible
+  if (temperature !== 25) {
+    const tempAdjustment = 1 + (temperatureCoefficient * (temperature - standardTemperature));
+    power *= tempAdjustment;
+  }
+
+  return Math.max(0, power); // No puede ser negativa
+};
+
+// Función para obtener la dirección predominante del viento (pura)
+const getPredominantWindDirection = (data) => {
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    return "N/A";
+  }
+
+  const windDirections = data.map(item => item?.wind_direction_deg || 0).filter(deg => deg !== null && deg !== undefined);
+
+  if (windDirections.length === 0) {
+    return "N/A";
+  }
+
+  const directionCounts = [0, 0, 0, 0, 0, 0, 0, 0]; // N, NE, E, SE, S, SW, W, NW
+
+  windDirections.forEach(deg => {
+    if (deg >= 337.5 || deg < 22.5) directionCounts[0]++; // N
+    else if (deg >= 22.5 && deg < 67.5) directionCounts[1]++; // NE
+    else if (deg >= 67.5 && deg < 112.5) directionCounts[2]++; // E
+    else if (deg >= 112.5 && deg < 157.5) directionCounts[3]++; // SE
+    else if (deg >= 157.5 && deg < 202.5) directionCounts[4]++; // S
+    else if (deg >= 202.5 && deg < 247.5) directionCounts[5]++; // SW
+    else if (deg >= 247.5 && deg < 292.5) directionCounts[6]++; // W
+    else if (deg >= 292.5 && deg < 337.5) directionCounts[7]++; // NW
+  });
+
+  const maxCount = Math.max(...directionCounts);
+  const predominantDirection = directionCounts.findIndex(count => count === maxCount);
+
+  const directionNames = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return directionNames[predominantDirection] || "N/A";
+};
 
 // Componente principal
 function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, navigateTo, isSidebarMinimized, setIsSidebarMinimized }) {
@@ -375,7 +437,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   }, [filters, authToken, fetchWeatherData]);
 
   // Función para procesar datos de KPIs
-  const processKPIData = (latestData) => {
+  const processKPIData = useCallback((latestData) => {
     console.log('🔍 processKPIData iniciado con:', latestData);
     // Verificar que latestData existe y es válido
     if (!latestData || typeof latestData !== 'object') {
@@ -504,7 +566,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     // Actualizar el estado de kpiData con los nuevos valores
     console.log('🔍 Actualizando kpiData con:', kpis);
     setKpiData(kpis);
-  };
+  }, [weatherData]);
 
   // Función para calcular datos de la rosa de los vientos
   const calculateWindRoseData = (data, minSpeed, maxSpeed) => {
@@ -564,68 +626,6 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     return directionCounts;
   };
 
-  // Función para calcular potencia fotovoltaica teórica
-  const calculateTheoreticalPVPower = (irradiance, temperature = 25) => {
-    // Verificar que irradiance sea un número válido
-    if (!irradiance || isNaN(irradiance) || irradiance < 0) {
-                return 0;
-    }
-    
-    // Verificar que temperature sea un número válido
-    if (!temperature || isNaN(temperature)) {
-      temperature = 25; // Usar temperatura estándar si no es válida
-    }
-    
-    // Parámetros estándar de un panel solar (pueden ser configurables)
-    const panelEfficiency = 0.20; // 20% eficiencia estándar
-    const panelArea = 1.6; // 1.6 m² por panel
-    const temperatureCoefficient = -0.004; // -0.4% por °C
-    const standardTemperature = 25; // Temperatura estándar de prueba
-    
-    // Calcular potencia teórica
-    let power = irradiance * panelArea * panelEfficiency;
-    
-    // Ajustar por temperatura si está disponible
-    if (temperature !== 25) {
-      const tempAdjustment = 1 + (temperatureCoefficient * (temperature - standardTemperature));
-      power *= tempAdjustment;
-    }
-    
-    return Math.max(0, power); // No puede ser negativa
-  };
-
-  // Función para obtener la dirección predominante del viento
-  const getPredominantWindDirection = (data) => {
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      return "N/A";
-    }
-
-    const windDirections = data.map(item => item?.wind_direction_deg || 0).filter(deg => deg !== null && deg !== undefined);
-    
-    if (windDirections.length === 0) {
-      return "N/A";
-    }
-    
-    const directionCounts = [0, 0, 0, 0, 0, 0, 0, 0]; // N, NE, E, SE, S, SW, W, NW
-
-    windDirections.forEach(deg => {
-      if (deg >= 337.5 || deg < 22.5) directionCounts[0]++; // N
-      else if (deg >= 22.5 && deg < 67.5) directionCounts[1]++; // NE
-      else if (deg >= 67.5 && deg < 112.5) directionCounts[2]++; // E
-      else if (deg >= 112.5 && deg < 157.5) directionCounts[3]++; // SE
-      else if (deg >= 157.5 && deg < 202.5) directionCounts[4]++; // S
-      else if (deg >= 202.5 && deg < 247.5) directionCounts[5]++; // SW
-      else if (deg >= 247.5 && deg < 292.5) directionCounts[6]++; // W
-      else if (deg >= 292.5 && deg < 337.5) directionCounts[7]++; // NW
-    });
-
-    const maxCount = Math.max(...directionCounts);
-    const predominantDirection = directionCounts.findIndex(count => count === maxCount);
-
-    const directionNames = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    return directionNames[predominantDirection] || "N/A";
-  };
-
   // Funciones de paginación
   const getCurrentPageData = () => {
     if (!weatherData?.results || !Array.isArray(weatherData.results)) {
@@ -678,7 +678,10 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     if (filters.institutionId && authToken && !weatherData) {
       fetchWeatherData(filters);
     }
-  }, [filters.institutionId, authToken]); // Solo depender de institutionId y authToken
+    // Se omiten `filters` y `weatherData` de las deps a propósito: incluirlos provocaría
+    // cargas duplicadas (handleFilterChange ya gestiona esos cambios con debounce)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.institutionId, authToken, fetchWeatherData]); // Solo depender de institutionId y authToken
 
   // Efecto para resetear paginación cuando cambien los filtros
   useEffect(() => {
@@ -695,7 +698,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     } else {
       console.log('🔍 No hay datos meteorológicos para procesar KPIs');
     }
-  }, [weatherData]);
+  }, [weatherData, processKPIData]);
 
   // Función para obtener información detallada de cada KPI
   const getKpiDetailedInfo = (kpiKey) => {

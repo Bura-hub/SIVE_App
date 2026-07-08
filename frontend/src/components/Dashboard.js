@@ -1,6 +1,5 @@
 // Importaciones necesarias de React y componentes personalizados
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { KpiCard } from "./KPI/KpiCard";
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 
@@ -9,9 +8,8 @@ import {
   formatDateForAPI, 
   getCurrentMonthStart, 
   getCurrentMonthEnd, 
-  getPreviousMonthStart, 
+  getPreviousMonthStart,
   getPreviousMonthEnd,
-  formatDateForDisplay,
   formatAPIDateForDisplay, // Nueva función
   parseISODateToColombia
 } from '../utils/dateUtils';
@@ -47,48 +45,6 @@ ChartJS.register(
   Filler,
   zoomPlugin
 );
-
-
-
-
-
-// Configuración base de la API
-export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '';
-
-// Endpoints organizados por categoría
-export const ENDPOINTS = {
-  dashboard: {
-    kpi: '/api/dashboard/summary/',
-    charts: '/api/dashboard/chart-data/',
-    tasks: '/api/dashboard/tasks/'
-  },
-  electrical: {
-    meters: '/api/electrical/meters/',
-    consumption: '/api/electrical/consumption/',
-    details: '/api/electrical/details/'
-  },
-  inverters: {
-    status: '/api/inverters/status/',
-    generation: '/api/inverters/generation/',
-    details: '/api/inverters/details/'
-  },
-  weather: {
-    current: '/api/weather/current/',
-    forecast: '/api/weather/forecast/',
-    details: '/api/weather/details/'
-  },
-  tasks: {
-    sync: '/tasks/fetch-historical/',
-    deviceSync: '/local/sync-devices/',
-    kpiCalculation: '/api/dashboard/calculate-kpis/',
-    dailyData: '/api/dashboard/calculate-daily-data/'
-  },
-  scada: {
-    connectionStatus: '/scada/connection-status/'
-  }
-};
-
-
 
 
 
@@ -169,13 +125,13 @@ export class TaskManager {
   _getEndpointForTask(taskType) {
     switch (taskType) {
       case 'sync':
-        return ENDPOINTS.tasks.sync;
+        return apiUtils.ENDPOINTS.tasks.sync;
       case 'deviceSync':
-        return ENDPOINTS.tasks.deviceSync;
+        return apiUtils.ENDPOINTS.tasks.deviceSync;
       case 'kpiCalculation':
-        return ENDPOINTS.tasks.kpiCalculation;
+        return apiUtils.ENDPOINTS.tasks.kpiCalculation;
       case 'dailyData':
-        return ENDPOINTS.tasks.dailyData;
+        return apiUtils.ENDPOINTS.tasks.dailyData;
       default:
         throw new Error(`Tipo de tarea no soportado: ${taskType}`);
     }
@@ -326,7 +282,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   };
 
   // Hook de efecto para cargar datos desde la API
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (signal = null) => {
     setLoading(true);
     setError(null);
 
@@ -352,32 +308,28 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
       // Realizar todas las llamadas en paralelo usando fetchWithAuth
       const [kpisData, currentMonthCharts, prevMonthCharts] = await Promise.all([
         apiUtils.fetchWithAuth(
-          apiUtils.buildApiUrl(ENDPOINTS.dashboard.kpi), 
-          apiUtils.getDefaultFetchOptions(authToken),
+          apiUtils.buildApiUrl(apiUtils.ENDPOINTS.dashboard.kpi),
+          { ...apiUtils.getDefaultFetchOptions(authToken), signal },
           handleAuthError
         ),
         apiUtils.fetchWithAuth(
-          apiUtils.buildApiUrl(ENDPOINTS.dashboard.charts, {
+          apiUtils.buildApiUrl(apiUtils.ENDPOINTS.dashboard.charts, {
             start_date: formatDateForAPI(dates.currentMonth.start),
             end_date: formatDateForAPI(dates.currentMonth.end)
-          }), 
-          apiUtils.getDefaultFetchOptions(authToken),
+          }),
+          { ...apiUtils.getDefaultFetchOptions(authToken), signal },
           handleAuthError
         ),
         apiUtils.fetchWithAuth(
-          apiUtils.buildApiUrl(ENDPOINTS.dashboard.charts, {
+          apiUtils.buildApiUrl(apiUtils.ENDPOINTS.dashboard.charts, {
             start_date: formatDateForAPI(dates.prevMonth.start),
             end_date: formatDateForAPI(dates.prevMonth.end)
-          }), 
-          apiUtils.getDefaultFetchOptions(authToken),
+          }),
+          { ...apiUtils.getDefaultFetchOptions(authToken), signal },
           handleAuthError
         )
       ]);
 
-      // Debug: mostrar los datos de KPIs antes de actualizar
-      console.log("KPIs recibidos del backend:", kpisData);
-      console.log("Estructura de datos:", Object.keys(kpisData));
-      
       // Actualizar KPIs con las unidades correctas
       updateKPIs(kpisData);
 
@@ -390,27 +342,30 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
       // Verificar estado de conexión SCADA (no fallar el dashboard si falla)
       try {
         const connData = await apiUtils.fetchWithAuth(
-          apiUtils.buildApiUrl(ENDPOINTS.scada.connectionStatus),
-          apiUtils.getDefaultFetchOptions(authToken),
+          apiUtils.buildApiUrl(apiUtils.ENDPOINTS.scada.connectionStatus),
+          { ...apiUtils.getDefaultFetchOptions(authToken), signal },
           handleAuthError
         );
         setScadaConnection({ connected: connData.connected, message: connData.message || '' });
-      } catch {
+      } catch (scadaError) {
+        // Propagar cancelaciones y errores de sesión al manejador externo
+        if (scadaError.name === 'AbortError' || scadaError.isAuthError) throw scadaError;
         setScadaConnection({ connected: false, message: 'No se pudo verificar la conexión SCADA.' });
       }
     } catch (error) {
+      // Ignorar peticiones canceladas (desmontaje del componente)
+      if (error.name === 'AbortError') return;
       setError(error.message);
       console.error('Error al cargar datos del dashboard:', error);
     } finally {
-      setLoading(false);
+      if (!signal || !signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   // Función para actualizar KPIs
   const updateKPIs = (data) => {
-    // Debug: mostrar qué datos están llegando del backend
-    console.log("Datos recibidos del backend:", data);
-    
     setKpiData(prevKpiData => ({
       ...prevKpiData,
       totalConsumption: {
@@ -786,24 +741,22 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
     });
   };
 
-  // Agregar un useEffect que se ejecute cuando el componente se monta
+  // Agregar un useEffect que se ejecute cuando el componente se monta o cambie el token
   useEffect(() => {
-  if (authToken) {
+    if (!authToken) return;
+    const controller = new AbortController();
     setLoading(true);
     // Simular un pequeño delay para mostrar la animación
-    setTimeout(() => {
-      fetchDashboardData();
+    const timer = setTimeout(() => {
+      fetchDashboardData(controller.signal);
     }, 300);
-  }
-}, []); // Se ejecuta solo al montar el componente
-
-  // Modificar onLogout para incluir animación
-  const handleLogout = () => {
-    showTransitionAnimation('logout', 'Cerrando sesión...', 1500);
-    setTimeout(() => {
-      onLogout();
-    }, 1500);
-  };
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+    // fetchDashboardData se recrea en cada render; incluirla en deps provocaría un bucle de recargas
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authToken]);
 
   // Opciones genéricas para los gráficos (con soporte para zoom/pan y tooltips mejorados)
   const chartOptions = {

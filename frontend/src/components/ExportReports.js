@@ -1,8 +1,11 @@
 // Importaciones necesarias de React y componentes personalizados
 import React, { useState, useEffect, useRef } from 'react';
 import TransitionOverlay from './TransitionOverlay';
-import { formatDateForAPI, getCurrentDateISO } from '../utils/dateUtils';
-import { ENDPOINTS, buildApiUrl, getDefaultFetchOptions, handleApiResponse } from '../utils/apiConfig';
+import { formatDateForAPI } from '../utils/dateUtils';
+import { ENDPOINTS, buildApiUrl, getDefaultFetchOptions, handleApiResponse, fetchWithAuth } from '../utils/apiConfig';
+
+// Límite de sondeos de estado por reporte (cada 2-5 s → ~5-12 min máximo)
+const MAX_STATUS_CHECKS = 150;
 
 function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo, isSidebarMinimized, setIsSidebarMinimized }) {
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,21 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize, setPageSize] = useState(5);
+
+  // Refs para el monitoreo de reportes: timeouts y peticiones en curso por task_id,
+  // para poder cancelarlos al desmontar el componente y evitar fugas
+  const monitorTimeoutsRef = useRef({});
+  const monitorControllersRef = useRef({});
+
+  // Cancelar polling y peticiones pendientes al desmontar
+  useEffect(() => {
+    const timeouts = monitorTimeoutsRef.current;
+    const controllers = monitorControllersRef.current;
+    return () => {
+      Object.values(timeouts).forEach(clearTimeout);
+      Object.values(controllers).forEach(controller => controller.abort());
+    };
+  }, []);
 
   // Definir categorías de dispositivos disponibles
   const availableCategories = [
@@ -85,44 +103,58 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
 
   // Cargar datos iniciales
   useEffect(() => {
-    if (authToken) {
-      setLoading(true);
-      // Simular un pequeño delay para mostrar la animación
-      setTimeout(() => {
-        loadInstitutions();
-        loadPreviousExports();
-        setLoading(false);
-      }, 300);
-    }
+    if (!authToken) return;
+    const controller = new AbortController();
+    setLoading(true);
+    // Simular un pequeño delay para mostrar la animación
+    const timer = setTimeout(() => {
+      loadInstitutions(controller.signal);
+      loadPreviousExports(1, pageSize, controller.signal);
+      setLoading(false);
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+    // Las funciones de carga se recrean en cada render; incluirlas en deps provocaría recargas infinitas
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]);
 
   // Cargar dispositivos cuando cambie la institución o categoría
   useEffect(() => {
     if (selectedInstitution && selectedCategory) {
-      loadDevices();
+      // AbortController por ejecución del efecto: evita condiciones de carrera
+      // con respuestas fuera de orden al cambiar rápido de institución/categoría
+      const controller = new AbortController();
+      loadDevices(controller.signal);
+      return () => controller.abort();
     } else {
       setElectricMeters([]);
       setInverters([]);
       setWeatherStations([]);
     }
-  }, [selectedInstitution, selectedCategory]);
+    // loadDevices se recrea en cada render; incluirla en deps provocaría recargas infinitas
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedInstitution, selectedCategory, authToken]);
 
   // Cargar instituciones disponibles
-  const loadInstitutions = async () => {
+  const loadInstitutions = async (signal = null) => {
     try {
-      const response = await fetch(buildApiUrl(ENDPOINTS.electrical.institutions), {
-        ...getDefaultFetchOptions(authToken)
+      const data = await fetchWithAuth(buildApiUrl(ENDPOINTS.electrical.institutions), {
+        ...getDefaultFetchOptions(authToken),
+        signal
       });
-      const data = await handleApiResponse(response);
       setInstitutions(data);
     } catch (error) {
+      // Ignorar cancelaciones y errores de sesión (fetchWithAuth ya redirige en 401)
+      if (error.name === 'AbortError' || error.isAuthError) return;
       console.error('Error cargando instituciones:', error);
       setError('Error al cargar instituciones');
     }
   };
 
   // Cargar dispositivos según la categoría seleccionada
-  const loadDevices = async () => {
+  const loadDevices = async (signal = null) => {
     if (!selectedInstitution || !selectedCategory) return;
 
     try {
@@ -146,11 +178,11 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           return;
       }
 
-      const response = await fetch(buildApiUrl(endpoint, { institution_id: selectedInstitution }), {
-        ...getDefaultFetchOptions(authToken)
+      const data = await fetchWithAuth(buildApiUrl(endpoint, { institution_id: selectedInstitution }), {
+        ...getDefaultFetchOptions(authToken),
+        signal
       });
-      const data = await handleApiResponse(response);
-      
+
       // Adaptar la respuesta según el endpoint
       if (selectedCategory === 'weatherStation') {
         setterFunction(data.results || []);
@@ -158,27 +190,24 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
         setterFunction(data.devices || []);
       }
     } catch (error) {
+      // Ignorar respuestas obsoletas canceladas y errores de sesión
+      if (error.name === 'AbortError' || error.isAuthError) return;
       console.error('Error cargando dispositivos:', error);
       setError('Error al cargar dispositivos');
     }
   };
 
   // Cargar reportes previos con paginación
-  const loadPreviousExports = async (page = 1, size = pageSize) => {
+  const loadPreviousExports = async (page = 1, size = pageSize, signal = null) => {
     setLoadingExports(true);
     try {
       // Llamada real a la API para obtener historial de reportes con paginación
       const url = `${buildApiUrl(ENDPOINTS.reports.history)}?page=${page}&page_size=${size}`;
-      const response = await fetch(url, {
-        ...getDefaultFetchOptions(authToken)
+      const data = await fetchWithAuth(url, {
+        ...getDefaultFetchOptions(authToken),
+        signal
       });
 
-      if (!response.ok) {
-        throw new Error('Error al cargar historial de reportes');
-      }
-
-      const data = await response.json();
-      
       // Actualizar estados de paginación
       setCurrentPage(data.current_page || 1);
       setTotalPages(data.total_pages || 1);
@@ -203,8 +232,10 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
       }));
       
       setPreviousExports(transformedExports);
-      
+
     } catch (error) {
+      // Ignorar cancelaciones y errores de sesión (fetchWithAuth ya redirige en 401)
+      if (error.name === 'AbortError' || error.isAuthError) return;
       console.error('Error cargando reportes previos:', error);
       // En caso de error, mostrar lista vacía
       setPreviousExports([]);
@@ -271,8 +302,8 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
     setTimeout(() => setExportProgress(90), 300);
 
     try {
-      // Llamada real a la API para generar reporte
-      const response = await fetch(buildApiUrl(ENDPOINTS.reports.generate), {
+      // Llamada real a la API para generar reporte (fetchWithAuth maneja 401 y errores)
+      const result = await fetchWithAuth(buildApiUrl(ENDPOINTS.reports.generate), {
         method: 'POST',
         ...getDefaultFetchOptions(authToken),
         body: JSON.stringify({
@@ -287,13 +318,6 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al generar el reporte');
-      }
-
-      const result = await response.json();
-      
       if (result.success) {
         // Mostrar mensaje de éxito
         showTransitionAnimation('success', `Generación de reporte iniciada exitosamente! El reporte se generará en segundo plano.`, 4000);
@@ -324,7 +348,9 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
 
     } catch (error) {
       console.error('Error en la exportación:', error);
-      setError(error.message || 'Error al generar el reporte');
+      if (!error.isAuthError) {
+        setError(error.message || 'Error al generar el reporte');
+      }
       setLoading(false);
       setExportProgress(0);
     }
@@ -332,67 +358,96 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
 
   // Monitorear el estado de generación del reporte
   const monitorReportStatus = async (taskId) => {
+    let attempts = 0;
+
+    // Programar el siguiente sondeo guardando el timeout para poder limpiarlo al desmontar
+    const scheduleNextCheck = (delay) => {
+      monitorTimeoutsRef.current[taskId] = setTimeout(checkStatus, delay);
+    };
+
+    const stopMonitoring = () => {
+      if (monitorTimeoutsRef.current[taskId]) {
+        clearTimeout(monitorTimeoutsRef.current[taskId]);
+        delete monitorTimeoutsRef.current[taskId];
+      }
+    };
+
     const checkStatus = async () => {
+      attempts += 1;
+      if (attempts > MAX_STATUS_CHECKS) {
+        // Límite de reintentos alcanzado: detener el polling para evitar peticiones eternas
+        stopMonitoring();
+        showTransitionAnimation('warning', 'El monitoreo del reporte excedió el tiempo de espera. Actualice el historial para consultar su estado.', 4000);
+        return;
+      }
+
+      const controller = new AbortController();
+      monitorControllersRef.current[taskId] = controller;
+
       try {
-        const response = await fetch(buildApiUrl(ENDPOINTS.reports.status, { task_id: taskId }), {
-          ...getDefaultFetchOptions(authToken)
+        const statusInfo = await fetchWithAuth(buildApiUrl(ENDPOINTS.reports.status, { task_id: taskId }), {
+          ...getDefaultFetchOptions(authToken),
+          signal: controller.signal
         });
 
-        if (!response.ok) {
-          throw new Error('Error al consultar estado del reporte');
-        }
-
-        const statusInfo = await response.json();
-        
         // Actualizar progreso individual del reporte
         setReportProgress(prev => ({
           ...prev,
           [taskId]: statusInfo.progress
         }));
-        
+
         if (statusInfo.status === 'completed') {
           // Reporte completado
+          stopMonitoring();
           setReportProgress(prev => ({
             ...prev,
             [taskId]: 100
           }));
-          
+
           // Descargar archivo automáticamente
           downloadReport(taskId);
-          
+
           // Actualizar estado en la lista
-          setPreviousExports(prev => prev.map(exp => 
-            exp.id === taskId 
+          setPreviousExports(prev => prev.map(exp =>
+            exp.id === taskId
               ? { ...exp, status: 'Completed', fileSize: 'Descargando...', recordCount: statusInfo.record_count || 0 }
               : exp
           ));
-          
+
           showTransitionAnimation('success', `Reporte "${reportType}" generado exitosamente!`, 3000);
-          
+
         } else if (statusInfo.status === 'failed') {
           // Reporte falló
+          stopMonitoring();
           setReportProgress(prev => ({
             ...prev,
             [taskId]: 0
           }));
           setError(`Error al generar reporte: ${statusInfo.error}`);
-          
+
           // Actualizar estado en la lista
-          setPreviousExports(prev => prev.map(exp => 
-            exp.id === taskId 
+          setPreviousExports(prev => prev.map(exp =>
+            exp.id === taskId
               ? { ...exp, status: 'Failed', fileSize: 'Error', recordCount: 0 }
               : exp
           ));
-          
+
         } else if (statusInfo.status === 'processing') {
           // Reporte en proceso, continuar monitoreando
-          setTimeout(checkStatus, 2000);
+          scheduleNextCheck(2000);
         }
-        
+
       } catch (error) {
+        // Detener el monitoreo si la petición fue cancelada (desmontaje) o la sesión expiró
+        if (error.name === 'AbortError' || error.isAuthError) {
+          stopMonitoring();
+          return;
+        }
         console.error('Error monitoreando estado:', error);
-        // Reintentar en 5 segundos
-        setTimeout(checkStatus, 5000);
+        // Reintentar en 5 segundos (cuenta para el límite de reintentos)
+        scheduleNextCheck(5000);
+      } finally {
+        delete monitorControllersRef.current[taskId];
       }
     };
 
@@ -422,7 +477,10 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
       });
 
       if (!response.ok) {
-        throw new Error('Error al descargar el reporte');
+        // Manejar el 401 (limpieza de token y redirección) y demás errores ANTES de leer el blob;
+        // handleApiResponse siempre lanza en respuestas no exitosas
+        await handleApiResponse(response);
+        return;
       }
 
       // Crear blob y descargar
@@ -444,6 +502,8 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
       ));
       
     } catch (error) {
+      // Si la sesión expiró, handleApiResponse ya redirigió al login
+      if (error.isAuthError) return;
       console.error('Error descargando reporte:', error);
       setError('Error al descargar el reporte generado');
     }
@@ -458,14 +518,6 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
     setTimeout(() => {
       setShowTransition(false);
     }, duration);
-  };
-
-  // Modificar onLogout para incluir animación
-  const handleLogout = () => {
-    showTransitionAnimation('logout', 'Cerrando sesión...', 1500);
-    setTimeout(() => {
-      onLogout();
-    }, 1500);
   };
 
   // Limpiar selección de dispositivos cuando cambie la categoría
@@ -499,7 +551,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(buildApiUrl(ENDPOINTS.reports.generate), {
+      const result = await fetchWithAuth(buildApiUrl(ENDPOINTS.reports.generate), {
         method: 'POST',
         ...getDefaultFetchOptions(authToken),
         body: JSON.stringify({
@@ -513,13 +565,6 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           format: exportFormat
         })
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al regenerar el reporte');
-      }
-
-      const result = await response.json();
 
       if (result.success) {
         showTransitionAnimation('success', `Generación de reporte iniciada exitosamente!`, 3000);
@@ -541,7 +586,11 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
       }
     } catch (error) {
       console.error('Error al regenerar reporte:', error);
-      setError(error.message || 'Error al regenerar el reporte');
+      if (!error.isAuthError) {
+        setError(error.message || 'Error al regenerar el reporte');
+      }
+    } finally {
+      // Liberar siempre la UI, tanto en éxito como en error
       setLoading(false);
     }
   };
@@ -560,15 +609,20 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al eliminar el reporte');
+        // handleApiResponse gestiona el 401 (limpieza y redirección) y lanza un error con el detalle
+        await handleApiResponse(response);
+        return;
       }
 
       setPreviousExports(prev => prev.filter(exp => exp.id !== taskId));
       showTransitionAnimation('success', 'Reporte eliminado exitosamente!');
     } catch (error) {
       console.error('Error al eliminar reporte:', error);
-      setError(error.message || 'Error al eliminar el reporte');
+      if (!error.isAuthError) {
+        setError(error.message || 'Error al eliminar el reporte');
+      }
+    } finally {
+      // Liberar siempre la UI para que no quede bloqueada tras un fallo
       setLoading(false);
     }
   };

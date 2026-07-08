@@ -98,7 +98,10 @@ export const getDefaultFetchOptions = (authToken) => ({
  * Función para manejar errores de la API con manejo especial para autenticación
  * @param {Response} response - Respuesta de fetch
  * @param {Function} onAuthError - Callback para errores de autenticación
- * @returns {Promise} - Promesa resuelta con los datos o rechazada con error
+ * @returns {Promise} - Promesa resuelta con los datos o rechazada con error.
+ *                      En 401 limpia la sesión, redirige al login y rechaza con un
+ *                      error marcado con `isAuthError = true` para que los callers
+ *                      puedan ignorarlo (nunca resuelve con undefined).
  */
 export const handleApiResponse = async (response, onAuthError = null) => {
   if (!response.ok) {
@@ -114,9 +117,12 @@ export const handleApiResponse = async (response, onAuthError = null) => {
       localStorage.removeItem('isSuperuser');
       // Redirigir al login
       window.location.href = '/';
-      return;
+      // Rechazar con un error controlado para que los callers no procesen datos undefined
+      const authError = new Error('Token expirado. Por favor, inicie sesión nuevamente.');
+      authError.isAuthError = true;
+      throw authError;
     }
-    
+
     const error = await response.json().catch(() => ({
       detail: 'Error de red desconocido'
     }));
@@ -137,7 +143,8 @@ export const fetchWithAuth = async (url, options = {}, onAuthError = null) => {
     const response = await fetch(url, options);
     return await handleApiResponse(response, onAuthError);
   } catch (error) {
-    if (error.message.includes('Token expirado')) {
+    // Los errores 401 (isAuthError) ya notificaron a onAuthError dentro de handleApiResponse
+    if (!error.isAuthError && error.message.includes('Token expirado')) {
       if (onAuthError) {
         onAuthError(error.message);
       }
