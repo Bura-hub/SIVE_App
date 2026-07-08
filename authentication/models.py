@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import F
 from django.utils import timezone
 from django.core.validators import RegexValidator
 from django.contrib.auth.models import User
@@ -71,11 +72,17 @@ class UserProfile(models.Model):
         self.save(update_fields=['locked_until', 'failed_login_attempts'])
     
     def increment_failed_attempts(self):
-        """Incrementa el contador de intentos fallidos"""
-        self.failed_login_attempts += 1
+        """Incrementa (atómicamente) el contador de intentos fallidos y bloquea al superar el umbral.
+
+        Usa F() + UPDATE para evitar la condición de carrera del read-modify-write
+        bajo intentos concurrentes.
+        """
+        type(self).objects.filter(pk=self.pk).update(
+            failed_login_attempts=F('failed_login_attempts') + 1
+        )
+        self.refresh_from_db(fields=['failed_login_attempts'])
         if self.failed_login_attempts >= 5:  # Bloquear después de 5 intentos
             self.lock_account()
-        self.save(update_fields=['failed_login_attempts', 'locked_until'])
     
     def reset_failed_attempts(self):
         """Resetea el contador de intentos fallidos"""
@@ -101,7 +108,15 @@ class AuthToken(models.Model):
     user_agent = models.TextField(blank=True, verbose_name="User Agent")
     ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="Dirección IP")
     device_type = models.CharField(max_length=50, blank=True, verbose_name="Tipo de dispositivo")
-    
+
+    # Token de refresco emparejado con esta sesión/dispositivo. Permite que el
+    # logout invalide SOLO el refresh token de esta sesión (antes se usaba una
+    # heurística por fecha que afectaba a otros dispositivos).
+    refresh_token = models.ForeignKey(
+        'RefreshToken', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='access_tokens', verbose_name="Token de refresco emparejado"
+    )
+
     class Meta:
         verbose_name = 'Token de Autenticación'
         verbose_name_plural = 'Tokens de Autenticación'
@@ -125,15 +140,16 @@ class AuthToken(models.Model):
         return secrets.token_hex(32)
     
     @classmethod
-    def create_token(cls, user, name="", user_agent="", ip_address=None, days_valid=30):
-        """Crea un nuevo token para un usuario"""
+    def create_token(cls, user, name="", user_agent="", ip_address=None, days_valid=30, refresh_token=None):
+        """Crea un nuevo token para un usuario, opcionalmente emparejado a un refresh token"""
         token = cls(
             user=user,
             key=cls.generate_key(),
             name=name,
             expires_at=timezone.now() + timedelta(days=days_valid),
             user_agent=user_agent,
-            ip_address=ip_address
+            ip_address=ip_address,
+            refresh_token=refresh_token
         )
         token.save()
         return token

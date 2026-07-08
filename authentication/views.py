@@ -46,11 +46,33 @@ from .serializers import (
 )
 
 # Modelos personalizados
-from .models import UserProfile, AuthToken, RefreshToken
+from .models import UserProfile, AuthToken, RefreshToken, LoginAttempt
 
 # Utilidades
 import ipaddress
+import logging
 from datetime import timedelta
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+
+def get_client_ip(request):
+    """
+    Obtiene la IP del cliente.
+
+    Por defecto usa REMOTE_ADDR. La cabecera X-Forwarded-For es falsificable por
+    el cliente, así que solo se usa si el despliegue está detrás de un proxy de
+    confianza (settings.TRUST_X_FORWARDED_FOR=True), tomando el último salto
+    (el añadido por el proxy más cercano). Evita el spoofing que permitía saltarse
+    blacklist/rate-limit y falsear la auditoría.
+    """
+    if getattr(settings, 'TRUST_X_FORWARDED_FOR', False):
+        xff = request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[-1].strip()
+    return request.META.get('REMOTE_ADDR')
+
 
 # ========================= Vistas de Autenticación =========================
 
@@ -78,40 +100,41 @@ class LoginView(ObtainAuthToken):
     
     def post(self, request, *args, **kwargs):
         """
-        Maneja la solicitud POST para iniciar sesión
-        """
-        # Obtener IP del cliente
-        client_ip = self._get_client_ip(request)
-        username = request.data.get('username', '')
-        
-        # No logging por seguridad
-        
-        try:
-        # Serializa y valida los datos de entrada
-            serializer = self.serializer_class(data=request.data, context={'request': request})
-            
-            # Validar datos sin lanzar excepción
-            if not serializer.is_valid():
-                            # No logging por seguridad
-                return Response({
-                    'error': 'Datos de entrada inválidos',
-                    'details': serializer.errors
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Autenticar usuario
-            user = serializer.validated_data['user']
+        Maneja la solicitud POST para iniciar sesión.
 
-            # Obtener o crear el perfil del usuario
-            profile, created = UserProfile.objects.get_or_create(user=user)
-            
-            # Verificar si la cuenta está bloqueada
+        Aplica el bloqueo por intentos fallidos (antes era código muerto:
+        increment_failed_attempts nunca se llamaba) y registra cada intento en
+        LoginAttempt para auditoría.
+        """
+        client_ip = get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        username = request.data.get('username', '')
+
+        # Bloqueo previo: si el usuario existe y está bloqueado, cortar ANTES de autenticar.
+        existing_user = User.objects.filter(username=username).first()
+        if existing_user is not None:
+            profile, _ = UserProfile.objects.get_or_create(user=existing_user)
             if profile.is_locked():
+                return self._locked_response(existing_user, username, client_ip, user_agent, profile)
+
+        try:
+            serializer = self.serializer_class(data=request.data, context={'request': request})
+
+            # Credenciales inválidas: contar el intento fallido (y bloquear al superar el umbral).
+            if not serializer.is_valid():
+                self._register_failed_attempt(existing_user, username, client_ip, user_agent)
                 return Response({
-                    'error': 'Cuenta bloqueada',
-                    'message': f'Tu cuenta está bloqueada hasta {profile.locked_until.strftime("%H:%M")}',
-                    'locked_until': profile.locked_until
-                }, status=status.HTTP_423_LOCKED)
-            
+                    'error': 'Credenciales inválidas',
+                    'message': 'Usuario o contraseña incorrectos'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+
+            user = serializer.validated_data['user']
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+
+            # Doble verificación de bloqueo (por si el estado cambió tras la validación).
+            if profile.is_locked():
+                return self._locked_response(user, username, client_ip, user_agent, profile)
+
             # Verificar si requiere cambio de contraseña
             if profile.require_password_change:
                 return Response({
@@ -119,20 +142,21 @@ class LoginView(ObtainAuthToken):
                     'message': 'Debes cambiar tu contraseña antes de continuar',
                     'require_password_change': True
                 }, status=status.HTTP_403_FORBIDDEN)
-            
+
             # Crear tokens
             access_token, refresh_token = self._create_tokens(user, request)
-            
-            # Resetear intentos fallidos
+
+            # Login exitoso: resetear intentos y actualizar/auditar.
             profile.reset_failed_attempts()
-            
-            # Actualizar información de login
             profile.last_login_ip = client_ip
             profile.last_activity = timezone.now()
             profile.save(update_fields=['last_login_ip', 'last_activity'])
-            
-            # No logging por seguridad
-            
+            LoginAttempt.objects.create(
+                user=user, username=username or user.username,
+                ip_address=client_ip or '0.0.0.0', user_agent=user_agent,
+                status=LoginAttempt.SUCCESS
+            )
+
             # Preparar respuesta
             response_data = {
                 'access_token': access_token.key,
@@ -149,59 +173,67 @@ class LoginView(ObtainAuthToken):
                     'created_at': profile.created_at,
                 }
             }
-            
+
             return Response(response_data, status=status.HTTP_200_OK)
-            
-        except ValidationError as e:
-            # No logging por seguridad
-            return Response({'error': 'Error de validación', 'details': e.detail}, 
-                          status=status.HTTP_400_BAD_REQUEST)
-        
-        except AuthenticationFailed as e:
-            # No logging por seguridad
-            return Response({
-                'error': 'Credenciales inválidas',
-                'message': 'Usuario o contraseña incorrectos'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        except Exception as e:
-            # No logging por seguridad
-            return Response({'error': 'Error interno del servidor'}, 
+
+        except Exception:
+            logger.exception('Error interno en login')
+            return Response({'error': 'Error interno del servidor'},
                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
+    def _register_failed_attempt(self, user, username, client_ip, user_agent):
+        """Registra un intento fallido: incrementa el contador (atómico, si el
+        usuario existe) y crea el LoginAttempt de auditoría."""
+        if user is not None:
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.increment_failed_attempts()
+        LoginAttempt.objects.create(
+            user=user, username=username or '', ip_address=client_ip or '0.0.0.0',
+            user_agent=user_agent, status=LoginAttempt.FAILED,
+            failure_reason='Credenciales inválidas'
+        )
+
+    def _locked_response(self, user, username, client_ip, user_agent, profile):
+        """Registra el intento sobre cuenta bloqueada y devuelve 423."""
+        LoginAttempt.objects.create(
+            user=user, username=username or (user.username if user else ''),
+            ip_address=client_ip or '0.0.0.0', user_agent=user_agent,
+            status=LoginAttempt.LOCKED, failure_reason='Cuenta bloqueada'
+        )
+        return Response({
+            'error': 'Cuenta bloqueada',
+            'message': f'Tu cuenta está bloqueada hasta {profile.locked_until.strftime("%H:%M")}',
+            'locked_until': profile.locked_until
+        }, status=status.HTTP_423_LOCKED)
+
     def _create_tokens(self, user, request):
         """
-        Crea tokens de acceso y refresco para el usuario
+        Crea tokens de acceso y refresco para el usuario (emparejados, para que el
+        logout pueda invalidar solo el refresh token de esta sesión).
         """
-        # Obtener información del dispositivo
         user_agent = request.META.get('HTTP_USER_AGENT', '')
-        client_ip = self._get_client_ip(request)
+        client_ip = get_client_ip(request)
         device_name = self._detect_device_name(user_agent)
-        
+
+        # Crear refresco (90 días) primero, para emparejarlo con el token de acceso.
+        refresh_token = RefreshToken.create_refresh_token(user, days_valid=90)
+
         # Crear token de acceso (30 días)
         access_token = AuthToken.create_token(
             user=user,
             name=device_name,
             user_agent=user_agent,
             ip_address=client_ip,
-            days_valid=30
+            days_valid=30,
+            refresh_token=refresh_token
         )
-        
-        # Crear token de refresco (90 días)
-        refresh_token = RefreshToken.create_refresh_token(user, days_valid=90)
-        
+
         return access_token, refresh_token
     
     def _get_client_ip(self, request):
-        """
-        Obtiene la IP real del cliente
-        """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+        """Obtiene la IP del cliente (delega en get_client_ip, que ignora
+        X-Forwarded-For salvo tras un proxy de confianza)."""
+        return get_client_ip(request)
     
     def _detect_device_name(self, user_agent):
         """
@@ -273,12 +305,12 @@ class LogoutView(APIView):
                 token = request.auth
                 token.is_active = False
                 token.save(update_fields=['is_active'])
-                
-                # También invalidar token de refresco asociado
-                RefreshToken.objects.filter(
-                    user=user,
-                    created__gte=token.created
-                ).update(is_active=False)
+
+                # Invalidar SOLO el refresh token emparejado con esta sesión.
+                # Antes se usaba created__gte, que invalidaba las sesiones MÁS
+                # nuevas de otros dispositivos.
+                if token.refresh_token_id:
+                    RefreshToken.objects.filter(pk=token.refresh_token_id).update(is_active=False)
             
             # Logout exitoso
             return Response({
@@ -293,15 +325,9 @@ class LogoutView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _get_client_ip(self, request):
-        """
-        Obtiene la IP real del cliente
-        """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+        """Obtiene la IP del cliente (delega en get_client_ip, que ignora
+        X-Forwarded-For salvo tras un proxy de confianza)."""
+        return get_client_ip(request)
 
 
 @extend_schema(
@@ -321,65 +347,57 @@ class RefreshTokenView(APIView):
         """
         Renueva el token de acceso
         """
+        # La validación (raise_exception=True) va FUERA del try: un refresh token
+        # inválido/expirado debe devolver 400 (vía DRF), no 500.
+        serializer = RefreshTokenRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token_value = serializer.validated_data['refresh_token']
+
         try:
-            serializer = RefreshTokenRequestSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            
-            refresh_token_value = serializer.validated_data['refresh_token']
-            
-            # Obtener el token de refresco
             refresh_token = RefreshToken.objects.get(
                 token=refresh_token_value,
                 is_active=True
             )
-            
             user = refresh_token.user
-            
+
             # Verificar que el usuario esté activo
             if not user.is_active:
                 return Response({
                     'error': 'Usuario inactivo'
                 }, status=status.HTTP_403_FORBIDDEN)
-            
-            # Crear nuevo token de acceso
+
+            # Nuevo token de acceso, emparejado con el mismo refresh token
             new_access_token = AuthToken.create_token(
                 user=user,
                 name='Renovado',
                 user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                ip_address=self._get_client_ip(request),
-                days_valid=30
+                ip_address=get_client_ip(request),
+                days_valid=30,
+                refresh_token=refresh_token
             )
-            
-            # No logging por seguridad
-            
+
             return Response({
                 'access_token': new_access_token.key,
                 'refresh_token': refresh_token_value,  # Mantener el mismo refresh token
                 'expires_in': int((new_access_token.expires_at - timezone.now()).total_seconds()),
                 'token_type': 'Bearer'
             }, status=status.HTTP_200_OK)
-            
+
         except RefreshToken.DoesNotExist:
             return Response({
                 'error': 'Token de refresco inválido'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        except Exception as e:
-            # No logging por seguridad
+
+        except Exception:
+            logger.exception('Error interno al refrescar token')
             return Response({
                 'error': 'Error interno del servidor'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _get_client_ip(self, request):
-        """
-        Obtiene la IP real del cliente
-        """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+        """Obtiene la IP del cliente (delega en get_client_ip, que ignora
+        X-Forwarded-For salvo tras un proxy de confianza)."""
+        return get_client_ip(request)
 
 
 @extend_schema(
@@ -398,10 +416,12 @@ class ChangePasswordView(APIView):
         """
         Cambia la contraseña del usuario
         """
+        # Validación fuera del try: contraseña actual incorrecta o nueva contraseña
+        # débil deben devolver 400 (vía DRF), no 500.
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+
         try:
-            serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
-            serializer.is_valid(raise_exception=True)
-            
             user = request.user
             new_password = serializer.validated_data['new_password']
             
@@ -460,10 +480,10 @@ class UserProfileView(APIView):
             profile, created = UserProfile.objects.get_or_create(user=request.user)
             serializer = UserProfileSerializer(profile)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        except Exception as e:
+        except Exception:
+            logger.exception('Error al obtener el perfil')
             return Response({
-                'error': 'Error al obtener el perfil',
-                'details': str(e)
+                'error': 'Error al obtener el perfil'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def put(self, request):
@@ -495,17 +515,25 @@ class UserProfileView(APIView):
             for field in profile_fields:
                 if field in update_data:
                     setattr(profile, field, update_data[field])
-            
+
+            # Validar el perfil (p. ej. phone_regex) antes de guardar: save() por sí
+            # solo no ejecuta los validadores del modelo.
+            profile.full_clean()
             profile.save()
-            
+
             # Serializar respuesta
             serializer = UserProfileSerializer(profile)
             return Response(serializer.data, status=status.HTTP_200_OK)
-            
-        except Exception as e:
+
+        except ValidationError as e:
             return Response({
-                'error': 'Error al actualizar el perfil',
-                'details': str(e)
+                'error': 'Datos de perfil inválidos',
+                'details': e.message_dict if hasattr(e, 'message_dict') else e.messages
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('Error al actualizar el perfil')
+            return Response({
+                'error': 'Error al actualizar el perfil'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -551,29 +579,24 @@ class UserRegistrationView(APIView):
         """
         Registra un nuevo usuario
         """
+        # Validación fuera del try: datos inválidos (contraseña débil, email
+        # duplicado, etc.) deben devolver 400 (vía DRF), no 500.
+        serializer = UserRegistrationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         try:
-            serializer = UserRegistrationSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            
             with transaction.atomic():
                 user = serializer.save()
-                
-                            # No logging por seguridad
-                
-                return Response({
-                    'message': 'Usuario registrado exitosamente',
-                    'user_id': user.pk,
-                    'username': user.username,
-                    'email': user.email
-                }, status=status.HTTP_201_CREATED)
-                
-        except Exception as e:
-            # Logging temporal para debugging
-            import traceback
-            print(f"Error en registro: {str(e)}")
-            print(f"Traceback: {traceback.format_exc()}")
             return Response({
-                'error': f'Error al registrar el usuario: {str(e)}'
+                'message': 'Usuario registrado exitosamente',
+                'user_id': user.pk,
+                'username': user.username,
+                'email': user.email
+            }, status=status.HTTP_201_CREATED)
+        except Exception:
+            logger.exception('Error al registrar el usuario')
+            return Response({
+                'error': 'Error al registrar el usuario'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -737,18 +760,10 @@ class ProfileImageView(APIView):
             
             return Response(response_data, status=status.HTTP_200_OK)
             
-        except Exception as e:
-            import traceback
-            error_details = str(e)
-            error_traceback = traceback.format_exc()
-            
-            # Log del error para debugging
-            print(f"Error en ProfileImageView.post: {error_details}")
-            print(f"Traceback: {error_traceback}")
-            
+        except Exception:
+            logger.exception('Error en ProfileImageView.post')
             return Response({
-                'error': 'Error al subir la imagen de perfil',
-                'details': error_details
+                'error': 'Error al subir la imagen de perfil'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def delete(self, request):
@@ -780,18 +795,10 @@ class ProfileImageView(APIView):
                     'message': 'No hay imagen de perfil para eliminar'
                 }, status=status.HTTP_404_NOT_FOUND)
                 
-        except Exception as e:
-            import traceback
-            error_details = str(e)
-            error_traceback = traceback.format_exc()
-            
-            # Log del error para debugging
-            print(f"Error en ProfileImageView.delete: {error_details}")
-            print(f"Traceback: {error_traceback}")
-            
+        except Exception:
+            logger.exception('Error en ProfileImageView.delete')
             return Response({
-                'error': 'Error al eliminar la imagen de perfil',
-                'details': error_details
+                'error': 'Error al eliminar la imagen de perfil'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def get(self, request):
@@ -851,18 +858,10 @@ class ProfileImageView(APIView):
                     'message': 'No hay imagen de perfil configurada'
                 }, status=status.HTTP_200_OK)
                 
-        except Exception as e:
-            import traceback
-            error_details = str(e)
-            error_traceback = traceback.format_exc()
-            
-            # Log del error para debugging
-            print(f"Error en ProfileImageView.get: {error_details}")
-            print(f"Traceback: {error_traceback}")
-            
+        except Exception:
+            logger.exception('Error en ProfileImageView.get')
             return Response({
-                'error': 'Error al obtener información de la imagen de perfil',
-                'details': error_details
+                'error': 'Error al obtener información de la imagen de perfil'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

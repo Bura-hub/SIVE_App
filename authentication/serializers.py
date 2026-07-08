@@ -1,6 +1,8 @@
 # Importa el módulo de serializadores de Django REST Framework
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from django.contrib.auth.models import User
 from .models import UserProfile, AuthToken, RefreshToken, LoginAttempt
@@ -222,12 +224,12 @@ class ChangePasswordSerializer(serializers.Serializer):
         style={'input_type': 'password'}
     )
     
-    # Nueva contraseña
+    # Nueva contraseña (la política de fortaleza se aplica en validate() vía
+    # validate_password, usando AUTH_PASSWORD_VALIDATORS de settings)
     new_password = serializers.CharField(
         help_text="Nueva contraseña",
         write_only=True,
-        style={'input_type': 'password'},
-        validators=[]
+        style={'input_type': 'password'}
     )
     
     # Confirmación de la nueva contraseña
@@ -259,7 +261,15 @@ class ChangePasswordSerializer(serializers.Serializer):
         # Verificar que la nueva contraseña sea diferente a la actual
         if user.check_password(new_password):
             raise serializers.ValidationError("La nueva contraseña debe ser diferente a la actual")
-        
+
+        # Aplicar la política de fortaleza (AUTH_PASSWORD_VALIDATORS: longitud 12,
+        # CustomPasswordValidator, etc.). Antes el cambio de contraseña NO validaba
+        # fortaleza (validators=[]), permitiendo contraseñas triviales.
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({'new_password': list(e.messages)})
+
         return attrs
 
 
@@ -316,11 +326,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
 # ========================= Serializador de Registro de Usuario =========================
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    # Contraseña y confirmación
+    # Contraseña y confirmación (fortaleza validada en validate() vía validate_password)
     password = serializers.CharField(
         write_only=True,
-        style={'input_type': 'password'},
-        validators=[]
+        style={'input_type': 'password'}
     )
     confirm_password = serializers.CharField(
         write_only=True,
@@ -355,40 +364,23 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         email = attrs.get('email')
         if User.objects.filter(email=email).exists():
             raise serializers.ValidationError("Este correo electrónico ya está registrado")
-        
-        # Validación personalizada de contraseña
-        self._validate_password(password)
-        
+
+        # Aplicar la política de fortaleza completa (AUTH_PASSWORD_VALIDATORS:
+        # longitud 12, CommonPasswordValidator, CustomPasswordValidator, etc.),
+        # coherente con el resto del sistema. Antes se usaba una validación propia
+        # más débil (mínimo 8, sin lista de comunes).
+        temp_user = User(
+            username=attrs.get('username', ''),
+            email=email or '',
+            first_name=attrs.get('first_name', ''),
+            last_name=attrs.get('last_name', ''),
+        )
+        try:
+            validate_password(password, user=temp_user)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({'password': list(e.messages)})
+
         return attrs
-    
-    def _validate_password(self, password):
-        """
-        Valida la contraseña según los criterios de seguridad
-        """
-        errors = []
-        
-        # Verificar longitud mínima
-        if len(password) < 8:
-            errors.append("La contraseña debe tener al menos 8 caracteres")
-        
-        # Verificar mayúsculas
-        if not re.search(r'[A-Z]', password):
-            errors.append("La contraseña debe contener al menos una letra mayúscula")
-        
-        # Verificar minúsculas
-        if not re.search(r'[a-z]', password):
-            errors.append("La contraseña debe contener al menos una letra minúscula")
-        
-        # Verificar dígitos
-        if not re.search(r'\d', password):
-            errors.append("La contraseña debe contener al menos un número")
-        
-        # Verificar caracteres especiales
-        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
-            errors.append("La contraseña debe contener al menos un carácter especial (!@#$%^&*(),.?\":{}|<>)")
-        
-        if errors:
-            raise serializers.ValidationError(errors)
 
     def create(self, validated_data):
         """

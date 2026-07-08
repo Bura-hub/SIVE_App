@@ -30,7 +30,7 @@ class UserProfileAdmin(admin.ModelAdmin):
             'fields': ('avatar', 'bio', 'date_of_birth')
         }),
         ('Seguridad', {
-            'fields': ('two_factor_enabled', 'backup_codes')
+            'fields': ('two_factor_enabled',)
         }),
         ('Preferencias', {
             'fields': ('theme_preference', 'language', 'notification_preferences')
@@ -41,31 +41,8 @@ class UserProfileAdmin(admin.ModelAdmin):
         }),
     )
     
-    def backup_codes(self, obj):
-        """Muestra los códigos de respaldo de forma segura"""
-        if obj.backup_codes:
-            codes = obj.backup_codes[:3]  # Solo mostrar los primeros 3
-            return format_html(
-                '<code>{}</code>... ({} códigos totales)',
-                ', '.join(codes),
-                len(obj.backup_codes)
-            )
-        return 'No generados'
-    backup_codes.short_description = 'Códigos de Respaldo'
-    
-    actions = ['generate_backup_codes', 'enable_2fa', 'disable_2fa']
-    
-    def generate_backup_codes(self, request, queryset):
-        """Genera códigos de respaldo para 2FA"""
-        for profile in queryset:
-            profile.generate_backup_codes()
-        
-        self.message_user(
-            request,
-            f'Códigos de respaldo generados para {queryset.count()} perfiles.'
-        )
-    generate_backup_codes.short_description = "Generar códigos de respaldo"
-    
+    actions = ['enable_2fa', 'disable_2fa']
+
     def enable_2fa(self, request, queryset):
         """Habilita 2FA para perfiles seleccionados"""
         for profile in queryset:

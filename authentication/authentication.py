@@ -14,54 +14,48 @@ class CustomTokenAuthentication(TokenAuthentication):
     
     def authenticate_credentials(self, key):
         """
-        Autentica las credenciales del token
+        Autentica las credenciales del token.
+
+        Nota de seguridad: los AuthenticationFailed (token expirado, usuario
+        inactivo, cuenta bloqueada) DEBEN propagarse. Antes iban dentro de un
+        `except Exception: pass`/`except Exception` genérico que (a) se tragaba
+        el bloqueo de cuenta y (b) filtraba str(e) al cliente. Cualquier error
+        inesperado ahora falla cerrado (500), no concede acceso.
         """
+        from .models import UserProfile
+
         try:
             # Buscar el token en la base de datos
             token = self.model.objects.select_related('user').get(
                 key=key,
                 is_active=True
             )
-            
-            # Verificar si el token ha expirado
-            if token.is_expired():
-                # Marcar el token como inactivo
-                token.is_active = False
-                token.save(update_fields=['is_active'])
-                raise AuthenticationFailed('Token expirado')
-            
-            # Verificar que el usuario esté activo
-            if not token.user.is_active:
-                raise AuthenticationFailed('Usuario inactivo')
-            
-            # Verificar si la cuenta está bloqueada
-            try:
-                from .models import UserProfile
-                profile, created = UserProfile.objects.get_or_create(user=token.user)
-                if profile.is_locked():
-                    raise AuthenticationFailed('Cuenta bloqueada temporalmente')
-            except Exception as e:
-                # Si no se puede verificar el bloqueo, continuar
-                pass
-            
-            # Actualizar timestamp de último uso
-            token.last_used = timezone.now()
-            token.save(update_fields=['last_used'])
-            
-            # Actualizar actividad del usuario
-            try:
-                profile.last_activity = timezone.now()
-                profile.save(update_fields=['last_activity'])
-            except Exception as e:
-                # Si no se puede actualizar la actividad, continuar
-                pass
-            
-            return (token.user, token)
-            
         except self.model.DoesNotExist:
             raise AuthenticationFailed('Token inválido')
-        except Exception as e:
-            raise AuthenticationFailed(f'Error de autenticación: {str(e)}')
+
+        # Verificar si el token ha expirado
+        if token.is_expired():
+            # Marcar el token como inactivo
+            token.is_active = False
+            token.save(update_fields=['is_active'])
+            raise AuthenticationFailed('Token expirado')
+
+        # Verificar que el usuario esté activo
+        if not token.user.is_active:
+            raise AuthenticationFailed('Usuario inactivo')
+
+        # Verificar si la cuenta está bloqueada (el bloqueo SÍ debe cortar el acceso)
+        profile, _ = UserProfile.objects.get_or_create(user=token.user)
+        if profile.is_locked():
+            raise AuthenticationFailed('Cuenta bloqueada temporalmente')
+
+        # Actualizar metadatos de uso (no crítico para la decisión de auth)
+        token.last_used = timezone.now()
+        token.save(update_fields=['last_used'])
+        profile.last_activity = timezone.now()
+        profile.save(update_fields=['last_activity'])
+
+        return (token.user, token)
     
     def authenticate_header(self, request):
         """
