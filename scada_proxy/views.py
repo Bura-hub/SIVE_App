@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import logging
+import re
 import requests
 import uuid # ¡Importar el módulo uuid!
 
@@ -25,7 +26,7 @@ from .serializers import (
     MeasurementSerializer, TaskProgressSerializer, SCADAResponseSerializer,
 )
 from .scada_client import ScadaConnectorClient
-from .tasks import fetch_historical_measurements_for_all_devices
+from .tasks import fetch_historical_measurements_for_all_devices, sync_scada_metadata_core
 
 logger = logging.getLogger(__name__)
 scada_client = ScadaConnectorClient()
@@ -114,7 +115,7 @@ class InstitutionsView(ScadaProxyView):
             return Response({"data": resp.get("data", []), "total": resp.get("total", 0)})
         except requests.exceptions.RequestException as e:
             logger.error(f"Error al obtener instituciones: {e}")
-            return Response({"detail": f"Error SCADA: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+            return Response({"detail": "Error al comunicarse con el servicio SCADA."}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 @extend_schema(
@@ -135,7 +136,7 @@ class DeviceCategoriesView(ScadaProxyView):
             return Response({"data": resp.get("data", []), "total": resp.get("total", 0)})
         except requests.exceptions.RequestException as e:
             logger.error(f"Error al obtener categorías de SCADA: {e}")
-            return Response({"detail": f"Error SCADA: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+            return Response({"detail": "Error al comunicarse con el servicio SCADA."}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 @extend_schema(
@@ -206,7 +207,7 @@ class DevicesView(ScadaProxyView):
             return Response({"data": resp.get("data", []), "total": resp.get("total", 0)})
         except requests.exceptions.RequestException as e:
             logger.error(f"Error al obtener dispositivos: {e}")
-            return Response({"detail": f"Error SCADA: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+            return Response({"detail": "Error al comunicarse con el servicio SCADA."}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 @extend_schema(
@@ -241,7 +242,7 @@ class MeasurementsView(ScadaProxyView):
             return Response({"data": resp.get("data", []), "total": resp.get("total", 0)})
         except requests.exceptions.RequestException as e:
             logger.error(f"Error al obtener mediciones para {device_id}: {e}")
-            return Response({"detail": f"Error SCADA: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+            return Response({"detail": "Error al comunicarse con el servicio SCADA."}, status=status.HTTP_502_BAD_GATEWAY)
 
 # ========================= Local Models Views =========================
 
@@ -276,8 +277,9 @@ class LocalDeviceCategoryListView(generics.ListAPIView):
 
         try:
             token = scada_client.get_token()
-            scada_categories = scada_client.get_device_categories(token).get('data', [])
-            scada_map = {str(cat['id']): cat for cat in scada_categories}
+            scada_categories = scada_client.get_device_categories(token).get('data', []) or []
+            # Usar .get() y saltar categorías sin 'id' para no romper el enriquecimiento.
+            scada_map = {str(cat['id']): cat for cat in scada_categories if cat.get('id') is not None}
 
             for item in response.data:
                 scada_id = item.get('scada_id')
@@ -315,78 +317,11 @@ class LocalDeviceListView(generics.ListAPIView):
     search_fields = ['name', 'scada_id']
     ordering_fields = ['name', 'category__name', 'institution__name']
 
-    def get_queryset(self):
-        """
-        Obtiene el queryset base y asegura que las relaciones estén completas.
-        Si hay dispositivos con relaciones faltantes, intenta repararlos automáticamente.
-        """
-        queryset = super().get_queryset()
-        
-        # Verificar si hay dispositivos con relaciones faltantes
-        devices_with_issues = queryset.filter(
-            models.Q(category__isnull=True) | models.Q(institution__isnull=True)
-        )
-        
-        if devices_with_issues.exists():
-            logger.warning(f"Se encontraron {devices_with_issues.count()} dispositivos con relaciones faltantes. Intentando reparar...")
-            
-            # Intentar reparar las relaciones faltantes
-            repaired_count = self._repair_missing_relationships_in_queryset(devices_with_issues)
-            
-            if repaired_count > 0:
-                logger.info(f"Se repararon {repaired_count} dispositivos. Refrescando queryset...")
-                # Refrescar el queryset para incluir las reparaciones
-                queryset = Device.objects.filter(is_active=True).select_related('category', 'institution')
-        
-        return queryset
-    
-    def _repair_missing_relationships_in_queryset(self, devices_with_issues):
-        """
-        Repara las relaciones faltantes en un queryset específico de dispositivos.
-        """
-        repaired_count = 0
-        
-        try:
-            for device in devices_with_issues:
-                repaired = False
-                
-                # Intentar encontrar categoría por nombre del dispositivo
-                if not device.category:
-                    # Buscar por patrones en el nombre
-                    if 'medidor' in device.name.lower() or 'meter' in device.name.lower():
-                        category = DeviceCategory.objects.filter(name__icontains='electricmeter').first()
-                        if category:
-                            device.category = category
-                            repaired = True
-                    elif 'inversor' in device.name.lower() or 'inverter' in device.name.lower():
-                        category = DeviceCategory.objects.filter(name__icontains='inverter').first()
-                        if category:
-                            device.category = category
-                            repaired = True
-                    elif 'estación' in device.name.lower() or 'weather' in device.name.lower():
-                        category = DeviceCategory.objects.filter(name__icontains='weatherstation').first()
-                        if category:
-                            device.category = category
-                            repaired = True
-                
-                # Intentar encontrar institución por nombre del dispositivo
-                if not device.institution:
-                    # Buscar por patrones en el nombre
-                    for institution in Institution.objects.all():
-                        if institution.name.lower() in device.name.lower():
-                            device.institution = institution
-                            repaired = True
-                            break
-                
-                if repaired:
-                    device.save()
-                    repaired_count += 1
-                    logger.info(f"Dispositivo {device.name} reparado en queryset - Categoría: {device.category}, Institución: {device.institution}")
-            
-        except Exception as e:
-            logger.error(f"Error al reparar relaciones faltantes en queryset: {e}")
-        
-        return repaired_count
+    # NOTA: un GET debe ser de solo lectura. La reparación de relaciones
+    # faltantes se realiza en la tarea Celery 'repair_device_relationships' y en
+    # el comando de gestión 'repair_device_relationships', no aquí. Antes este
+    # get_queryset hacía device.save() (escrituras en BD durante un GET) y con
+    # consultas N+1; se eliminó.
 
 @extend_schema(
     tags=["Datos Locales"],
@@ -395,7 +330,7 @@ class LocalDeviceListView(generics.ListAPIView):
         OpenApiParameter("device", str, OpenApiParameter.QUERY, description="ID o SCADA_ID del dispositivo (string)"),
         OpenApiParameter("from_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (ISO 8601) 2025-01-18T13:00:00"),
         OpenApiParameter("to_date", str, OpenApiParameter.QUERY, description="Fecha final (ISO 8601) 2025-01-18T13:00:00"),
-        OpenApiParameter("ordering", str, OpenApiParameter.QUERY, description="Ordenar por 'timestamp' o 'value'"),
+        OpenApiParameter("ordering", str, OpenApiParameter.QUERY, description="Ordenar por 'date' (usar '-date' para descendente)"),
     ],
     responses={200: MeasurementSerializer(many=True)}
 )
@@ -404,7 +339,8 @@ class HistoricalMeasurementsView(generics.ListAPIView):
     serializer_class = MeasurementSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    ordering_fields = ['timestamp', 'value']
+    # El modelo Measurement solo tiene 'date' (y 'data' JSON). 'timestamp'/'value' no existen.
+    ordering_fields = ['date']
 
     def get_queryset(self):
         qs = Measurement.objects.all()
@@ -467,6 +403,15 @@ class DailySummaryMeasurementsView(ScadaProxyView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Validar 'variable_key': se interpola directamente en lookups ORM sobre el
+        # JSONField, así que debe ser un identificador seguro (letras, dígitos y '_'),
+        # sin '__' para evitar inyectar lookups anidados o transformaciones.
+        if not re.fullmatch(r'[A-Za-z0-9_]+', variable_key) or '__' in variable_key:
+            return Response(
+                {"detail": "El parámetro 'variable_key' no es válido."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             # Construye el filtro dinámico para JSONField
             value_field = Cast(F(f"data__{variable_key}"), FloatField())
@@ -506,8 +451,9 @@ class DailySummaryMeasurementsView(ScadaProxyView):
             ])
 
         except Exception as e:
+            logger.error(f"Error al calcular el resumen diario: {e}", exc_info=True)
             return Response(
-                {"detail": f"Error al calcular el resumen: {str(e)}"},
+                {"detail": "Error al calcular el resumen."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -689,7 +635,6 @@ class TaskHistoryView(generics.ListAPIView):
     
 # ========================= Sincronización Local =========================
 
-from django.db import transaction
 from django.db import models
 
 @extend_schema(
@@ -704,153 +649,27 @@ class SyncLocalDevicesView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        token = scada_client.get_token()
-        if not token:
-            return Response({"detail": "No se pudo autenticar con SCADA."},
-                            status=status.HTTP_502_BAD_GATEWAY)
-
+        # Delega en la implementación ÚNICA de sincronización (sync_scada_metadata_core),
+        # que mapea correctamente las relaciones anidadas, pagina el listado de
+        # dispositivos y solo desactiva ausentes si la lista vino completa.
         try:
-            with transaction.atomic():
-                # 1. Sincronizar categorías
-                scada_categories = scada_client.get_device_categories(token).get("data", [])
-                category_map = {}
-                for cat in scada_categories:
-                    category_obj, _ = DeviceCategory.objects.update_or_create(
-                        scada_id=cat["id"],
-                        defaults={"name": cat["name"], "description": cat.get("description", "")}
-                    )
-                    category_map[cat["id"]] = category_obj
-                    logger.info(f"Categoría sincronizada: {cat['name']} (SCADA ID: {cat['id']}) -> Local ID: {category_obj.id}")
-
-                # 2. Sincronizar instituciones
-                scada_institutions = scada_client.get_institutions(token).get("data", [])
-                institution_map = {}
-                for inst in scada_institutions:
-                    institution_obj, _ = Institution.objects.update_or_create(
-                        scada_id=inst["id"],
-                        defaults={"name": inst["name"]}
-                    )
-                    institution_map[inst["id"]] = institution_obj
-                    logger.info(f"Institución sincronizada: {inst['name']} (SCADA ID: {inst['id']}) -> Local ID: {institution_obj.id}")
-
-                # 3. Sincronizar dispositivos
-                scada_devices = scada_client.get_devices(token).get("data", [])
-                devices_updated = 0
-                devices_with_issues = 0
-                
-                for dev in scada_devices:
-                    # Extraer información de categoría e institución con mejor manejo de errores
-                    category_obj = None
-                    institution_obj = None
-                    
-                    # Manejar categoría
-                    if dev.get("category") and isinstance(dev["category"], dict) and dev["category"].get("id"):
-                        category_obj = category_map.get(dev["category"]["id"])
-                        if not category_obj:
-                            logger.warning(f"Dispositivo {dev.get('name', 'N/A')} tiene categoría SCADA ID {dev['category']['id']} que no se encontró en el mapeo local")
-                    elif dev.get("category"):
-                        logger.warning(f"Dispositivo {dev.get('name', 'N/A')} tiene formato de categoría inesperado: {dev['category']}")
-                    
-                    # Manejar institución
-                    if dev.get("institution") and isinstance(dev["institution"], dict) and dev["institution"].get("id"):
-                        institution_obj = institution_map.get(dev["institution"]["id"])
-                        if not institution_obj:
-                            logger.warning(f"Dispositivo {dev.get('name', 'N/A')} tiene institución SCADA ID {dev['institution']['id']} que no se encontró en el mapeo local")
-                    elif dev.get("institution"):
-                        logger.warning(f"Dispositivo {dev.get('name', 'N/A')} tiene formato de institución inesperado: {dev['institution']}")
-
-                    # Crear o actualizar dispositivo
-                    device_obj, created = Device.objects.update_or_create(
-                        scada_id=dev["id"],
-                        defaults={
-                            "name": dev["name"],
-                            "status": dev.get("status"),
-                            "category": category_obj,
-                            "institution": institution_obj,
-                            "is_active": True
-                        }
-                    )
-                    
-                    if created:
-                        logger.info(f"Dispositivo creado: {dev['name']} (SCADA ID: {dev['id']})")
-                    else:
-                        logger.info(f"Dispositivo actualizado: {dev['name']} (SCADA ID: {dev['id']})")
-                    
-                    # Verificar si se establecieron las relaciones correctamente
-                    if category_obj and institution_obj:
-                        devices_updated += 1
-                    else:
-                        devices_with_issues += 1
-                        logger.warning(f"Dispositivo {dev['name']} sincronizado con relaciones incompletas - Categoría: {category_obj}, Institución: {institution_obj}")
-
-                # 4. Intentar reparar dispositivos con relaciones faltantes
-                repaired_devices = self._repair_missing_relationships()
-                
-                logger.info(f"Sincronización completada: {devices_updated} dispositivos completos, {devices_with_issues} con problemas, {repaired_devices} reparados")
-
-            return Response({
-                "detail": "Sincronización completada con éxito.",
-                "summary": {
-                    "devices_updated": devices_updated,
-                    "devices_with_issues": devices_with_issues,
-                    "repaired_devices": repaired_devices
-                }
-            }, status=status.HTTP_200_OK)
-
+            summary = sync_scada_metadata_core()
+            return Response(
+                {"detail": "Sincronización completada con éxito.", "summary": summary},
+                status=status.HTTP_200_OK,
+            )
+        except EnvironmentError as e:
+            logger.error(f"Error de configuración de SCADA al sincronizar: {e}")
+            return Response({"detail": "Error de configuración del servidor SCADA."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error de red/API al sincronizar datos locales: {e}")
+            return Response({"detail": "No se pudo sincronizar con la API SCADA."},
+                            status=status.HTTP_502_BAD_GATEWAY)
         except Exception as e:
             logger.error(f"Error al sincronizar datos locales: {e}", exc_info=True)
-            return Response({"detail": f"Error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def _repair_missing_relationships(self):
-        """Intenta reparar dispositivos que tienen categoría o institución como null"""
-        repaired_count = 0
-        
-        try:
-            # Buscar dispositivos con relaciones faltantes
-            devices_with_issues = Device.objects.filter(
-                models.Q(category__isnull=True) | models.Q(institution__isnull=True)
-            ).select_related('category', 'institution')
-            
-            for device in devices_with_issues:
-                repaired = False
-                
-                # Intentar encontrar categoría por nombre del dispositivo
-                if not device.category:
-                    # Buscar por patrones en el nombre
-                    if 'medidor' in device.name.lower() or 'meter' in device.name.lower():
-                        category = DeviceCategory.objects.filter(name__icontains='electricmeter').first()
-                        if category:
-                            device.category = category
-                            repaired = True
-                    elif 'inversor' in device.name.lower() or 'inverter' in device.name.lower():
-                        category = DeviceCategory.objects.filter(name__icontains='inverter').first()
-                        if category:
-                            device.category = category
-                            repaired = True
-                    elif 'estación' in device.name.lower() or 'weather' in device.name.lower():
-                        category = DeviceCategory.objects.filter(name__icontains='weatherstation').first()
-                        if category:
-                            device.category = category
-                            repaired = True
-                
-                # Intentar encontrar institución por nombre del dispositivo
-                if not device.institution:
-                    # Buscar por patrones en el nombre
-                    for institution in Institution.objects.all():
-                        if institution.name.lower() in device.name.lower():
-                            device.institution = institution
-                            repaired = True
-                            break
-                
-                if repaired:
-                    device.save()
-                    repaired_count += 1
-                    logger.info(f"Dispositivo {device.name} reparado - Categoría: {device.category}, Institución: {device.institution}")
-            
-        except Exception as e:
-            logger.error(f"Error al reparar relaciones faltantes: {e}")
-        
-        return repaired_count
+            return Response({"detail": "Error durante la sincronización."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @extend_schema(
