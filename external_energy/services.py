@@ -1,6 +1,7 @@
 import os
 import requests
 import logging
+import concurrent.futures
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django.conf import settings
@@ -9,373 +10,429 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# Opcional: desactivar verificación SSL para API XM (solo si hay proxy/cortafuegos o CA no reconocida)
-# En .env: PYDATAXM_VERIFY_SSL=false (por defecto true)
+# Verificación SSL para las llamadas a la API de XM.
+# En .env: PYDATAXM_VERIFY_SSL=false (por defecto true).
+#
+# NOTA DE SEGURIDAD: pydataxm usa el módulo `requests` global internamente y NO expone
+# un parámetro `verify` ni acepta una `requests.Session` propia. Por eso NO es posible
+# desactivar la verificación SSL solo para este módulo sin parchear el `requests.post`
+# global del proceso, lo que afectaría a TODO el backend (incluido el cliente SCADA que
+# envía credenciales). En consecuencia, aquí NUNCA se altera el `requests` global: si
+# PYDATAXM_VERIFY_SSL=false solo se registra una advertencia y se ignora. Para entornos
+# con una CA propia use la variable de entorno estándar REQUESTS_CA_BUNDLE.
 _ssl_verify = os.environ.get('PYDATAXM_VERIFY_SSL', 'true').lower() not in ('0', 'false', 'no')
-
-
-def _maybe_patch_requests_ssl():
-    """Si PYDATAXM_VERIFY_SSL=false, hace que requests no verifique SSL (solo para llamadas desde este módulo)."""
-    if _ssl_verify:
-        return
-    _orig_post = getattr(requests, '_saved_post', None)
-    if _orig_post is not None:
-        return
-    requests._saved_post = requests.post
-    def _post(*args, **kwargs):
-        kwargs.setdefault('verify', False)
-        return requests._saved_post(*args, **kwargs)
-    requests.post = _post
-    logger.warning("PYDATAXM_VERIFY_SSL=false: verificación SSL desactivada para pydataxm (solo entorno controlado).")
 
 
 class XMRealAPIService:
     """Servicio para obtener datos reales de la API de XM (Sistema Interconectado Nacional)"""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        # Timeout duro (segundos) para acotar las llamadas a XM y no bloquear el ciclo
+        # request/response de Django. Configurable vía settings.XM_API_TIMEOUT.
+        self.request_timeout = int(getattr(settings, 'XM_API_TIMEOUT', 30) or 30)
         self.api_available = self._check_api_availability()
-    
+
     def _check_api_availability(self):
-        """Verifica si la librería pydataxm está disponible"""
+        """Verifica si la librería pydataxm está disponible (sin tocar el `requests` global)."""
+        if not _ssl_verify:
+            # No se parchea el `requests` global (ver nota de seguridad al inicio del módulo).
+            self.logger.warning(
+                "PYDATAXM_VERIFY_SSL=false se ignora: no es posible desactivar la "
+                "verificación SSL solo para pydataxm sin afectar al resto del backend. "
+                "Use REQUESTS_CA_BUNDLE si necesita registrar una CA propia."
+            )
         try:
-            _maybe_patch_requests_ssl()
-            from pydataxm import pydataxm
+            from pydataxm import pydataxm  # noqa: F401
             return True
         except ImportError:
             self.logger.warning("pydataxm no está disponible. Usando datos simulados.")
             return False
-    
-    def _convert_to_hourly_series(self, df, date_column='Date', value_prefix='Values_Hour'):
-        """Convierte DataFrame de XM API a serie horaria"""
-        try:
-            import pandas as pd
-            
-            # Asegurar que la fecha esté en formato datetime
-            df[date_column] = pd.to_datetime(df[date_column], format='%d/%m/%Y')
-            
-            # Obtener columnas de valores por hora
-            hour_columns = [col for col in df.columns if value_prefix in col]
-            
-            # Convertir a serie horaria
-            hourly_data = []
-            for idx, row in df.iterrows():
+
+    def _request_data_with_timeout(self, api_client, metric_id, entity, start, end):
+        """Ejecuta `api_client.request_data` con un timeout duro.
+
+        pydataxm no expone un parámetro de timeout, por lo que la llamada se ejecuta en un
+        hilo aparte y se acota el tiempo máximo de espera del ciclo request/response de Django.
+        """
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(api_client.request_data, metric_id, entity, start, end)
+            try:
+                return future.result(timeout=self.request_timeout)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError(
+                    f"La consulta a XM '{metric_id}' superó el timeout de "
+                    f"{self.request_timeout}s"
+                )
+
+    def _extract_series(self, df, date_column='Date'):
+        """Normaliza un DataFrame de la API de XM a una lista de registros {'datetime', 'value'}.
+
+        Soporta los dos formatos que devuelve pydataxm:
+        - Métricas HORARIAS: 24 columnas 'Values_HourXX' por fila (una fila por día).
+        - Métricas DIARIAS: una única columna 'Value' (o 'Values') por fila.
+
+        No silencia errores de formato/fecha: los propaga en lugar de devolver datos vacíos
+        ocultando el fallo real.
+        """
+        import pandas as pd
+
+        if df is None or df.empty:
+            return []
+
+        # La API de XM devuelve la fecha en formato ISO (YYYY-MM-DD); se infiere el formato
+        # automáticamente en lugar de forzar '%d/%m/%Y', que no coincidía y lanzaba ValueError.
+        df[date_column] = pd.to_datetime(df[date_column])
+
+        hour_columns = [col for col in df.columns if 'Values_Hour' in col]
+        records = []
+
+        if hour_columns:
+            # Métrica horaria: expandir las 24 horas de cada día en registros individuales.
+            for _, row in df.iterrows():
                 base_date = row[date_column]
                 for i, col in enumerate(hour_columns):
-                    hour_datetime = base_date + pd.Timedelta(hours=i)
-                    hourly_data.append({
-                        'datetime': hour_datetime,
-                        'value': row[col]
+                    value = row[col]
+                    records.append({
+                        'datetime': base_date + pd.Timedelta(hours=i),
+                        'value': None if pd.isna(value) else float(value),
                     })
-            
-            return pd.DataFrame(hourly_data)
-            
-        except Exception as e:
-            self.logger.error(f"Error convirtiendo a serie horaria: {str(e)}")
-            return pd.DataFrame()
-    
+            return records
+
+        # Métrica diaria: buscar la columna de valor único ('Value' o 'Values').
+        daily_col = None
+        for candidate in ('Value', 'Values'):
+            if candidate in df.columns:
+                daily_col = candidate
+                break
+
+        if daily_col is not None:
+            for _, row in df.iterrows():
+                value = row[daily_col]
+                records.append({
+                    'datetime': row[date_column],
+                    'value': None if pd.isna(value) else float(value),
+                })
+            return records
+
+        raise ValueError(
+            f"Formato de DataFrame de XM no reconocido (columnas: {list(df.columns)})"
+        )
+
+    def _records_to_daily_average(self, records, value_key='price'):
+        """Agrega registros (horarios o diarios) a nivel DIARIO usando el promedio.
+
+        Ignora valores None/NaN. Devuelve una lista ordenada por fecha:
+        [{'date': 'YYYY-MM-DD', value_key: <promedio>}]. Se usa para precios, cuya serie de
+        XM es horaria (24 valores/día) pero el modelo EnergyPrice guarda un valor por fecha.
+        """
+        sums = {}
+        counts = {}
+        for rec in records:
+            value = rec['value']
+            if value is None:
+                continue
+            dt = rec['datetime']
+            day = dt.date() if hasattr(dt, 'date') else dt
+            sums[day] = sums.get(day, 0.0) + float(value)
+            counts[day] = counts.get(day, 0) + 1
+
+        daily = []
+        for day in sorted(sums.keys()):
+            if counts[day] > 0:
+                daily.append({
+                    'date': day.strftime('%Y-%m-%d'),
+                    value_key: sums[day] / counts[day],
+                })
+        return daily
+
+    def _records_to_list(self, records):
+        """Convierte registros normalizados a la lista {'date', 'value'} que esperan las vistas.
+
+        Conserva None para valores faltantes: las vistas filtran None/NaN pero conservan los
+        ceros legítimos (demanda/generación/importación/exportación 0 son datos reales).
+        """
+        return [
+            {
+                'date': rec['datetime'].strftime('%Y-%m-%d'),
+                'value': rec['value'],
+            }
+            for rec in records
+        ]
+
     def fetch_energy_prices(self, start_date, end_date):
-        """Obtiene precios de energía desde la API de XM"""
+        """Obtiene precios de energía (bolsa nacional) desde XM, agregados a nivel DIARIO."""
         try:
             if not self.api_available:
                 raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
+
             from pydataxm import pydataxm
             import datetime as dt
-            
+
             # Crear objeto de conexión a la API
             api_client = pydataxm.ReadDB()
-            
-            # Consultar precios de bolsa nacional
-            df_prices = api_client.request_data(
+
+            # Consultar precios de bolsa nacional (serie horaria)
+            df_prices = self._request_data_with_timeout(
+                api_client,
                 "PrecBolsNaci",  # Precio Bolsa Nacional
                 "Sistema",       # Entidad Sistema
                 dt.date(start_date.year, start_date.month, start_date.day),
-                dt.date(end_date.year, end_date.month, end_date.day)
+                dt.date(end_date.year, end_date.month, end_date.day),
             )
-            
-            if df_prices.empty:
+
+            if df_prices is None or df_prices.empty:
                 raise Exception("No se obtuvieron datos de precios desde la API de XM")
-            
-            # Convertir a serie horaria
-            hourly_data = self._convert_to_hourly_series(df_prices)
-            
-            if hourly_data.empty:
+
+            # La serie de precios es HORARIA (24 valores/día). Se agrega a promedio DIARIO
+            # para que coincida con el modelo EnergyPrice (una fila por fecha) y no se pierdan
+            # 23 de cada 24 registros por el `unique` de la fecha.
+            records = self._extract_series(df_prices)
+            prices = self._records_to_daily_average(records, value_key='price')
+
+            if not prices:
                 raise Exception("Error al procesar datos de precios desde XM")
-            
-            # Procesar datos para el formato esperado
-            import pandas as pd
-            prices = []
-            for _, row in hourly_data.iterrows():
-                prices.append({
-                    'date': row['datetime'].strftime('%Y-%m-%d'),
-                    'price': float(row['value']) if pd.notna(row['value']) else 0.0
-                })
-            
+
             return prices
-            
+
         except Exception as e:
             self.logger.error(f"Error obteniendo precios de XM API: {str(e)}")
             raise e
-    
+
     def fetch_generation_data(self, start_date, end_date):
-        """Obtiene datos de generación desde la API de XM"""
+        """Obtiene datos de generación desde la API de XM (serie horaria)"""
         try:
             if not self.api_available:
                 raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
+
             from pydataxm import pydataxm
             import datetime as dt
-            
+
             api_client = pydataxm.ReadDB()
-            
-            # Consultar generación real total
-            df_generation = api_client.request_data(
+
+            # Consultar generación real total (serie horaria)
+            df_generation = self._request_data_with_timeout(
+                api_client,
                 "Gene",  # Generación
                 "Sistema",
                 dt.date(start_date.year, start_date.month, start_date.day),
-                dt.date(end_date.year, end_date.month, end_date.day)
+                dt.date(end_date.year, end_date.month, end_date.day),
             )
-            
-            if df_generation.empty:
+
+            if df_generation is None or df_generation.empty:
                 raise Exception("No se obtuvieron datos de generación desde la API de XM")
-            
-            # Convertir a serie horaria
-            hourly_data = self._convert_to_hourly_series(df_generation)
-            
-            if hourly_data.empty:
-                raise Exception("Error al procesar datos de generación desde XM")
-            
-            # Procesar datos
-            import pandas as pd
-            generation = []
-            for _, row in hourly_data.iterrows():
-                generation.append({
-                    'date': row['datetime'].strftime('%Y-%m-%d'),
-                    'value': float(row['value']) if pd.notna(row['value']) else 0.0
-                })
-            
-            return generation
-            
+
+            return self._records_to_list(self._extract_series(df_generation))
+
         except Exception as e:
             self.logger.error(f"Error obteniendo generación de XM API: {str(e)}")
             raise e
-    
+
     def fetch_demand_data(self, start_date, end_date):
-        """Obtiene datos de demanda desde la API de XM"""
+        """Obtiene datos de demanda desde la API de XM (serie horaria)"""
         try:
             if not self.api_available:
                 raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
+
             from pydataxm import pydataxm
             import datetime as dt
-            
+
             api_client = pydataxm.ReadDB()
-            
-            # Consultar demanda comercial
-            df_demand = api_client.request_data(
+
+            # Consultar demanda comercial (serie horaria)
+            df_demand = self._request_data_with_timeout(
+                api_client,
                 "DemaCome",  # Demanda Comercial
                 "Sistema",
                 dt.date(start_date.year, start_date.month, start_date.day),
-                dt.date(end_date.year, end_date.month, end_date.day)
+                dt.date(end_date.year, end_date.month, end_date.day),
             )
-            
-            if df_demand.empty:
-                raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
-            # Convertir a serie horaria
-            hourly_data = self._convert_to_hourly_series(df_demand)
-            
-            if hourly_data.empty:
-                raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
-            # Procesar datos
-            import pandas as pd
-            demand = []
-            for _, row in hourly_data.iterrows():
-                demand.append({
-                    'date': row['datetime'].strftime('%Y-%m-%d'),
-                    'value': float(row['value']) if pd.notna(row['value']) else 0.0
-                })
-            
-            return demand
-            
+
+            if df_demand is None or df_demand.empty:
+                raise Exception("No se obtuvieron datos de demanda desde la API de XM")
+
+            return self._records_to_list(self._extract_series(df_demand))
+
         except Exception as e:
             self.logger.error(f"Error obteniendo demanda de XM API: {str(e)}")
-            raise Exception("No se obtuvieron datos de demanda desde la API de XM")
-    
+            raise e
+
     def fetch_emissions_data(self, start_date, end_date):
-        """Obtiene datos de emisiones desde la API de XM"""
+        """Obtiene datos de emisiones desde la API de XM.
+
+        `factorEmisionCO2e` es una métrica DIARIA (columna 'Value', no 'Values_HourXX'), por
+        lo que `_extract_series` la normaliza por la rama de métricas diarias.
+        """
         try:
             if not self.api_available:
                 raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
+
             from pydataxm import pydataxm
             import datetime as dt
-            
+
             api_client = pydataxm.ReadDB()
-            
-            # Consultar factor de emisión CO2
-            df_emissions = api_client.request_data(
+
+            # Consultar factor de emisión de CO2 equivalente (métrica diaria)
+            df_emissions = self._request_data_with_timeout(
+                api_client,
                 "factorEmisionCO2e",  # Factor de emisión CO2 equivalente
                 "Sistema",
                 dt.date(start_date.year, start_date.month, start_date.day),
-                dt.date(end_date.year, end_date.month, end_date.day)
+                dt.date(end_date.year, end_date.month, end_date.day),
             )
-            
-            if df_emissions.empty:
-                raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
-            # Convertir a serie horaria
-            hourly_data = self._convert_to_hourly_series(df_emissions)
-            
-            if hourly_data.empty:
-                raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
-            # Procesar datos
-            import pandas as pd
-            emissions = []
-            for _, row in hourly_data.iterrows():
-                emissions.append({
-                    'date': row['datetime'].strftime('%Y-%m-%d'),
-                    'value': float(row['value']) if pd.notna(row['value']) else 0.0
-                })
-            
-            return emissions
-            
+
+            if df_emissions is None or df_emissions.empty:
+                raise Exception("No se obtuvieron datos de emisiones desde la API de XM")
+
+            return self._records_to_list(self._extract_series(df_emissions))
+
         except Exception as e:
             self.logger.error(f"Error obteniendo emisiones de XM API: {str(e)}")
-            raise Exception("No se obtuvieron datos de emisiones desde la API de XM")
+            raise e
 
     def fetch_exports_data(self, start_date, end_date):
-        """Obtiene datos de exportaciones de energía desde la API de XM"""
+        """Obtiene datos de exportaciones de energía desde la API de XM.
+
+        NOTA: El identificador de métrica 'ExpoEner' no pudo confirmarse contra el catálogo de
+        XM en este entorno (sin acceso a pydataxm). Verificar contra la documentación oficial
+        de XM; `_extract_series` soporta tanto series horarias como diarias según lo que
+        devuelva la API.
+        """
         try:
             if not self.api_available:
                 raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
+
             from pydataxm import pydataxm
             import datetime as dt
-            
+
             api_client = pydataxm.ReadDB()
-            
+
             # Consultar exportaciones de energía
-            df_exports = api_client.request_data(
-                "ExpoEner",           # Exportaciones de energía
+            df_exports = self._request_data_with_timeout(
+                api_client,
+                "ExpoEner",           # Exportaciones de energía (verificar ID en catálogo XM)
                 "Sistema",            # Entidad Sistema
                 dt.date(start_date.year, start_date.month, start_date.day),
-                dt.date(end_date.year, end_date.month, end_date.day)
+                dt.date(end_date.year, end_date.month, end_date.day),
             )
-            
-            if df_exports.empty:
-                raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
-            # Convertir a serie horaria
-            hourly_data = self._convert_to_hourly_series(df_exports)
-            
-            if hourly_data.empty:
-                raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
-            # Procesar datos
-            import pandas as pd
-            exports = []
-            for _, row in hourly_data.iterrows():
-                exports.append({
-                    'date': row['datetime'].strftime('%Y-%m-%d'),
-                    'value': float(row['value']) if pd.notna(row['value']) else 0.0
-                })
-            
-            return exports
-            
+
+            if df_exports is None or df_exports.empty:
+                raise Exception("No se obtuvieron datos de exportaciones desde la API de XM")
+
+            return self._records_to_list(self._extract_series(df_exports))
+
         except Exception as e:
             self.logger.error(f"Error obteniendo exportaciones de XM API: {str(e)}")
-            raise Exception("No se obtuvieron datos de exportaciones desde la API de XM")
+            raise e
 
     def fetch_imports_data(self, start_date, end_date):
-        """Obtiene datos de importaciones de energía desde la API de XM"""
+        """Obtiene datos de importaciones de energía desde la API de XM.
+
+        NOTA: El identificador de métrica 'ImpoEner' no pudo confirmarse contra el catálogo de
+        XM en este entorno (sin acceso a pydataxm). Verificar contra la documentación oficial
+        de XM; `_extract_series` soporta tanto series horarias como diarias según lo que
+        devuelva la API.
+        """
         try:
             if not self.api_available:
                 raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
+
             from pydataxm import pydataxm
             import datetime as dt
-            
+
             api_client = pydataxm.ReadDB()
-            
+
             # Consultar importaciones de energía
-            df_imports = api_client.request_data(
-                "ImpoEner",           # Importaciones de energía
+            df_imports = self._request_data_with_timeout(
+                api_client,
+                "ImpoEner",           # Importaciones de energía (verificar ID en catálogo XM)
                 "Sistema",            # Entidad Sistema
                 dt.date(start_date.year, start_date.month, start_date.day),
-                dt.date(end_date.year, end_date.month, end_date.day)
+                dt.date(end_date.year, end_date.month, end_date.day),
             )
-            
-            if df_imports.empty:
-                raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
-            # Convertir a serie horaria
-            hourly_data = self._convert_to_hourly_series(df_imports)
-            
-            if hourly_data.empty:
-                raise Exception("API de XM no disponible: pydataxm no está instalado")
-            
-            # Procesar datos
-            import pandas as pd
-            imports = []
-            for _, row in hourly_data.iterrows():
-                imports.append({
-                    'date': row['datetime'].strftime('%Y-%m-%d'),
-                    'value': float(row['value']) if pd.notna(row['value']) else 0.0
-                })
-            
-            return imports
-            
+
+            if df_imports is None or df_imports.empty:
+                raise Exception("No se obtuvieron datos de importaciones desde la API de XM")
+
+            return self._records_to_list(self._extract_series(df_imports))
+
         except Exception as e:
             self.logger.error(f"Error obteniendo importaciones de XM API: {str(e)}")
-            raise Exception("No se obtuvieron datos de importaciones desde la API de XM")
-    
+            raise e
 
 
 # Mantener compatibilidad con el código existente
 class XMEnergyService:
     """Servicio principal que usa la API real de XM"""
-    
+
     def __init__(self):
         self.xm_service = XMRealAPIService()
-    
+
     def fetch_energy_prices(self, start_date, end_date):
         return self.xm_service.fetch_energy_prices(start_date, end_date)
-    
+
     def sync_all_data(self):
+        """Sincroniza y PERSISTE datos de XM en la base de datos.
+
+        Los precios se agregan a nivel DIARIO (promedio de las 24 horas) y se guardan con
+        `update_or_create` para no depender de un IntegrityError (por el `unique` de la fecha)
+        para deduplicar. A diferencia de la versión anterior, aquí sí se persiste de verdad.
+        """
+        # Import diferido para evitar dependencias circulares al cargar el módulo.
+        from .models import EnergyPrice
+
         try:
             today = timezone.now().date()
             start_date = today - timedelta(days=30)
-            
-            # Obtener precios desde XM
+
+            # Obtener precios desde XM (ya vienen agregados a nivel diario)
             prices = self.fetch_energy_prices(start_date, today)
-            
+
+            created = 0
+            updated = 0
+            for price_data in prices:
+                price_date = price_data['date']
+                if isinstance(price_date, str):
+                    price_date = datetime.strptime(price_date, '%Y-%m-%d').date()
+
+                _, was_created = EnergyPrice.objects.update_or_create(
+                    date=price_date,
+                    defaults={
+                        'price_per_kwh': Decimal(str(round(float(price_data['price']), 4))),
+                        'source': 'XM',
+                        'region': 'Colombia',
+                    },
+                )
+                if was_created:
+                    created += 1
+                else:
+                    updated += 1
+
             return {
                 'prices_synced': len(prices),
-                'last_sync': timezone.now().isoformat()
+                'prices_created': created,
+                'prices_updated': updated,
+                'last_sync': timezone.now().isoformat(),
             }
-            
+
         except Exception as e:
             logger.error(f"Error en sync_all_data: {str(e)}")
             return {
                 'error': str(e),
-                'last_sync': timezone.now().isoformat()
+                'last_sync': timezone.now().isoformat(),
             }
-    
+
     def fetch_generation_data(self, start_date, end_date):
         return self.xm_service.fetch_generation_data(start_date, end_date)
-    
+
     def fetch_demand_data(self, start_date, end_date):
         return self.xm_service.fetch_demand_data(start_date, end_date)
-    
+
     def fetch_emissions_data(self, start_date, end_date):
         return self.xm_service.fetch_emissions_data(start_date, end_date)
-    
+
     def fetch_exports_data(self, start_date, end_date):
         return self.xm_service.fetch_exports_data(start_date, end_date)
-    
+
     def fetch_imports_data(self, start_date, end_date):
         return self.xm_service.fetch_imports_data(start_date, end_date)

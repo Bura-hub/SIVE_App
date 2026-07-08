@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.conf import settings
 from django.utils import timezone
 from django.db import models
 from datetime import datetime, timedelta
@@ -9,10 +10,10 @@ from decimal import Decimal
 import logging
 
 from .models import (
-    EnergyPrice, 
-    EnergySavings, 
-    EnergyPriceForecast, 
-    EnergyMarketData, 
+    EnergyPrice,
+    EnergySavings,
+    EnergyPriceForecast,
+    EnergyMarketData,
     EnergyAlert
 )
 from .serializers import (
@@ -24,6 +25,19 @@ from .services import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_valid_number(value):
+    """Indica si `value` es un número utilizable para estadísticas.
+
+    Descarta None y NaN, pero CONSERVA los ceros: una demanda/generación/importación/
+    exportación de 0 es un dato real y no debe excluirse de los agregados.
+    """
+    if value is None:
+        return False
+    if isinstance(value, float) and value != value:  # NaN
+        return False
+    return True
 
 
 @api_view(['GET'])
@@ -59,18 +73,23 @@ def energy_prices(request):
                 xm_service = XMEnergyService()
                 prices_data = xm_service.fetch_energy_prices(start_date, end_date)
                 
+                # Los precios vienen agregados a nivel diario desde el servicio (una entrada
+                # por fecha), por lo que no hay 24 filas con la misma fecha. Se usa
+                # update_or_create para no depender del IntegrityError del `unique` de la fecha.
                 for price_data in prices_data:
                     try:
                         if isinstance(price_data['date'], str):
                             price_date = datetime.strptime(price_data['date'], '%Y-%m-%d').date()
                         else:
                             price_date = price_data['date']
-                        
-                        EnergyPrice.objects.create(
+
+                        EnergyPrice.objects.update_or_create(
                             date=price_date,
-                            price_per_kwh=price_data['price'],
-                            source='XM',
-                            region='Colombia'
+                            defaults={
+                                'price_per_kwh': price_data['price'],
+                                'source': 'XM',
+                                'region': 'Colombia',
+                            },
                         )
                     except Exception as e:
                         logger.warning(f"Error creando registro de precio: {str(e)}")
@@ -130,8 +149,19 @@ def energy_prices(request):
             date__range=[start_date, end_date]
         ).order_by('-date').first()
         
-        # Determinar fuente de datos
-        data_source = 'XM' if prices.exists() and prices.first().source == 'XM' else 'Error'
+        # Determinar la fuente REAL de los datos servidos. No se marcan datos válidos como
+        # 'Error': se distingue el origen real de XM del origen simulado (p.ej. el comando
+        # populate crea registros con source='ElectricityMaps').
+        if prices.exists():
+            sources = set(p.source for p in prices)
+            if sources == {'XM'}:
+                data_source = 'XM'
+            elif 'XM' not in sources:
+                data_source = 'simulated'  # datos simulados (no reales de XM)
+            else:
+                data_source = 'mixed'      # mezcla de reales y simulados
+        else:
+            data_source = 'none'
         
         response_data = {
             'average_price': average_price,
@@ -220,17 +250,20 @@ def energy_savings(request):
         # Calcular excedentes
         excess_energy = max(0, total_generated - total_consumed)
         
-        # Calcular factor de capacidad (simplificado)
+        # Calcular factor de capacidad (simplificado).
+        # La capacidad instalada es parametrizable (settings.SOLAR_INSTALLED_CAPACITY_KW,
+        # variable de entorno SOLAR_INSTALLED_CAPACITY_KW; por defecto 100 kW).
         capacity_factor = 0
-        if total_generated > 0:
-            # Asumiendo una capacidad instalada de 100kW como ejemplo
-            installed_capacity = 100
-            hours_in_period = (end_date - start_date).days * 24
+        installed_capacity = float(getattr(settings, 'SOLAR_INSTALLED_CAPACITY_KW', 100))
+        hours_in_period = (end_date - start_date).days * 24
+        # Guardar contra división por cero (p.ej. start_date == end_date -> hours_in_period == 0).
+        if total_generated > 0 and installed_capacity > 0 and hours_in_period > 0:
             capacity_factor = (total_generated / (installed_capacity * hours_in_period)) * 100
-        
-        # Calcular ROI (simplificado)
-        # Asumiendo un costo de instalación de 50,000,000 COP
-        installation_cost = 50000000
+
+        # Calcular ROI (simplificado).
+        # El costo de instalación es parametrizable (settings.SOLAR_INSTALLATION_COST_COP,
+        # variable de entorno SOLAR_INSTALLATION_COST_COP; por defecto 50.000.000 COP).
+        installation_cost = float(getattr(settings, 'SOLAR_INSTALLATION_COST_COP', 50000000))
         roi = 0
         if installation_cost > 0:
             roi = (total_savings / installation_cost) * 100
@@ -280,22 +313,30 @@ def energy_savings(request):
 @permission_classes([IsAuthenticated])
 def sync_external_data(request):
     """
-    Sincroniza datos externos de energía desde fuentes como XM
+    Sincroniza datos externos de energía desde fuentes como XM.
+
+    La sincronización llama a la API de XM (red potencialmente lenta) y persiste datos, por
+    lo que se ejecuta como tarea Celery asíncrona en lugar de bloquear el ciclo
+    request/response de Django.
     """
     try:
-        # Obtener datos de XM
-        xm_service = XMEnergyService()
-        sync_result = xm_service.sync_all_data()
-        
-        return Response({
-            'message': 'Datos sincronizados exitosamente',
-            'details': sync_result
-        })
-        
-    except Exception as e:
-        logger.error(f"Error en sync_external_data: {str(e)}")
+        # Import diferido: la tarea depende de Celery y de los servicios de XM.
+        from .tasks import sync_external_energy_data
+
+        async_result = sync_external_energy_data.delay()
+
         return Response(
-            {'error': 'Error al sincronizar datos externos'},
+            {
+                'message': 'Sincronización de datos externos encolada',
+                'task_id': async_result.id,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    except Exception as e:
+        logger.error(f"Error al encolar la sincronización externa: {str(e)}")
+        return Response(
+            {'error': 'Error al encolar la sincronización de datos externos'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -389,9 +430,9 @@ def generation_data(request):
         except Exception as e:
             logger.warning(f"No se pudieron obtener datos de generación de XM: {str(e)}")
         
-        # Calcular estadísticas
+        # Calcular estadísticas (conservando los ceros legítimos; solo se descartan None/NaN)
         if generation_data:
-            values = [item['value'] for item in generation_data if item['value'] > 0]
+            values = [item['value'] for item in generation_data if _is_valid_number(item['value'])]
             if values:
                 avg_generation = sum(values) / len(values)
                 max_generation = max(values)
@@ -401,14 +442,14 @@ def generation_data(request):
                 avg_generation = max_generation = min_generation = total_generation = 0
         else:
             avg_generation = max_generation = min_generation = total_generation = 0
-        
+
         response_data = {
             'average_generation': avg_generation,
             'max_generation': max_generation,
             'min_generation': min_generation,
             'total_generation': total_generation,
             'generation_history': generation_data or [],
-            'source': 'XM' if generation_data else 'Error',
+            'source': 'XM' if generation_data else 'unavailable',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
                 'end_date': end_date.strftime('%Y-%m-%d'),
@@ -456,9 +497,9 @@ def demand_data(request):
         except Exception as e:
             logger.warning(f"No se pudieron obtener datos de demanda de XM: {str(e)}")
         
-        # Calcular estadísticas
+        # Calcular estadísticas (conservando los ceros legítimos; solo se descartan None/NaN)
         if demand_data:
-            values = [item['value'] for item in demand_data if item['value'] > 0]
+            values = [item['value'] for item in demand_data if _is_valid_number(item['value'])]
             if values:
                 avg_demand = sum(values) / len(values)
                 max_demand = max(values)
@@ -468,14 +509,14 @@ def demand_data(request):
                 avg_demand = max_demand = min_demand = total_demand = 0
         else:
             avg_demand = max_demand = min_demand = total_demand = 0
-        
+
         response_data = {
             'average_demand': avg_demand,
             'max_demand': max_demand,
             'min_demand': min_demand,
             'total_demand': total_demand,
             'demand_history': demand_data or [],
-            'source': 'XM' if demand_data else 'Error',
+            'source': 'XM' if demand_data else 'unavailable',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
                 'end_date': end_date.strftime('%Y-%m-%d'),
@@ -523,9 +564,9 @@ def emissions_data(request):
         except Exception as e:
             logger.warning(f"No se pudieron obtener datos de emisiones de XM: {str(e)}")
         
-        # Calcular estadísticas
+        # Calcular estadísticas (conservando los ceros legítimos; solo se descartan None/NaN)
         if emissions_data:
-            values = [item['value'] for item in emissions_data if item['value'] > 0]
+            values = [item['value'] for item in emissions_data if _is_valid_number(item['value'])]
             if values:
                 avg_emissions = sum(values) / len(values)
                 max_emissions = max(values)
@@ -535,14 +576,14 @@ def emissions_data(request):
                 avg_emissions = max_emissions = min_emissions = total_emissions = 0
         else:
             avg_emissions = max_emissions = min_emissions = total_emissions = 0
-        
+
         response_data = {
             'average_emissions': avg_emissions,
             'max_emissions': max_emissions,
             'min_emissions': min_emissions,
             'total_emissions': total_emissions,
             'emissions_history': emissions_data or [],
-            'source': 'XM' if emissions_data else 'Error',
+            'source': 'XM' if emissions_data else 'unavailable',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
                 'end_date': end_date.strftime('%Y-%m-%d'),
@@ -587,9 +628,9 @@ def exports_data(request):
         except Exception as e:
             logger.warning(f"No se pudieron obtener datos de exportaciones de XM: {str(e)}")
         
-        # Calcular estadísticas
+        # Calcular estadísticas (conservando los ceros legítimos; solo se descartan None/NaN)
         if exports_data:
-            values = [item['value'] for item in exports_data if item['value'] > 0]
+            values = [item['value'] for item in exports_data if _is_valid_number(item['value'])]
             if values:
                 avg_exports = sum(values) / len(values)
                 max_exports = max(values)
@@ -599,14 +640,14 @@ def exports_data(request):
                 avg_exports = max_exports = min_exports = total_exports = 0
         else:
             avg_exports = max_exports = min_exports = total_exports = 0
-        
+
         response_data = {
             'average_exports': avg_exports,
             'max_exports': max_exports,
             'min_exports': min_exports,
             'total_exports': total_exports,
             'exports_history': exports_data or [],
-            'source': 'XM' if exports_data else 'Error',
+            'source': 'XM' if exports_data else 'unavailable',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
                 'end_date': end_date.strftime('%Y-%m-%d'),
@@ -651,9 +692,9 @@ def imports_data(request):
         except Exception as e:
             logger.warning(f"No se pudieron obtener datos de importaciones de XM: {str(e)}")
         
-        # Calcular estadísticas
+        # Calcular estadísticas (conservando los ceros legítimos; solo se descartan None/NaN)
         if imports_data:
-            values = [item['value'] for item in imports_data if item['value'] > 0]
+            values = [item['value'] for item in imports_data if _is_valid_number(item['value'])]
             if values:
                 avg_imports = sum(values) / len(values)
                 max_imports = max(values)
@@ -663,14 +704,14 @@ def imports_data(request):
                 avg_imports = max_imports = min_imports = total_imports = 0
         else:
             avg_imports = max_imports = min_imports = total_imports = 0
-        
+
         response_data = {
             'average_imports': avg_imports,
             'max_imports': max_imports,
             'min_imports': min_imports,
             'total_imports': total_imports,
             'imports_history': imports_data or [],
-            'source': 'XM' if imports_data else 'Error',
+            'source': 'XM' if imports_data else 'unavailable',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
                 'end_date': end_date.strftime('%Y-%m-%d'),
