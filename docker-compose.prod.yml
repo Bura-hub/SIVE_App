@@ -92,6 +92,7 @@ services:
       - SCADA_BASE_URL=${SCADA_BASE_URL}
       - SCADA_USERNAME=${SCADA_USERNAME}
       - SCADA_PASSWORD=${SCADA_PASSWORD}
+      - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - DJANGO_SETTINGS_MODULE=core.settings
@@ -125,6 +126,7 @@ services:
           memory: 512M
     command: >
       sh -c "python manage.py migrate &&
+             (python manage.py bootstrap_scada_if_empty || true) &&
              python manage.py collectstatic --noinput &&
              gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 --max-requests 1000 --max-requests-jitter 100 core.wsgi:application"
 
@@ -153,6 +155,7 @@ services:
       - SCADA_BASE_URL=${SCADA_BASE_URL}
       - SCADA_USERNAME=${SCADA_USERNAME}
       - SCADA_PASSWORD=${SCADA_PASSWORD}
+      - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
       - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
       - ./media:/app/media
@@ -208,6 +211,7 @@ services:
       - SCADA_BASE_URL=${SCADA_BASE_URL}
       - SCADA_USERNAME=${SCADA_USERNAME}
       - SCADA_PASSWORD=${SCADA_PASSWORD}
+      - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
       - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
       - ./media:/app/media

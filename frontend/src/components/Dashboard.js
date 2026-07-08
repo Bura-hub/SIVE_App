@@ -82,6 +82,9 @@ export const ENDPOINTS = {
     deviceSync: '/local/sync-devices/',
     kpiCalculation: '/api/dashboard/calculate-kpis/',
     dailyData: '/api/dashboard/calculate-daily-data/'
+  },
+  scada: {
+    connectionStatus: '/scada/connection-status/'
   }
 };
 
@@ -258,7 +261,9 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   const [showTransition, setShowTransition] = useState(false);
   const [transitionType, setTransitionType] = useState('info');
   const [transitionMessage, setTransitionMessage] = useState('');
-  
+  const [scadaConnection, setScadaConnection] = useState({ connected: null, message: '' });
+  const [hasDashboardData, setHasDashboardData] = useState(true);
+
   // Creamos el taskManager después de tener todas las funciones necesarias
   const [taskManager] = useState(() => new TaskManager(authToken, handleTaskStatusChange));
 
@@ -376,9 +381,23 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
       // Actualizar KPIs con las unidades correctas
       updateKPIs(kpisData);
 
+      // Guardar si hay datos para mostrar mensaje informativo
+      setHasDashboardData(kpisData.hasData !== false);
+
       // Procesar y actualizar datos de gráficos
       updateCharts(currentMonthCharts, prevMonthCharts);
 
+      // Verificar estado de conexión SCADA (no fallar el dashboard si falla)
+      try {
+        const connData = await apiUtils.fetchWithAuth(
+          apiUtils.buildApiUrl(ENDPOINTS.scada.connectionStatus),
+          apiUtils.getDefaultFetchOptions(authToken),
+          handleAuthError
+        );
+        setScadaConnection({ connected: connData.connected, message: connData.message || '' });
+      } catch {
+        setScadaConnection({ connected: false, message: 'No se pudo verificar la conexión SCADA.' });
+      }
     } catch (error) {
       setError(error.message);
       console.error('Error al cargar datos del dashboard:', error);
@@ -1059,7 +1078,37 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         </div>
       </header>
 
+      {/* Banner de estado de conexión SCADA */}
+      {scadaConnection.connected === false && (
+        <div className="mx-4 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 min-w-0" role="alert">
+          <span className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center" aria-hidden="true">
+            <svg className="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-amber-800">Sin conexión con SCADA</p>
+            <p className="text-sm text-amber-700 break-words">{scadaConnection.message}</p>
+          </div>
+        </div>
+      )}
 
+      {/* Mensaje cuando no hay datos de indicadores (conexión OK pero sin carga) */}
+      {!loading && hasDashboardData === false && (
+        <div className="mx-4 mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3 min-w-0" role="status">
+          <span className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center" aria-hidden="true">
+            <svg className="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-blue-800">No hay datos de indicadores aún</p>
+            <p className="text-sm text-blue-700 break-words">
+              Compruebe que la sincronización con SCADA y la carga de datos se hayan ejecutado. Puede usar el botón &quot;Ejecutar Tareas&quot; para sincronizar dispositivos y cargar datos.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Sección KPI superpuesta con el banner */}
       <section className="-mt-8 mb-8">

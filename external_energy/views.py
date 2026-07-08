@@ -54,28 +54,29 @@ def energy_prices(request):
         ).order_by('date')
         
         if not prices.exists():
-            # Si no hay datos, intentar obtener de fuentes externas
-            xm_service = XMEnergyService()
-            prices_data = xm_service.fetch_energy_prices(start_date, end_date)
-            
-            # Crear registros en la base de datos
-            for price_data in prices_data:
-                try:
-                    # Convertir string de fecha a objeto date si es necesario
-                    if isinstance(price_data['date'], str):
-                        price_date = datetime.strptime(price_data['date'], '%Y-%m-%d').date()
-                    else:
-                        price_date = price_data['date']
-                    
-                    EnergyPrice.objects.create(
-                        date=price_date,
-                        price_per_kwh=price_data['price'],
-                        source='XM',
-                        region='Colombia'
-                    )
-                except Exception as e:
-                    logger.warning(f"Error creando registro de precio: {str(e)}")
-                    continue
+            # Si no hay datos, intentar obtener de fuentes externas (no fallar si XM no está disponible)
+            try:
+                xm_service = XMEnergyService()
+                prices_data = xm_service.fetch_energy_prices(start_date, end_date)
+                
+                for price_data in prices_data:
+                    try:
+                        if isinstance(price_data['date'], str):
+                            price_date = datetime.strptime(price_data['date'], '%Y-%m-%d').date()
+                        else:
+                            price_date = price_data['date']
+                        
+                        EnergyPrice.objects.create(
+                            date=price_date,
+                            price_per_kwh=price_data['price'],
+                            source='XM',
+                            region='Colombia'
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error creando registro de precio: {str(e)}")
+                        continue
+            except Exception as e:
+                logger.warning(f"No se pudieron obtener precios de XM (se devuelven datos vacíos): {str(e)}")
             
             prices = EnergyPrice.objects.filter(
                 date__range=[start_date, end_date]
@@ -203,13 +204,14 @@ def energy_savings(request):
         average_price = EnergyPrice.objects.filter(
             date__range=[start_date, end_date]
         ).aggregate(avg_price=models.Avg('price_per_kwh'))['avg_price'] or 0
+        average_price_float = float(average_price)
         
-        avoided_cost = total_generated * float(average_price)
+        avoided_cost = total_generated * average_price_float
         
-        # Calcular porcentajes
+        # Calcular porcentajes (evitar división por cero)
         savings_percentage = 0
-        if total_consumed > 0:
-            savings_percentage = (total_savings / (total_consumed * float(average_price))) * 100
+        if total_consumed > 0 and average_price_float > 0:
+            savings_percentage = (total_savings / (total_consumed * average_price_float)) * 100
         
         self_consumption = 0
         if total_consumed > 0:
@@ -379,9 +381,13 @@ def generation_data(request):
         else:
             start_date = end_date - timedelta(days=30)
         
-        # Obtener datos de generación desde XM
-        xm_service = XMEnergyService()
-        generation_data = xm_service.fetch_generation_data(start_date, end_date)
+        # Obtener datos de generación desde XM (no fallar si XM no está disponible)
+        generation_data = None
+        try:
+            xm_service = XMEnergyService()
+            generation_data = xm_service.fetch_generation_data(start_date, end_date)
+        except Exception as e:
+            logger.warning(f"No se pudieron obtener datos de generación de XM: {str(e)}")
         
         # Calcular estadísticas
         if generation_data:
@@ -401,7 +407,7 @@ def generation_data(request):
             'max_generation': max_generation,
             'min_generation': min_generation,
             'total_generation': total_generation,
-            'generation_history': generation_data,
+            'generation_history': generation_data or [],
             'source': 'XM' if generation_data else 'Error',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
@@ -442,9 +448,13 @@ def demand_data(request):
         else:
             start_date = end_date - timedelta(days=30)
         
-        # Obtener datos de demanda desde XM
-        xm_service = XMEnergyService()
-        demand_data = xm_service.fetch_demand_data(start_date, end_date)
+        # Obtener datos de demanda desde XM (no fallar si XM no está disponible)
+        demand_data = None
+        try:
+            xm_service = XMEnergyService()
+            demand_data = xm_service.fetch_demand_data(start_date, end_date)
+        except Exception as e:
+            logger.warning(f"No se pudieron obtener datos de demanda de XM: {str(e)}")
         
         # Calcular estadísticas
         if demand_data:
@@ -464,7 +474,7 @@ def demand_data(request):
             'max_demand': max_demand,
             'min_demand': min_demand,
             'total_demand': total_demand,
-            'demand_history': demand_data,
+            'demand_history': demand_data or [],
             'source': 'XM' if demand_data else 'Error',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
@@ -505,9 +515,13 @@ def emissions_data(request):
         else:
             start_date = end_date - timedelta(days=30)
         
-        # Obtener datos de emisiones desde XM
-        xm_service = XMEnergyService()
-        emissions_data = xm_service.fetch_emissions_data(start_date, end_date)
+        # Obtener datos de emisiones desde XM (no fallar si XM no está disponible)
+        emissions_data = None
+        try:
+            xm_service = XMEnergyService()
+            emissions_data = xm_service.fetch_emissions_data(start_date, end_date)
+        except Exception as e:
+            logger.warning(f"No se pudieron obtener datos de emisiones de XM: {str(e)}")
         
         # Calcular estadísticas
         if emissions_data:
@@ -527,7 +541,7 @@ def emissions_data(request):
             'max_emissions': max_emissions,
             'min_emissions': min_emissions,
             'total_emissions': total_emissions,
-            'emissions_history': emissions_data,
+            'emissions_history': emissions_data or [],
             'source': 'XM' if emissions_data else 'Error',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
@@ -565,9 +579,13 @@ def exports_data(request):
         else:
             start_date = end_date - timedelta(days=30)
         
-        # Obtener datos de exportaciones desde XM
-        xm_service = XMEnergyService()
-        exports_data = xm_service.fetch_exports_data(start_date, end_date)
+        # Obtener datos de exportaciones desde XM (no fallar si XM no está disponible)
+        exports_data = None
+        try:
+            xm_service = XMEnergyService()
+            exports_data = xm_service.fetch_exports_data(start_date, end_date)
+        except Exception as e:
+            logger.warning(f"No se pudieron obtener datos de exportaciones de XM: {str(e)}")
         
         # Calcular estadísticas
         if exports_data:
@@ -587,7 +605,7 @@ def exports_data(request):
             'max_exports': max_exports,
             'min_exports': min_exports,
             'total_exports': total_exports,
-            'exports_history': exports_data,
+            'exports_history': exports_data or [],
             'source': 'XM' if exports_data else 'Error',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),
@@ -625,9 +643,13 @@ def imports_data(request):
         else:
             start_date = end_date - timedelta(days=30)
         
-        # Obtener datos de importaciones desde XM
-        xm_service = XMEnergyService()
-        imports_data = xm_service.fetch_imports_data(start_date, end_date)
+        # Obtener datos de importaciones desde XM (no fallar si XM no está disponible)
+        imports_data = None
+        try:
+            xm_service = XMEnergyService()
+            imports_data = xm_service.fetch_imports_data(start_date, end_date)
+        except Exception as e:
+            logger.warning(f"No se pudieron obtener datos de importaciones de XM: {str(e)}")
         
         # Calcular estadísticas
         if imports_data:
@@ -647,7 +669,7 @@ def imports_data(request):
             'max_imports': max_imports,
             'min_imports': min_imports,
             'total_imports': total_imports,
-            'imports_history': imports_data,
+            'imports_history': imports_data or [],
             'source': 'XM' if imports_data else 'Error',
             'period': {
                 'start_date': start_date.strftime('%Y-%m-%d'),

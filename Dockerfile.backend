@@ -5,20 +5,24 @@
 # Stage 1: Base Python image with system dependencies
 FROM python:3.11-slim AS base
 
-# Set environment variables
+# Set environment variables (SSL: usar CA del sistema para pydataxm/API XM)
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
-# Install system dependencies
+# Install system dependencies (ca-certificates para SSL con API XM / pydataxm)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     postgresql-client \
     build-essential \
     libpq-dev \
     gettext \
     curl \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Stage 2: Dependencies

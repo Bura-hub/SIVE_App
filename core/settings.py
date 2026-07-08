@@ -224,34 +224,39 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # ========================= Tareas Periódicas =========================
 
+# Una sola fuente de verdad: todas las tareas periódicas aquí, con horarios escalonados
+# para evitar carreras (sync → fetch → cálculos).
 CELERY_BEAT_SCHEDULE = {
     'fetch-device-metadata-daily': {
-        # Sincroniza los metadatos de los dispositivos diariamente a las 3:00 AM.
         'task': 'scada_proxy.tasks.sync_scada_metadata',
-        'schedule': crontab(minute=0),
+        'schedule': crontab(minute=0),  # Cada hora en :00
     },
     'fetch-historical-measurements-hourly': {
-        # Busca mediciones históricas cada hora al inicio del minuto 0.
         'task': 'scada_proxy.tasks.fetch_historical_measurements_for_all_devices',
-        'schedule': crontab(minute=0),
-        'args': (int(timedelta(hours=2).total_seconds()),),  # Últimas 2 horas
+        'schedule': crontab(minute=10),  # Cada hora en :10 (después de sync)
+        'args': (int(timedelta(hours=2).total_seconds()),),
     },
     'calculate-monthly-consumption-kpi-daily': {
-        # Calcula el KPI de consumo mensualmente diariamente a las 3:30 AM.
         'task': 'indicators.tasks.calculate_monthly_consumption_kpi',
-        'schedule': crontab(minute=0),
+        'schedule': crontab(minute=25),  # Cada hora en :25
         'args': (),
         'kwargs': {},
         'options': {'queue': 'default'},
     },
     'calculate-daily-chart-data': {
-        # ¡NUEVA TAREA! Calcula y guarda los datos diarios del gráfico.
-        # Se ejecuta a las 3:45 AM para asegurarse de que todos los datos del día anterior están disponibles.
         'task': 'indicators.tasks.calculate_and_save_daily_data',
-        'schedule': crontab(minute=0),
+        'schedule': crontab(minute=35),  # Cada hora en :35
         'args': (),
         'kwargs': {},
         'options': {'queue': 'default'},
+    },
+    'check-devices-status-hourly': {
+        'task': 'scada_proxy.tasks.check_devices_status',
+        'schedule': crontab(minute=1),
+    },
+    'repair-device-relationships-after-check': {
+        'task': 'scada_proxy.tasks.repair_device_relationships',
+        'schedule': crontab(minute=2),
     },
 }
 

@@ -844,9 +844,12 @@ class ProfileImageView(APIView):
                     }
                     return Response(response_data, status=status.HTTP_200_OK)
             else:
+                # 200 con null para que el frontend no reciba 404 (evita error en consola)
                 return Response({
+                    'profile_image_url': None,
+                    'profile_image_name': None,
                     'message': 'No hay imagen de perfil configurada'
-                }, status=status.HTTP_404_NOT_FOUND)
+                }, status=status.HTTP_200_OK)
                 
         except Exception as e:
             import traceback

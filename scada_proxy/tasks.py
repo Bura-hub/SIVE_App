@@ -33,11 +33,8 @@ def sync_scada_metadata(self):
         institutions_data = scada_client.get_institutions(token).get('data', [])
         for inst_data in institutions_data:
             Institution.objects.update_or_create(
-                scada_id=str(inst_data['id']), # Asegura que sea string si el campo es CharField
-                defaults={
-                    'name': inst_data['name'],
-                    'description': inst_data.get('description', '')
-                }
+                scada_id=str(inst_data['id']),
+                defaults={'name': inst_data['name']}
             )
         logger.info(f"Sincronizadas {len(institutions_data)} instituciones.")
 
@@ -505,3 +502,86 @@ def repair_device_relationships(self):
     except Exception as e:
         logger.error(f"Error en reparación automática de relaciones: {e}")
         raise self.retry(exc=e, countdown=self.request.retries * 30)
+
+
+# Días de histórico a traer en el bootstrap (mediciones y cálculos).
+BOOTSTRAP_HISTORICAL_DAYS = 365  # 1 año
+
+# Segundos de espera antes de encolar cálculos de Medidores/Inversores/Estaciones,
+# para dar tiempo a que el fetch histórico llene Measurement.
+BOOTSTRAP_COMPONENT_CALCULATION_DELAY = 3600  # 1 hora
+
+
+@shared_task(bind=True)
+def bootstrap_scada_data(self):
+    """
+    Carga inicial en frío: sincroniza metadatos SCADA, encola fetch del último año (365 días),
+    cálculo de KPIs y datos diarios, y (con delay) cálculos para Medidores, Inversores y Estaciones.
+    Los cálculos por componente se encolan tras BOOTSTRAP_COMPONENT_CALCULATION_DELAY
+    para que el histórico de SCADA tenga tiempo de llenarse.
+    """
+    logger.info("=== BOOTSTRAP: Iniciando carga inicial de datos SCADA ===")
+    try:
+        # 1. Sincronizar metadatos (instituciones, categorías, dispositivos)
+        sync_scada_metadata.apply()
+        logger.info("Bootstrap: sync_scada_metadata completado.")
+
+        # 2. Encolar obtención de mediciones históricas (último año)
+        time_range_seconds = int(timedelta(days=BOOTSTRAP_HISTORICAL_DAYS).total_seconds())
+        fetch_historical_measurements_for_all_devices.delay(time_range_seconds)
+        logger.info(f"Bootstrap: encolado fetch histórico ({BOOTSTRAP_HISTORICAL_DAYS} días = {time_range_seconds} s).")
+
+        end_date = get_colombia_now()
+        start_date = end_date - timedelta(days=BOOTSTRAP_HISTORICAL_DAYS)
+        start_str = start_date.date().isoformat()
+        end_str = end_date.date().isoformat()
+
+        # 3. Encolar cálculo de KPIs mensuales y datos diarios (1 año)
+        from indicators.tasks import (
+            calculate_monthly_consumption_kpi,
+            calculate_and_save_daily_data,
+            calculate_electrical_data,
+            calculate_inverter_data,
+            calculate_weather_station_indicators,
+        )
+
+        calculate_monthly_consumption_kpi.delay()
+        calculate_and_save_daily_data.delay(
+            start_date_str=start_str,
+            end_date_str=end_str,
+        )
+        logger.info(f"Bootstrap: encolados calculate_monthly_consumption_kpi y calculate_and_save_daily_data ({BOOTSTRAP_HISTORICAL_DAYS} días).")
+
+        # 4. Encolar cálculos para Medidores, Inversores y Estaciones (después de llenar histórico)
+        # Se ejecutan con delay para dar tiempo al fetch de mediciones por dispositivo.
+        calculate_electrical_data.apply_async(
+            kwargs={
+                "time_range": "daily",
+                "start_date_str": start_str,
+                "end_date_str": end_str,
+            },
+            countdown=BOOTSTRAP_COMPONENT_CALCULATION_DELAY,
+        )
+        calculate_inverter_data.apply_async(
+            kwargs={
+                "time_range": "daily",
+                "start_date_str": start_str,
+                "end_date_str": end_str,
+            },
+            countdown=BOOTSTRAP_COMPONENT_CALCULATION_DELAY,
+        )
+        calculate_weather_station_indicators.apply_async(
+            kwargs={
+                "time_range": "daily",
+                "start_date_str": start_str,
+                "end_date_str": end_str,
+            },
+            countdown=BOOTSTRAP_COMPONENT_CALCULATION_DELAY,
+        )
+        logger.info(
+            f"Bootstrap: encolados cálculos Medidores/Inversores/Estaciones ({BOOTSTRAP_HISTORICAL_DAYS} días, delay {BOOTSTRAP_COMPONENT_CALCULATION_DELAY}s)."
+        )
+        logger.info("=== BOOTSTRAP: Carga inicial encolada correctamente ===")
+    except Exception as e:
+        logger.error(f"Bootstrap SCADA fallido: {e}", exc_info=True)
+        raise

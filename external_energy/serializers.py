@@ -88,6 +88,7 @@ class ExternalEnergySummarySerializer(serializers.Serializer):
     market_demand = serializers.DecimalField(max_digits=10, decimal_places=2)
     market_supply = serializers.DecimalField(max_digits=10, decimal_places=2)
     renewable_percentage = serializers.DecimalField(max_digits=5, decimal_places=2)
+    source = serializers.CharField(max_length=20, required=False, default='XM')
 
 
 class EnergySavingsSummarySerializer(serializers.Serializer):

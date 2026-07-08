@@ -50,6 +50,50 @@ class ScadaProxyView(APIView):
             return Response({"detail": "No se pudo autenticar con la API SCADA."},
                             status=status.HTTP_502_BAD_GATEWAY)
 
+
+def check_scada_connection():
+    """
+    Verifica la conexión real con SCADA: token y una llamada ligera (instituciones).
+    Retorna (connected: bool, message: str) para uso en vistas o endpoint.
+    """
+    try:
+        token = scada_client.get_token()
+        scada_client.get_institutions(token)
+        return True, "Conectado a SCADA"
+    except EnvironmentError as e:
+        logger.warning(f"Configuración SCADA: {e}")
+        return False, "Error de configuración del servidor SCADA (credenciales o URL)."
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Conexión SCADA: {e}")
+        return False, "No se pudo conectar con la API SCADA. Revise credenciales y conectividad."
+
+
+@extend_schema(
+    tags=["SCADA Proxy"],
+    description="Verifica el estado de conexión con el sistema SCADA (token y API).",
+    responses={
+        200: OpenApiResponse(
+            description="Conexión correcta",
+            response=OpenApiTypes.OBJECT,
+            examples=[OpenApiExample("Conectado", value={"connected": True, "message": "Conectado a SCADA"})]
+        ),
+        503: OpenApiResponse(
+            description="Sin conexión SCADA",
+            response=OpenApiTypes.OBJECT,
+            examples=[OpenApiExample("Desconectado", value={"connected": False, "message": "No se pudo conectar con la API SCADA."})]
+        ),
+    },
+)
+class ScadaConnectionStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        connected, message = check_scada_connection()
+        payload = {"connected": connected, "message": message}
+        status_code = status.HTTP_200_OK if connected else status.HTTP_503_SERVICE_UNAVAILABLE
+        return Response(payload, status=status_code)
+
+
 # ========================= SCADA Proxy Views =========================
 
 @extend_schema(

@@ -3,14 +3,17 @@ from django.urls import path
 
 # Importación de las vistas que gestionan las entidades SCADA
 from .views import (
+    ScadaConnectionStatusView,
     InstitutionsView,         # Vista para obtener información de instituciones asociadas
-    DeviceCategoriesView,     # Vista para listar categorías de dispositivos disponibles
-    DevicesView,              # Vista para listar dispositivos SCADA registrados
-    MeasurementsView          # Vista para obtener mediciones asociadas a un dispositivo específico
+    DeviceCategoriesView,    # Vista para listar categorías de dispositivos disponibles
+    DevicesView,             # Vista para listar dispositivos SCADA registrados
+    MeasurementsView         # Vista para obtener mediciones asociadas a un dispositivo específico
 )
 
 # Definición de rutas URL para los recursos del sistema SCADA
 urlpatterns = [
+    # Estado de conexión con SCADA
+    path('connection-status/', ScadaConnectionStatusView.as_view(), name='scada-connection-status'),
     # Endpoint para obtener las instituciones registradas en el sistema SCADA
     path('institutions/', InstitutionsView.as_view(), name='scada-institutions'),
 

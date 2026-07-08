@@ -18,7 +18,8 @@ import pytz
 # Importa los modelos de indicadores
 from .models import ElectricMeterEnergyConsumption, MonthlyConsumptionKPI, DailyChartData, ElectricMeterConsumption, ElectricMeterChartData, ElectricMeterIndicators, InverterIndicators, InverterChartData, WeatherStationIndicators, WeatherStationChartData
 # Importa el cliente SCADA y los modelos DeviceCategory, Measurement, Device de scada_proxy
-from scada_proxy.scada_client import ScadaConnectorClient 
+from scada_proxy.scada_client import ScadaConnectorClient
+from scada_proxy.views import check_scada_connection
 from scada_proxy.models import DeviceCategory, Measurement, Device, Institution
 # Importa las tareas de Celery
 from .tasks import calculate_monthly_consumption_kpi, calculate_and_save_daily_data
@@ -426,16 +427,30 @@ class ConsumptionSummaryView(APIView):
                 "status": inverter_status_text
             }
 
+            # Indicador de si hay datos precalculados (registro existente y al menos un valor no cero)
+            has_data = bool(getattr(kpi_record, 'pk', None)) and any([
+                total_consumption_current_month,
+                total_generation_current_month,
+                avg_instantaneous_power_current,
+                avg_daily_temp_current,
+                avg_relative_humidity_current,
+                avg_wind_speed_current,
+                avg_irradiance_current,
+            ])
+            scada_connected, scada_message = check_scada_connection()
+
             kpi_data = {
                 "totalConsumption": consumption_kpi,
                 "totalGeneration": generation_kpi,
                 "energyBalance": energy_balance_kpi,
                 "averageInstantaneousPower": avg_power_kpi,
-                "avgDailyTemp": avg_daily_temp_kpi, 
-                "relativeHumidity": avg_relative_humidity_kpi, 
+                "avgDailyTemp": avg_daily_temp_kpi,
+                "relativeHumidity": avg_relative_humidity_kpi,
                 "windSpeed": avg_wind_speed_kpi,
                 "irradiance": avg_irradiance_kpi,
                 "activeInverters": active_inverters_kpi,
+                "hasData": has_data,
+                "scadaConnection": {"connected": scada_connected, "message": scada_message},
             }
             return Response(kpi_data)
 
@@ -1832,7 +1847,7 @@ class InvertersListView(APIView):
             # Obtener inversores de la institución
             from scada_proxy.models import Device
             inverters = Device.objects.filter(
-                category__id=1,  # category_id=1 para inversores
+                category__name='inverter',
                 institution_id=institution_id,
                 is_active=True
             ).select_related('institution')
@@ -2199,7 +2214,7 @@ class WeatherStationsListView(APIView):
             institution_id = request.query_params.get('institution_id')
 
             # Construir filtros
-            filters = Q(category__id=3, is_active=True)  # category_id=3 para estaciones meteorológicas
+            filters = Q(category__name='weatherStation', is_active=True)
             
             if institution_id:
                 try:

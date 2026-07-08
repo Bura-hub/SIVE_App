@@ -1,3 +1,4 @@
+import os
 import requests
 import logging
 from datetime import datetime, timedelta, date
@@ -7,6 +8,26 @@ from django.utils import timezone
 import json
 
 logger = logging.getLogger(__name__)
+
+# Opcional: desactivar verificación SSL para API XM (solo si hay proxy/cortafuegos o CA no reconocida)
+# En .env: PYDATAXM_VERIFY_SSL=false (por defecto true)
+_ssl_verify = os.environ.get('PYDATAXM_VERIFY_SSL', 'true').lower() not in ('0', 'false', 'no')
+
+
+def _maybe_patch_requests_ssl():
+    """Si PYDATAXM_VERIFY_SSL=false, hace que requests no verifique SSL (solo para llamadas desde este módulo)."""
+    if _ssl_verify:
+        return
+    _orig_post = getattr(requests, '_saved_post', None)
+    if _orig_post is not None:
+        return
+    requests._saved_post = requests.post
+    def _post(*args, **kwargs):
+        kwargs.setdefault('verify', False)
+        return requests._saved_post(*args, **kwargs)
+    requests.post = _post
+    logger.warning("PYDATAXM_VERIFY_SSL=false: verificación SSL desactivada para pydataxm (solo entorno controlado).")
+
 
 class XMRealAPIService:
     """Servicio para obtener datos reales de la API de XM (Sistema Interconectado Nacional)"""
@@ -18,6 +39,7 @@ class XMRealAPIService:
     def _check_api_availability(self):
         """Verifica si la librería pydataxm está disponible"""
         try:
+            _maybe_patch_requests_ssl()
             from pydataxm import pydataxm
             return True
         except ImportError:

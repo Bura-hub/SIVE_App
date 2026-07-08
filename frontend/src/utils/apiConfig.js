@@ -48,7 +48,8 @@ export const ENDPOINTS = {
     generate: '/api/reports/generate/',
     status: '/api/reports/status/',
     download: '/api/reports/download/',
-    history: '/api/reports/history/'
+    history: '/api/reports/history/',
+    delete: '/api/reports/delete/'  // usado por ExportReports; implementar en backend si no existe
   },
   
   // Endpoints para datos externos de energía
@@ -57,6 +58,11 @@ export const ENDPOINTS = {
     savings: '/api/external-energy/savings/',
     sync: '/api/external-energy/sync/',
     marketOverview: '/api/external-energy/market-overview/'
+  },
+
+  // Estado de conexión SCADA
+  scada: {
+    connectionStatus: '/scada/connection-status/'
   }
 };
 
