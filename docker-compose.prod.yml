@@ -42,6 +42,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: mte_redis_prod
+    # NOTA (A9): pasar --requirepass en la línea de comandos expone la contraseña
+    # en `docker inspect` / `ps` dentro del contenedor. Alternativa más segura:
+    # montar un redis.conf con "requirepass" o usar un secret de Docker.
+    # Se mantiene así por simplicidad; el riesgo es bajo (requiere acceso al host).
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data_prod:/data

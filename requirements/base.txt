@@ -14,6 +14,9 @@ celery==5.5.3
 django-celery-beat==2.8.1
 redis==6.2.0
 
+# Caché compartida entre procesos (Redis)
+django-redis==6.0.0
+
 # API Documentation
 drf-spectacular==0.28.0
 drf-spectacular-sidecar==2025.7.1

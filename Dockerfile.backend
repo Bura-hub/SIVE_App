@@ -2,7 +2,9 @@
 # Multi-stage Dockerfile para Backend Django
 # ================================
 
-# Stage 1: Base Python image with system dependencies
+# Stage 1: Base de runtime — SOLO dependencias de sistema necesarias en ejecución.
+# El toolchain de compilación (build-essential, libpq-dev) vive únicamente en el
+# stage "dependencies" y NO llega a la imagen final de producción.
 FROM python:3.11-slim AS base
 
 # Set environment variables (SSL: usar CA del sistema para pydataxm/API XM)
@@ -14,19 +16,28 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
-# Install system dependencies (ca-certificates para SSL con API XM / pydataxm)
+# Dependencias de sistema de RUNTIME únicamente:
+# - ca-certificates: SSL con API XM / pydataxm
+# - curl: healthchecks del contenedor (HEALTHCHECK y docker-compose)
+# Notas:
+# - psycopg2-binary trae libpq embebida: no se necesita libpq-dev ni
+#   postgresql-client en el backend (pg_dump/psql se ejecutan en el contenedor "db").
+# - gettext solo haría falta para compilemessages; no se usa en runtime.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    postgresql-client \
-    build-essential \
-    libpq-dev \
-    gettext \
     curl \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Stage 2: Dependencies
+# Stage 2: Dependencies (builder) — instala el toolchain de compilación y
+# construye el virtualenv. Nada de este toolchain se copia a producción.
 FROM base AS dependencies
+
+# Toolchain solo para compilar paquetes que no tengan wheel precompilada
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create and activate virtual environment
 RUN python -m venv /opt/venv
@@ -39,14 +50,15 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade pip && \
     pip install -r /tmp/requirements.txt
 
-# Stage 3: Development image
+# Stage 3: Development image (hereda el toolchain del builder; aceptable en desarrollo)
 FROM dependencies AS development
 
-# Install development tools
+# Install development tools (gettext para makemessages/compilemessages en dev)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     vim \
     nano \
+    gettext \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app user for security
@@ -71,7 +83,8 @@ EXPOSE 8000
 # Default command for development
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
-# Stage 4: Production image
+# Stage 4: Production image — ligera: base de runtime + venv ya construido + código.
+# Sin compiladores ni headers en la imagen final.
 FROM base AS production
 
 # Copy virtual environment from dependencies stage

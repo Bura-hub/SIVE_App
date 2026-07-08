@@ -31,8 +31,12 @@ logs/
 celery.log
 
 # Python
+# (en .dockerignore los patrones sin "**/" solo aplican a la raíz del contexto;
+#  se añaden variantes "**/" para cubrir subdirectorios)
 __pycache__/
+**/__pycache__
 *.py[cod]
+**/*.pyc
 *$py.class
 *.so
 .Python
@@ -162,3 +166,8 @@ cython_debug/
 
 # Local development
 local_settings.py
+
+# Archivos locales / artefactos que no deben entrar en la imagen
+iniciobash.txt
+*.save
+scada_devices_full.json

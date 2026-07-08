@@ -194,34 +194,45 @@ REST_FRAMEWORK = {
     },
 }
 
-# ========================= Caché en Memoria =========================
+# ========================= Redis =========================
 
+# Conexión a Redis compartida por la caché de Django y por Celery.
+# Variables desde el entorno (definidas en .env / docker-compose).
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = os.getenv('REDIS_PORT', '6379')
+REDIS_DB = os.getenv('REDIS_DB', '0')                # Base usada por Celery (broker/resultados)
+REDIS_CACHE_DB = os.getenv('REDIS_CACHE_DB', '1')    # Base separada para la caché de Django
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
+
+# URL base de Redis con autenticación si hay contraseña
+if REDIS_PASSWORD:
+    REDIS_BASE_URL = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}'
+else:
+    REDIS_BASE_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}'
+
+# ========================= Caché (Redis compartido) =========================
+
+# Caché compartida entre procesos vía django-redis. Con LocMemCache cada worker
+# de gunicorn tenía su propia caché en memoria, lo que rompía el throttling de
+# DRF y cualquier lock compartido entre procesos. Se usa una base de Redis
+# distinta a la de Celery (REDIS_CACHE_DB, por defecto la 1) para no mezclar
+# claves de caché con mensajes del broker.
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': f'{REDIS_BASE_URL}/{REDIS_CACHE_DB}',
         'TIMEOUT': 300,        # Elementos expiran en 5 minutos
         'OPTIONS': {
-            'MAX_ENTRIES': 1000  # Máximo de objetos en caché
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
     }
 }
 
 # ========================= Celery =========================
 
-# Broker y backend de resultados desde variables de entorno
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = os.getenv('REDIS_PORT', '6379')
-REDIS_DB = os.getenv('REDIS_DB', '0')
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
-
-# Construir URLs de Redis con autenticación si hay contraseña
-if REDIS_PASSWORD:
-    CELERY_BROKER_URL = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
-    CELERY_RESULT_BACKEND = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
-else:
-    CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
-    CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+# Broker y backend de resultados sobre la misma instancia de Redis (base REDIS_DB)
+CELERY_BROKER_URL = f'{REDIS_BASE_URL}/{REDIS_DB}'
+CELERY_RESULT_BACKEND = f'{REDIS_BASE_URL}/{REDIS_DB}'
 
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
@@ -269,7 +280,26 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'scada_proxy.tasks.repair_device_relationships',
         'schedule': crontab(minute=2),
     },
+    'sync-external-energy-daily': {
+        'task': 'external_energy.tasks.sync_external_energy_data',
+        'schedule': crontab(hour=3, minute=0),  # Diario a las 03:00 (hora Bogotá)
+    },
 }
+
+# ========================= Configuración External Energy (XM) =========================
+
+# Timeout duro (segundos) para las llamadas a la API de XM (pydataxm) hechas desde
+# vistas y tareas. Evita bloquear el ciclo request/response de Django ante una red lenta.
+XM_API_TIMEOUT = int(os.getenv('XM_API_TIMEOUT', '30'))
+
+# Verificación SSL para pydataxm (informativo). Ver la nota de seguridad en
+# external_energy/services.py: NO se desactiva la verificación SSL global del proceso.
+PYDATAXM_VERIFY_SSL = os.getenv('PYDATAXM_VERIFY_SSL', 'true').lower() not in ('0', 'false', 'no')
+
+# Parámetros del cálculo de factor de capacidad y ROI en los ahorros de energía.
+# Antes estaban hardcodeados en la vista (100 kW y 50.000.000 COP).
+SOLAR_INSTALLED_CAPACITY_KW = float(os.getenv('SOLAR_INSTALLED_CAPACITY_KW', '100'))
+SOLAR_INSTALLATION_COST_COP = float(os.getenv('SOLAR_INSTALLATION_COST_COP', '50000000'))
 
 # ========================= Documentación de la API (drf-spectacular) =========================
 
@@ -385,3 +415,36 @@ IMAGE_UPLOAD_MAX_SIZE = 5 * 1024 * 1024  # 5MB
 IMAGE_UPLOAD_ALLOWED_FORMATS = ['image/jpeg', 'image/png', 'image/webp']
 IMAGE_UPLOAD_MIN_DIMENSIONS = (100, 100)  # 100x100 píxeles mínimo
 IMAGE_UPLOAD_MAX_DIMENSIONS = (2000, 2000)  # 2000x2000 píxeles máximo
+
+# ========================= Seguridad en Producción =========================
+
+# Endurecimiento aplicado solo con DEBUG=False para no romper el desarrollo
+# local por HTTP.
+#
+# IMPORTANTE: HSTS y las cookies "Secure" requieren servir el sitio por HTTPS
+# real (TLS terminado en un proxy/nginx o en Django). Si el despliegue aún se
+# accede por HTTP plano, el login por sesión (/admin) no funcionará hasta tener
+# HTTPS, y el header HSTS le indica al navegador que rechace HTTP para el
+# dominio durante SECURE_HSTS_SECONDS (difícil de revertir: empezar con un
+# valor bajo si hay dudas).
+if not DEBUG:
+    # Cookies de sesión y CSRF solo se envían por HTTPS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # Evita que el navegador "adivine" content-types (X-Content-Type-Options: nosniff)
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+    # HSTS: el navegador fuerza HTTPS para el dominio durante 1 año.
+    # Activar únicamente cuando todo el dominio (y sus subdominios) sirva HTTPS
+    # de forma estable.
+    SECURE_HSTS_SECONDS = 31536000  # 1 año
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # Si Django corre detrás de un proxy/balanceador que termina TLS (p. ej.
+    # nginx con certificado), descomentar para que request.is_secure() detecte
+    # HTTPS a partir del header X-Forwarded-Proto que setea el proxy.
+    # NO activarlo sin un proxy de confianza que sobrescriba ese header: un
+    # cliente podría falsificarlo y hacerse pasar por una conexión segura.
+    # SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
