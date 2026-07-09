@@ -68,8 +68,10 @@ Dockerfile*
 docker-compose*.yml
 .dockerignore
 
-# Scripts
-scripts/
+# Scripts: se INCLUYEN en la imagen. audit_indicators.py, count_db_records.py y
+# comandos de mantenimiento están pensados para ejecutarse DENTRO del contenedor
+# (docker compose exec backend python scripts/...). Antes se excluía todo scripts/,
+# lo que impedía correrlos en Docker.
 
 # Backups
 backups/
@@ -83,8 +85,11 @@ nginx/
 # Requirements (will be copied separately)
 requirements/
 
-# Tests
-tests/
+# Tests: la carpeta tests/ se INCLUYE para poder ejecutar la suite con
+# `manage.py test` dentro del contenedor (el flujo documentado en las reglas del
+# proyecto). Antes se excluía tests/, por lo que la suite nunca llegaba a la imagen
+# y `manage.py test` encontraba 0 tests. Los ficheros de test del frontend (JS) sí
+# se excluyen (no aportan a la imagen).
 *.test.js
 *.spec.js
 
