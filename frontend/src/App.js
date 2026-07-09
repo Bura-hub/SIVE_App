@@ -1,13 +1,26 @@
 // Importación de hooks y componentes de React
-import React, { useState, useEffect } from 'react';
-import LoginPage from './components/LoginPage';
-import Dashboard from './components/Dashboard';
-import ElectricalDetails from './components/ElectricalDetails';
-import InverterDetails from './components/InverterDetails';
-import WeatherStationDetails from './components/WeatherStationDetails';
-import ExternalEnergyData from './components/ExternalEnergyData';
-import ExportReports from './components/ExportReports';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+import LoginPage from './components/LoginPage'; // Eager: la pantalla de login debe cargar de inmediato
 import Sidebar from './components/Sidebar'; // Componente de barra lateral
+
+// Code-splitting: cada pantalla se carga bajo demanda en su propio chunk
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const ElectricalDetails = lazy(() => import('./components/ElectricalDetails'));
+const InverterDetails = lazy(() => import('./components/InverterDetails'));
+const WeatherStationDetails = lazy(() => import('./components/WeatherStationDetails'));
+const ExternalEnergyData = lazy(() => import('./components/ExternalEnergyData'));
+const ExportReports = lazy(() => import('./components/ExportReports'));
+
+// Fallback discreto mientras se descarga el chunk de una pantalla
+// (mismo estilo que el spinner de carga del Dashboard)
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen bg-gray-100">
+    <div className="flex flex-col items-center">
+      <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+      <p className="mt-4 text-lg text-gray-700">Cargando...</p>
+    </div>
+  </div>
+);
 
 function App() {
   // Estados para gestionar la sesión del usuario
@@ -136,7 +149,10 @@ function App() {
       />
       {/* Contenedor principal de la página */}
       <main className={`flex-1 p-8 bg-gray-100 rounded-tl-3xl shadow-inner transition-all duration-500 ease-in-out ${isSidebarMinimized ? 'ml-0' : ''}`}>
-        {renderPageContent()} {/* Renderiza el componente correspondiente */}
+        {/* Suspense muestra el fallback mientras se descarga el chunk de la pantalla */}
+        <Suspense fallback={<PageLoader />}>
+          {renderPageContent()} {/* Renderiza el componente correspondiente */}
+        </Suspense>
       </main>
 
 

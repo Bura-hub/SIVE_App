@@ -215,6 +215,11 @@ REST_FRAMEWORK = {
         'anon': '100/day',
         'user': '1000/day'
     },
+    # Paginación global: acota el payload de los ViewSets/generics que devuelven listas.
+    # Los endpoints cuyo shape plano/custom consume el frontend se eximen con
+    # pagination_class = None en la vista (ver ElectricMeterIndicatorsViewSet).
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 100,
 }
 
 # ========================= Redis =========================
@@ -303,6 +308,12 @@ CELERY_BEAT_SCHEDULE = {
     'sync-external-energy-daily': {
         'task': 'external_energy.tasks.sync_external_energy_data',
         'schedule': crontab(hour=3, minute=0),  # Diario a las 03:00 (hora Bogotá)
+    },
+    'calculate-energy-savings-daily': {
+        'task': 'external_energy.tasks.calculate_energy_savings',
+        # 03:30: después de sync-external-energy-daily (03:00) para que los precios
+        # de XM del día ya estén persistidos al calcular los ahorros.
+        'schedule': crontab(hour=3, minute=30),
     },
 }
 

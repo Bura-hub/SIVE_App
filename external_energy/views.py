@@ -5,9 +5,17 @@ from rest_framework.response import Response
 from django.conf import settings
 from django.utils import timezone
 from django.db import models
+from django.views.decorators.cache import cache_page
 from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
+
+# TTL de caché para los endpoints que sirven series de XM. Los datos de XM son DIARIOS
+# (no cambian intra-hora), así que 1 hora de caché es seguro y evita golpear la API de XM
+# en cada request. Nota: la respuesta cacheada es un agregado del mercado colombiano
+# compartido entre todos los usuarios (no contiene datos sensibles ni por-usuario), por lo
+# que compartir la entrada de caché entre usuarios autenticados es aceptable.
+XM_CACHE_TTL = 60 * 60
 
 from .models import (
     EnergyPrice,
@@ -40,6 +48,7 @@ def _is_valid_number(value):
     return True
 
 
+@cache_page(XM_CACHE_TTL)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def energy_prices(request):
@@ -341,6 +350,7 @@ def sync_external_data(request):
         )
 
 
+@cache_page(XM_CACHE_TTL)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def market_overview(request):
@@ -449,6 +459,7 @@ def _xm_metric_response(request, fetch_method, prefix, default_range, error_labe
         )
 
 
+@cache_page(XM_CACHE_TTL)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def generation_data(request):
@@ -456,6 +467,7 @@ def generation_data(request):
     return _xm_metric_response(request, 'fetch_generation_data', 'generation', 'month', 'generación')
 
 
+@cache_page(XM_CACHE_TTL)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def demand_data(request):
@@ -463,18 +475,21 @@ def demand_data(request):
     return _xm_metric_response(request, 'fetch_demand_data', 'demand', 'month', 'demanda')
 
 
+@cache_page(XM_CACHE_TTL)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def emissions_data(request):
     """Obtiene datos de emisiones de CO2 desde XM"""
     return _xm_metric_response(request, 'fetch_emissions_data', 'emissions', 'month', 'emisiones')
 
+@cache_page(XM_CACHE_TTL)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def exports_data(request):
     """Obtiene datos de exportaciones de energía desde XM"""
     return _xm_metric_response(request, 'fetch_exports_data', 'exports', 'week', 'exportaciones')
 
+@cache_page(XM_CACHE_TTL)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def imports_data(request):

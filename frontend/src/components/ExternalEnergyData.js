@@ -33,86 +33,59 @@ const ExternalEnergyData = () => {
       }
 
       const options = getDefaultFetchOptions(authToken);
-      
-      // Obtener datos de precios de energía desde XM
-      const pricesResponse = await fetch(
-        buildApiUrl('/api/external-energy/prices/', { range: dateRange }),
-        options
-      );
-      
-      if (!pricesResponse.ok) {
+
+      // Devuelve el JSON de la respuesta o null si la respuesta no fue exitosa
+      const fetchSectionJson = async (path) => {
+        const response = await fetch(
+          buildApiUrl(path, { range: dateRange }),
+          options
+        );
+        return response.ok ? await response.json() : null;
+      };
+
+      // Lanzar las 7 peticiones en paralelo (antes eran secuenciales)
+      const [
+        pricesResult,
+        savingsResult,
+        generationResult,
+        demandResult,
+        emissionsResult,
+        exportsResult,
+        importsResult
+      ] = await Promise.allSettled([
+        fetchSectionJson('/api/external-energy/prices/'),
+        fetchSectionJson('/api/external-energy/savings/'),
+        fetchSectionJson('/api/external-energy/generation/'),
+        fetchSectionJson('/api/external-energy/demand/'),
+        fetchSectionJson('/api/external-energy/emissions/'),
+        fetchSectionJson('/api/external-energy/exports/'),
+        fetchSectionJson('/api/external-energy/imports/')
+      ]);
+
+      // Precios y ahorro son obligatorios: si fallan, toda la vista pasa a estado de error
+      if (pricesResult.status === 'rejected') {
+        throw pricesResult.reason;
+      }
+      const pricesData = pricesResult.value;
+      if (pricesData === null) {
         throw new Error('Error al obtener precios de energía');
       }
-      
-      const pricesData = await pricesResponse.json();
-      
-      // Obtener datos de ahorro calculado
-      const savingsResponse = await fetch(
-        buildApiUrl('/api/external-energy/savings/', { range: dateRange }),
-        options
-      );
-      
-      if (!savingsResponse.ok) {
+
+      if (savingsResult.status === 'rejected') {
+        throw savingsResult.reason;
+      }
+      const savingsData = savingsResult.value;
+      if (savingsData === null) {
         throw new Error('Error al obtener datos de ahorro');
       }
-      
-      const savingsData = await savingsResponse.json();
-      
-      // Obtener datos de generación desde XM
-      const generationResponse = await fetch(
-        buildApiUrl('/api/external-energy/generation/', { range: dateRange }),
-        options
-      );
-      
-      let generationData = null;
-      if (generationResponse.ok) {
-        generationData = await generationResponse.json();
-      }
-      
-      // Obtener datos de demanda desde XM
-      const demandResponse = await fetch(
-        buildApiUrl('/api/external-energy/demand/', { range: dateRange }),
-        options
-      );
-      
-      let demandData = null;
-      if (demandResponse.ok) {
-        demandData = await demandResponse.json();
-      }
-      
-      // Obtener datos de emisiones desde XM
-      const emissionsResponse = await fetch(
-        buildApiUrl('/api/external-energy/emissions/', { range: dateRange }),
-        options
-      );
-      
-      let emissionsData = null;
-      if (emissionsResponse.ok) {
-        emissionsData = await emissionsResponse.json();
-      }
-      
-      // Obtener datos de exportaciones desde XM
-      const exportsResponse = await fetch(
-        buildApiUrl('/api/external-energy/exports/', { range: dateRange }),
-        options
-      );
-      
-      let exportsData = null;
-      if (exportsResponse.ok) {
-        exportsData = await exportsResponse.json();
-      }
-      
-      // Obtener datos de importaciones desde XM
-      const importsResponse = await fetch(
-        buildApiUrl('/api/external-energy/imports/', { range: dateRange }),
-        options
-      );
-      
-      let importsData = null;
-      if (importsResponse.ok) {
-        importsData = await importsResponse.json();
-      }
-      
+
+      // Secciones opcionales: si alguna falla queda en null y las demás renderizan igual
+      const generationData = generationResult.status === 'fulfilled' ? generationResult.value : null;
+      const demandData = demandResult.status === 'fulfilled' ? demandResult.value : null;
+      const emissionsData = emissionsResult.status === 'fulfilled' ? emissionsResult.value : null;
+      const exportsData = exportsResult.status === 'fulfilled' ? exportsResult.value : null;
+      const importsData = importsResult.status === 'fulfilled' ? importsResult.value : null;
+
       // Combinar todos los datos
       const combinedData = {
         ...pricesData,

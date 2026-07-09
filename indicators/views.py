@@ -46,6 +46,47 @@ def get_colombia_date():
     """Obtiene la fecha actual en zona horaria de Colombia"""
     return get_colombia_now().date()
 
+
+# Ventana por defecto y tope del rango de fechas para los endpoints de indicadores.
+# Lo que realmente acota el payload de estos endpoints es el rango de fechas (no la
+# paginación): sin rango explícito se sirven los últimos 31 días y ningún rango puede
+# superar 366 días.
+INDICATORS_DEFAULT_RANGE_DAYS = 31
+INDICATORS_MAX_RANGE_DAYS = 366
+
+
+def resolve_indicators_date_range(start_date_str, end_date_str):
+    """Resuelve el rango de fechas efectivo de los endpoints de indicadores.
+
+    Devuelve una tupla (start_date, end_date, error):
+    - Sin start_date ni end_date: últimos INDICATORS_DEFAULT_RANGE_DAYS días.
+    - Solo end_date: ventana por defecto hacia atrás desde end_date.
+    - Solo start_date: end_date = hoy (hora Colombia).
+    - Rango mayor a INDICATORS_MAX_RANGE_DAYS días, fechas invertidas o formato
+      inválido: error con mensaje en español (la vista debe responder 400).
+    """
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
+    except ValueError:
+        return None, None, "Formato de fecha inválido. Use YYYY-MM-DD en 'start_date' y 'end_date'."
+
+    if end_date is None:
+        end_date = get_colombia_date()
+    if start_date is None:
+        start_date = end_date - timedelta(days=INDICATORS_DEFAULT_RANGE_DAYS)
+
+    if start_date > end_date:
+        return None, None, "La fecha de inicio no puede ser posterior a la fecha de fin."
+
+    if (end_date - start_date).days > INDICATORS_MAX_RANGE_DAYS:
+        return None, None, (
+            f"El rango de fechas solicitado supera el máximo permitido de "
+            f"{INDICATORS_MAX_RANGE_DAYS} días. Reduzca el rango e intente de nuevo."
+        )
+
+    return start_date, end_date, None
+
 @method_decorator(cache_page(60 * 5), name='dispatch')
 class ConsumptionSummaryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1432,50 +1473,66 @@ class ElectricMeterEnergyViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset.order_by('date')
 
+@method_decorator(cache_page(60 * 5), name='dispatch')
 class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Vista para obtener indicadores eléctricos de medidores.
     """
     serializer_class = ElectricMeterIndicatorsSerializer
     permission_classes = [IsAuthenticated]
-    
+    # Contrato con el frontend: ElectricalDetails.js consume {'summary', 'results'} con
+    # 'results' como la lista COMPLETA del rango pedido. La paginación global de DRF no
+    # debe alterar ese shape; el payload se acota por rango de fechas (31 días por
+    # defecto, máximo 366) en lugar de por páginas.
+    pagination_class = None
+
     def get_queryset(self):
-        queryset = ElectricMeterIndicators.objects.all()
-        
+        # select_related evita el N+1 sobre device/institution al serializar.
+        queryset = ElectricMeterIndicators.objects.select_related('device', 'institution').all()
+
         # Filtros
         institution_id = self.request.query_params.get('institution_id')
         device_id = self.request.query_params.get('device_id')
         time_range = self.request.query_params.get('time_range', 'daily')
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-        
+        start_date_str = self.request.query_params.get('start_date')
+        end_date_str = self.request.query_params.get('end_date')
+
         if institution_id:
             queryset = queryset.filter(institution_id=institution_id)
-        
+
         if device_id:
             # Aceptar tanto el id entero local como el scada_id (UUID/string)
             if str(device_id).isdigit():
                 queryset = queryset.filter(device_id=int(device_id))
             else:
                 queryset = queryset.filter(device__scada_id=device_id)
-        
+
         if time_range:
             queryset = queryset.filter(time_range=time_range)
-        
-        if start_date:
-            queryset = queryset.filter(date__gte=start_date)
-        
-        if end_date:
-            queryset = queryset.filter(date__lte=end_date)
-        
+
+        # La acción list SIEMPRE acota por rango de fechas (por defecto: últimos 31 días).
+        # retrieve (detalle por pk) no se restringe por fecha para no romper accesos directos.
+        if self.action == 'list':
+            start_date, end_date, error = resolve_indicators_date_range(start_date_str, end_date_str)
+            if error is None:
+                queryset = queryset.filter(date__gte=start_date, date__lte=end_date)
+
         return queryset.order_by('-date', 'device__name')
-    
+
     def list(self, request, *args, **kwargs):
         """
         Lista los indicadores eléctricos con opciones de filtrado.
         """
+        # Validar el rango de fechas antes de consultar (400 si es inválido o excesivo).
+        _, _, error = resolve_indicators_date_range(
+            request.query_params.get('start_date'),
+            request.query_params.get('end_date'),
+        )
+        if error:
+            return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
+
         queryset = self.get_queryset()
-        
+
         # Agregar información de resumen
         summary = {
             'total_records': queryset.count(),
@@ -1486,18 +1543,9 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
                 'max_date': queryset.aggregate(Max('date'))['date__max']
             }
         }
-        
-        # Paginación
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            response_data = {
-                'summary': summary,
-                'results': serializer.data,
-                'pagination': self.paginator.get_paginated_response(serializer.data).data
-            }
-            return Response(response_data)
-        
+
+        # Sin paginación (pagination_class = None): se conserva el contrato
+        # {'summary', 'results'} que espera el frontend.
         serializer = self.get_serializer(queryset, many=True)
         response_data = {
             'summary': summary,
@@ -1507,6 +1555,7 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
 
 # ========================= Vistas para Indicadores de Inversores =========================
 
+@method_decorator(cache_page(60 * 5), name='dispatch')
 @extend_schema(
     tags=["Inversores"],
     description="Lista todos los indicadores de inversores con opciones de filtrado.",
@@ -1514,8 +1563,8 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
         OpenApiParameter("institution_id", int, OpenApiParameter.QUERY, description="ID de la institución"),
         OpenApiParameter("device_id", str, OpenApiParameter.QUERY, description="ID del inversor específico"),
         OpenApiParameter("time_range", str, OpenApiParameter.QUERY, description="Rango de tiempo: 'daily' o 'monthly'"),
-        OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD)"),
-        OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD)"),
+        OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD). Sin rango: últimos 31 días"),
+        OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD). Rango máximo: 366 días"),
     ],
     responses={200: InverterIndicatorsSerializer(many=True)}
 )
@@ -1524,11 +1573,11 @@ class InverterIndicatorsView(APIView):
     Vista para obtener indicadores de inversores.
     """
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request, *args, **kwargs):
         """
         GET /api/inverter-indicators/
-        
+
         Lista los indicadores de inversores con opciones de filtrado.
         """
         try:
@@ -1536,39 +1585,40 @@ class InverterIndicatorsView(APIView):
             institution_id = request.query_params.get('institution_id')
             device_id = request.query_params.get('device_id')
             time_range = request.query_params.get('time_range', 'daily')
-            start_date = request.query_params.get('start_date')
-            end_date = request.query_params.get('end_date')
-            
+            start_date_str = request.query_params.get('start_date')
+            end_date_str = request.query_params.get('end_date')
+
             # Validar parámetros requeridos
             if not institution_id:
                 return Response({
                     "detail": "El parámetro 'institution_id' es requerido"
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Construir queryset base
+
+            # Rango de fechas efectivo: últimos 31 días por defecto, máximo 366 días.
+            start_date, end_date, error = resolve_indicators_date_range(start_date_str, end_date_str)
+            if error:
+                return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Construir queryset base (select_related evita el N+1 sobre device/institution).
             from .models import InverterIndicators
-            queryset = InverterIndicators.objects.all()
-            
+            queryset = InverterIndicators.objects.select_related('device', 'institution').all()
+
             # Aplicar filtros
             if institution_id:
                 queryset = queryset.filter(institution_id=institution_id)
-            
+
             if device_id:
                 # Aceptar tanto el id entero local como el scada_id (UUID/string)
                 if str(device_id).isdigit():
                     queryset = queryset.filter(device_id=int(device_id))
                 else:
                     queryset = queryset.filter(device__scada_id=device_id)
-            
+
             if time_range:
                 queryset = queryset.filter(time_range=time_range)
-            
-            if start_date:
-                queryset = queryset.filter(date__gte=start_date)
-            
-            if end_date:
-                queryset = queryset.filter(date__lte=end_date)
-            
+
+            queryset = queryset.filter(date__gte=start_date, date__lte=end_date)
+
             # Ordenar por fecha descendente y nombre del dispositivo
             queryset = queryset.order_by('-date', 'device__name')
             

@@ -384,12 +384,90 @@ class XMEnergyService:
     def fetch_energy_prices(self, start_date, end_date):
         return self.xm_service.fetch_energy_prices(start_date, end_date)
 
+    @staticmethod
+    def _series_to_daily_average_mw(series):
+        """Agrega una serie {'date', 'value'} de XM a promedio DIARIO en MW.
+
+        Las series horarias de XM (Gene/DemaCome) traen energía por hora en kWh; el
+        promedio de esos valores horarios equivale a la potencia media del día en kW,
+        que se divide entre 1000 para obtener MW (unidad de EnergyMarketData).
+        Ignora valores None/NaN. Devuelve {date: promedio_mw}.
+        """
+        sums, counts = {}, {}
+        for rec in series or []:
+            value = rec.get('value')
+            if value is None or (isinstance(value, float) and value != value):  # None/NaN
+                continue
+            # 'date' llega como 'YYYY-MM-DD' o 'YYYY-MM-DD HH:MM' (serie horaria).
+            day = datetime.strptime(str(rec['date'])[:10], '%Y-%m-%d').date()
+            sums[day] = sums.get(day, 0.0) + float(value)
+            counts[day] = counts.get(day, 0) + 1
+        return {day: (sums[day] / counts[day]) / 1000.0 for day in sums if counts[day] > 0}
+
+    def _sync_market_data(self, start_date, end_date):
+        """Puebla EnergyMarketData con demanda/oferta DIARIAS reales desde XM.
+
+        Reutiliza los mismos fetchers que los endpoints /demand/ (DemaCome, demanda
+        comercial horaria en kWh) y /generation/ (Gene, generación real horaria en kWh),
+        agregados a potencia media diaria en MW. market_price_cop_mwh se deriva del
+        EnergyPrice del día (COP/kWh × 1000). La composición por fuente
+        (hydro/thermal/renewable) NO es obtenible de forma fiable desde estos fetchers
+        (Gene a nivel Sistema no discrimina tecnología), por lo que se deja en 0 de
+        forma documentada.
+        """
+        from .models import EnergyMarketData, EnergyPrice
+
+        demand_by_day = self._series_to_daily_average_mw(
+            self.fetch_demand_data(start_date, end_date)
+        )
+        supply_by_day = self._series_to_daily_average_mw(
+            self.fetch_generation_data(start_date, end_date)
+        )
+
+        prices_by_day = {
+            p.date: p.price_per_kwh
+            for p in EnergyPrice.objects.filter(date__range=(start_date, end_date))
+        }
+
+        created = 0
+        updated = 0
+        # Solo días con demanda Y oferta: ambos campos son obligatorios en el modelo.
+        for day in sorted(set(demand_by_day) & set(supply_by_day)):
+            price = prices_by_day.get(day)
+            _, was_created = EnergyMarketData.objects.update_or_create(
+                date=day,
+                defaults={
+                    'demand_mw': Decimal(str(round(demand_by_day[day], 2))),
+                    'supply_mw': Decimal(str(round(supply_by_day[day], 2))),
+                    # COP/kWh -> COP/MWh; 0 si aún no hay precio para ese día.
+                    'market_price_cop_mwh': (
+                        Decimal(str(round(float(price) * 1000.0, 2))) if price is not None else Decimal('0')
+                    ),
+                    # No obtenible de forma fiable desde Gene/DemaCome a nivel Sistema:
+                    # se deja en 0 (ver docstring).
+                    'hydro_percentage': Decimal('0'),
+                    'thermal_percentage': Decimal('0'),
+                    'renewable_percentage': Decimal('0'),
+                },
+            )
+            if was_created:
+                created += 1
+            else:
+                updated += 1
+
+        return {
+            'market_days_synced': created + updated,
+            'market_created': created,
+            'market_updated': updated,
+        }
+
     def sync_all_data(self):
         """Sincroniza y PERSISTE datos de XM en la base de datos.
 
         Los precios se agregan a nivel DIARIO (promedio de las 24 horas) y se guardan con
         `update_or_create` para no depender de un IntegrityError (por el `unique` de la fecha)
         para deduplicar. A diferencia de la versión anterior, aquí sí se persiste de verdad.
+        Además puebla EnergyMarketData (demanda/oferta diarias) desde DemaCome/Gene.
         """
         # Import diferido para evitar dependencias circulares al cargar el módulo.
         from .models import EnergyPrice
@@ -421,12 +499,22 @@ class XMEnergyService:
                 else:
                     updated += 1
 
-            return {
+            result = {
                 'prices_synced': len(prices),
                 'prices_created': created,
                 'prices_updated': updated,
                 'last_sync': timezone.now().isoformat(),
             }
+
+            # Datos del mercado (demanda/oferta): fallo aquí NO invalida el sync de
+            # precios ya persistido; se reporta por separado.
+            try:
+                result.update(self._sync_market_data(start_date, today))
+            except Exception as e:
+                logger.error(f"Error sincronizando EnergyMarketData: {str(e)}")
+                result['market_error'] = str(e)
+
+            return result
 
         except Exception as e:
             logger.error(f"Error en sync_all_data: {str(e)}")
