@@ -99,6 +99,12 @@ services:
       - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
+      # Subpath HTTPS detrás de Apache (DEPLOY_SIVE_SUBPATH.md); vacíos/False = raíz
+      - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
+      - STATIC_URL=${STATIC_URL:-static/}
+      - USE_X_FORWARDED_HOST=${USE_X_FORWARDED_HOST:-False}
+      - BEHIND_TLS_PROXY=${BEHIND_TLS_PROXY:-False}
       - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
       - ./media:/app/media
