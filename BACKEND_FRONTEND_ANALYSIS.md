@@ -1,4 +1,4 @@
-# Análisis Backend–Frontend SIVET_App
+# Análisis Backend–Frontend SIVE_App
 
 Documento para entender cómo está construido el backend, cómo se integra con el frontend y cómo analizar problemas de funcionamiento.
 

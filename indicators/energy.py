@@ -1,5 +1,5 @@
 """
-Fórmula canónica de energía para los indicadores de SIVET.
+Fórmula canónica de energía para los indicadores de SIVE.
 
 Módulo PURO (sin dependencias de Django) para poder probar la fórmula con
 `python3 -m unittest` sin base de datos. La lógica de negocio (integración de la

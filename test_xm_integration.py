@@ -9,7 +9,7 @@ import django
 from datetime import datetime, timedelta
 
 # Configurar Django
-sys.path.append('/home/insuasti/iteracion2/SIVET_App/SIVET_App')
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 django.setup()
 

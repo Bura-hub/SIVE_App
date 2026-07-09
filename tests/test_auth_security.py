@@ -32,7 +32,7 @@ class AuthSecurityTests(TestCase):
         self.client = APIClient()
         self.username = 'analyst'
         self.user = User.objects.create_user(
-            username=self.username, email='analyst@sivet.local', password=self.PASSWORD
+            username=self.username, email='analyst@sive.local', password=self.PASSWORD
         )
         self.profile, _ = UserProfile.objects.get_or_create(user=self.user)
 
@@ -131,7 +131,7 @@ class AuthSecurityTests(TestCase):
             '/auth/register/',
             {
                 'username': 'newbie',
-                'email': 'newbie@sivet.local',
+                'email': 'newbie@sive.local',
                 'password': 'short',
                 'confirm_password': 'short',
             },

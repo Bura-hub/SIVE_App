@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Auditoría de indicadores de energía de SIVET.
+Auditoría de indicadores de energía de SIVE.
 
 Inspirado en los scripts data_quality_audit.py / audit_clean.py de la tesis
 Optimalidad-p2p-col: valida los datos crudos, determina empíricamente el intervalo
@@ -84,7 +84,7 @@ def detect_delta_t(device, sample=2000):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Auditoría de indicadores de energía SIVET")
+    parser = argparse.ArgumentParser(description="Auditoría de indicadores de energía SIVE")
     parser.add_argument("--days", type=int, default=30,
                         help="Ventana de días hacia atrás a auditar (default 30).")
     args = parser.parse_args()

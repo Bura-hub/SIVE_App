@@ -258,7 +258,7 @@ services:
         # Inyecta la URL del backend en build-time (CRA la incrusta en el bundle).
         # Por defecto usa http://DOMAIN_NAME:BACKEND_PORT (acceso directo por puerto).
         # Para el despliegue bajo subpath detrás de Apache, definir REACT_APP_API_URL
-        # en el .env con la URL pública, p. ej. https://mte.udenar.edu.co/sivet
+        # en el .env con la URL pública, p. ej. https://mte.udenar.edu.co/sive
         REACT_APP_API_URL: "${REACT_APP_API_URL:-http://${DOMAIN_NAME}:${BACKEND_PORT}}"
     image: mtesive_app-frontend:latest
     container_name: mte_frontend_prod

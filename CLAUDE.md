@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**MTE SIVE / SIVET** — energy visualization system (Universidad de Nariño). Decoupled architecture: **Django 5.2 + DRF** backend and **React 19 (Create React App)** frontend. Displays historical data and KPIs for energy consumption/generation and climate variables, sourced from a remote SCADA connector API and Colombia's XM energy market.
+**MTE SIVE** — energy visualization system (Universidad de Nariño). Decoupled architecture: **Django 5.2 + DRF** backend and **React 19 (Create React App)** frontend. Displays historical data and KPIs for energy consumption/generation and climate variables, sourced from a remote SCADA connector API and Colombia's XM energy market.
 
 ## Critical rule: everything runs in Docker
 

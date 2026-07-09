@@ -49,7 +49,7 @@ def env_list(name, default=''):
 # Lista de hosts permitidos desde variables de entorno
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 
-# --- Despliegue bajo un subpath detrás de un reverse proxy (p. ej. /sivet) ---
+# --- Despliegue bajo un subpath detrás de un reverse proxy (p. ej. /sive) ---
 # FORCE_SCRIPT_NAME hace que Django genere sus URLs (admin, DRF, login, redirecciones)
 # con este prefijo. Vacío por defecto → despliegue en la raíz "/" y dev local sin cambios.
 FORCE_SCRIPT_NAME = os.getenv('FORCE_SCRIPT_NAME') or None
@@ -179,9 +179,9 @@ USE_TZ = True
 
 # ========================= Archivos Estáticos =========================
 
-# Bajo un subpath (p. ej. /sivet) debe apuntarse a una ruta propia como
-# /sivet/django-static/ para NO colisionar con los estáticos del frontend React
-# (/sivet/static/). Por defecto conserva 'static/' (raíz / dev local).
+# Bajo un subpath (p. ej. /sive) debe apuntarse a una ruta propia como
+# /sive/django-static/ para NO colisionar con los estáticos del frontend React
+# (/sive/static/). Por defecto conserva 'static/' (raíz / dev local).
 STATIC_URL = os.getenv('STATIC_URL', 'static/')
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
@@ -460,7 +460,7 @@ if not DEBUG:
 
     # HSTS: opt-in por entorno. Por defecto DESACTIVADO (0) porque el dominio
     # mte.udenar.edu.co es COMPARTIDO con otras apps; un HSTS con includeSubDomains/
-    # preload emitido por SIVET afectaría a todo el dominio. El header HSTS debe
+    # preload emitido por SIVE afectaría a todo el dominio. El header HSTS debe
     # gestionarlo el dueño del dominio a nivel de Apache, no una sola app.
     SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() == 'true'
