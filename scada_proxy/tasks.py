@@ -14,9 +14,10 @@ from django.conf import settings
 from .scada_client import ScadaConnectorClient
 from .models import (
     Institution, DeviceCategory, Device, Measurement, TaskProgress,
-    CATEGORY_TO_MODEL,
+    CATEGORY_TO_MODEL, measurement_model_for_category,
 )
 from .measurements_schema import metrics_for_category
+from core.task_locks import single_instance
 
 logger = logging.getLogger(__name__)
 scada_client = ScadaConnectorClient()
@@ -317,7 +318,7 @@ def upsert_measurements_page(device, rows, write_v1=None, write_v2=True):
         return 0
 
     category_name = device.category.name if device.category_id else None
-    v2_model = CATEGORY_TO_MODEL.get(category_name) if write_v2 else None
+    v2_model = measurement_model_for_category(category_name) if write_v2 else None
     v2_metrics = metrics_for_category(category_name) if v2_model else None
     if write_v2 and v2_model is None:
         logger.warning(
@@ -397,10 +398,31 @@ def fetch_and_save_measurements_for_device(self, device_scada_id: str, django_de
         logger.error(f"Error al obtener/guardar mediciones: {e}", exc_info=True)
         raise
 
-@shared_task
-def fetch_historical_measurements_for_all_devices(time_range_seconds: int):
+@shared_task(bind=True)
+def run_post_ingest_pipeline(self):
+    """Callback del chord de ingesta: encadena los cálculos SOLO cuando todas
+    las subtareas de fetch terminaron (elimina la carrera fetch→KPI del
+    schedule por minutos). KPI mensual → datos diarios de HOY.
     """
-    Lanza subtareas para obtener mediciones históricas de todos los dispositivos en el rango dado.
+    from celery import chain
+    from indicators.tasks import calculate_monthly_consumption_kpi, calculate_and_save_daily_data
+
+    today_str = get_colombia_now().date().isoformat()
+    logger.info("Fetch completo: encadenando cálculos (KPI mensual → chart diario de hoy).")
+    chain(
+        calculate_monthly_consumption_kpi.si(),
+        calculate_and_save_daily_data.si(today_str, today_str),
+    ).apply_async()
+    return 'pipeline de cálculos encolado'
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=60, max_retries=3)
+@single_instance('fetch-historical-dispatch', ttl=300)
+def fetch_historical_measurements_for_all_devices(self, time_range_seconds: int):
+    """
+    Lanza subtareas para obtener mediciones históricas de todos los dispositivos
+    en el rango dado, como un chord cuyo callback (run_post_ingest_pipeline)
+    dispara los cálculos al terminar TODO el fetch.
     Permite cancelar la ejecución a través de la tabla TaskProgress.
     """
     time_range = timedelta(seconds=time_range_seconds)
@@ -423,8 +445,11 @@ def fetch_historical_measurements_for_all_devices(time_range_seconds: int):
     from celery import current_task
     task_progress = TaskProgress.objects.filter(task_id=current_task.request.id).first() if current_task else None
 
+    from celery import chord, group
+
+    signatures = []
     for device in devices:
-        # Verificar si se canceló la tarea
+        # Verificar si se canceló la tarea (antes de despachar nada)
         if task_progress:
             task_progress.refresh_from_db()
             if getattr(task_progress, "is_cancelled", False):
@@ -434,29 +459,78 @@ def fetch_historical_measurements_for_all_devices(time_range_seconds: int):
                 task_progress.save(update_fields=['status', 'message'])
                 return
 
-        # Encolar subtarea por dispositivo
-        fetch_and_save_measurements_for_device.delay(
+        signatures.append(fetch_and_save_measurements_for_device.s(
             device_scada_id=device.scada_id,
             django_device_id=device.id,
             from_datetime_str=from_date.isoformat(),
             to_datetime_str=now_colombia.isoformat()
-        )
-        logger.info(
-            f"Tarea creada para dispositivo {device.name} ({device.scada_id}) "
-            f"desde {from_date} hasta {now_colombia} (hora Colombia)."
-        )
+        ))
 
-        # Actualizar progreso
         if task_progress:
             task_progress.processed_devices += 1
             task_progress.save(update_fields=['processed_devices'])
 
+    # chord: los cálculos (callback) corren SOLO cuando el fetch de TODOS los
+    # dispositivos terminó — barrera real en vez de separadores de minutos.
+    chord(group(signatures))(run_post_ingest_pipeline.si())
+
     if task_progress:
         task_progress.status = 'SUCCESS'
-        task_progress.message = 'Todas las subtareas para obtener mediciones han sido encoladas.'
+        task_progress.message = f'{len(signatures)} subtareas de fetch encoladas (chord → cálculos).'
         task_progress.save(update_fields=['status', 'message'])
 
-    logger.info("Todas las subtareas para obtener mediciones han sido encoladas.")
+    logger.info(f"chord despachado: {len(signatures)} dispositivos; cálculos al completar.")
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=120, max_retries=2,
+             soft_time_limit=1500, time_limit=1700)
+@single_instance('refetch-verify-yesterday', ttl=3000)
+def refetch_and_verify_yesterday(self):
+    """Backfill automático: re-descarga TODO el día de ayer (Bogotá) para cada
+    dispositivo (idempotente, ~12k filas) y verifica los conteos contra el
+    connector. Cubre caídas del SCADA de hasta 24 h sin pérdida permanente.
+    Al terminar, recalcula el chart diario de ayer.
+    """
+    yesterday = (get_colombia_now() - timedelta(days=1)).date()
+    day_start = COLOMBIA_TZ.localize(datetime.combine(yesterday, datetime.min.time()))
+    day_end = day_start + timedelta(days=1)
+
+    token = scada_client.get_token()
+    devices = list(Device.objects.filter(is_active=True).select_related('category'))
+    mismatches = []
+    total = 0
+    for device in devices:
+        rows = 0
+        for page in _iter_measurement_pages(token, device.scada_id, day_start, day_end):
+            rows += upsert_measurements_page(device, page)
+        total += rows
+        # Verificación de conteo contra el connector (fuente de verdad)
+        r = scada_client.get_measurements(
+            token, device.scada_id,
+            day_start.isoformat(timespec='seconds'), day_end.isoformat(timespec='seconds'),
+            limit=1,
+        )
+        remote = (r.get('meta') or {}).get('total', r.get('total'))
+        category_name = device.category.name if device.category_id else None
+        model = measurement_model_for_category(category_name)
+        if model is not None and remote is not None:
+            local = model.objects.filter(device=device, date__gte=day_start, date__lt=day_end).count()
+            if local != remote:
+                mismatches.append((device.name, local, remote))
+
+    if mismatches:
+        for name, local, remote in mismatches:
+            logger.error(
+                f"refetch_and_verify_yesterday: conteo distinto tras refetch en "
+                f"'{name}' {yesterday}: local={local} connector={remote}"
+            )
+    else:
+        logger.info(f"refetch_and_verify_yesterday: {yesterday} verificado OK ({total} filas upserted).")
+
+    # Recalcular el chart diario de ayer con los datos ya completos
+    from indicators.tasks import calculate_and_save_daily_data
+    calculate_and_save_daily_data.delay(yesterday.isoformat(), yesterday.isoformat())
+    return f'{yesterday}: {total} filas, {len(mismatches)} discrepancias'
 
 @shared_task(bind=True, retry_backoff=30, max_retries=3)
 def check_devices_status(self):

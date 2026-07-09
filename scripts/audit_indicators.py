@@ -35,7 +35,7 @@ from scada_proxy.models import (  # noqa: E402
     MeterMeasurement,
     InverterMeasurement,
     WeatherStationMeasurement,
-    CATEGORY_TO_MODEL,
+    measurement_model_for_category,
 )
 from indicators.models import (  # noqa: E402
     MonthlyConsumptionKPI,
@@ -66,7 +66,7 @@ def power_sum(qs, field):
 def measurement_model(device):
     """Modelo de mediciones v2 según la categoría del dispositivo."""
     category_name = device.category.name if device.category else None
-    return CATEGORY_TO_MODEL.get(category_name)
+    return measurement_model_for_category(category_name)
 
 
 def detect_delta_t(device, sample=2000):

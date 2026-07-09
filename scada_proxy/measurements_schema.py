@@ -65,7 +65,13 @@ CATEGORY_METRICS = {
     'weatherStation': WEATHER_METRICS,
 }
 
+_CATEGORY_METRICS_LOWER = {k.lower(): v for k, v in CATEGORY_METRICS.items()}
+
 
 def metrics_for_category(category_name):
-    """Lista de métricas de una categoría, o None si es desconocida."""
-    return CATEGORY_METRICS.get(category_name)
+    """Lista de métricas de una categoría, o None si es desconocida.
+
+    Case-insensitive, igual que los filtros `category__name__iexact` que usa
+    todo el proyecto.
+    """
+    return _CATEGORY_METRICS_LOWER.get((category_name or '').lower())

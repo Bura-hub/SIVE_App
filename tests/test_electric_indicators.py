@@ -84,10 +84,11 @@ class ElectricMeterIndicatorsTestCase(TestCase):
         # (order_by/exists/count), así que creamos mediciones reales dentro del día.
         # Mediodía aware: cae dentro de [test_date, test_date+1) para cualquier offset de TZ.
         base = timezone.make_aware(datetime.combine(self.test_date, time(12, 0)))
-        Measurement.objects.create(
-            device=self.device,
-            date=base,
-            data={
+        # Insertadas por el helper real de ingesta (dual-write v1+v2): la tarea
+        # migrada lee la tabla tipada MeterMeasurement.
+        from scada_proxy.tasks import upsert_measurements_page
+        upsert_measurements_page(self.device, [
+            (base, {
                 'importedActivePowerLow': 100.0, 'importedActivePowerHigh': 0.5,
                 'exportedActivePowerLow': 25.0, 'exportedActivePowerHigh': 0.1,
                 'totalActivePower': 150.0, 'totalPowerFactor': 0.95,
@@ -96,12 +97,8 @@ class ElectricMeterIndicatorsTestCase(TestCase):
                 'voltageTHDPhaseA': 3.2, 'voltageTHDPhaseB': 3.0, 'voltageTHDPhaseC': 3.1,
                 'currentTHDPhaseA': 2.9, 'currentTHDPhaseB': 2.7, 'currentTHDPhaseC': 2.8,
                 'currentTDDPhaseA': 2.5, 'currentTDDPhaseB': 2.3, 'currentTDDPhaseC': 2.4,
-            },
-        )
-        Measurement.objects.create(
-            device=self.device,
-            date=base + timedelta(minutes=2),
-            data={
+            }),
+            (base + timedelta(minutes=2), {
                 'importedActivePowerLow': 200.0, 'importedActivePowerHigh': 1.0,
                 'exportedActivePowerLow': 50.0, 'exportedActivePowerHigh': 0.2,
                 'totalActivePower': 300.0, 'totalPowerFactor': 0.98,
@@ -110,8 +107,8 @@ class ElectricMeterIndicatorsTestCase(TestCase):
                 'voltageTHDPhaseA': 2.8, 'voltageTHDPhaseB': 2.6, 'voltageTHDPhaseC': 2.7,
                 'currentTHDPhaseA': 2.5, 'currentTHDPhaseB': 2.4, 'currentTHDPhaseC': 2.3,
                 'currentTDDPhaseA': 2.1, 'currentTDDPhaseB': 2.0, 'currentTDDPhaseC': 1.9,
-            },
-        )
+            }),
+        ])
 
         # Ejecutar la tarea
         result = calculate_electric_meter_indicators(

@@ -22,6 +22,7 @@ from celery import current_app
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse, OpenApiTypes
 from .models import (
     Institution, DeviceCategory, Device, TaskProgress, CATEGORY_TO_MODEL,
+    measurement_model_for_category,
 )
 from .measurements_schema import CATEGORY_METRICS
 from .serializers import (
@@ -454,7 +455,7 @@ class DailySummaryMeasurementsView(ScadaProxyView):
                 return Response([])
 
             category_name = device.category.name if device.category else None
-            model = CATEGORY_TO_MODEL.get(category_name)
+            model = measurement_model_for_category(category_name)
             metrics = CATEGORY_METRICS.get(category_name, [])
             if model is None or variable_key not in metrics:
                 # Igual que en v1 con una clave inexistente en `data`: sin filas

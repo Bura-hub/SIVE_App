@@ -26,7 +26,7 @@ django.setup()
 
 from django.utils import timezone  # noqa: E402
 
-from scada_proxy.models import Device, Measurement, CATEGORY_TO_MODEL  # noqa: E402
+from scada_proxy.models import Device, Measurement, measurement_model_for_category  # noqa: E402
 from scada_proxy.measurements_schema import metrics_for_category  # noqa: E402
 from scada_proxy.scada_client import ScadaConnectorClient  # noqa: E402
 
@@ -40,7 +40,7 @@ def fail(msg):
 
 
 def v2_model_for(device):
-    return CATEGORY_TO_MODEL.get(device.category.name if device.category_id else None)
+    return measurement_model_for_category(device.category.name if device.category_id else None)
 
 
 def check_counts_vs_connector(client, devices, quick=False):

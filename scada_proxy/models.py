@@ -154,6 +154,13 @@ CATEGORY_TO_MODEL = {
     'weatherStation': WeatherStationMeasurement,
 }
 
+_CATEGORY_TO_MODEL_LOWER = {k.lower(): v for k, v in CATEGORY_TO_MODEL.items()}
+
+
+def measurement_model_for_category(category_name):
+    """Modelo v2 de una categoría (case-insensitive, como category__name__iexact)."""
+    return _CATEGORY_TO_MODEL_LOWER.get((category_name or '').lower())
+
 
 class MeasurementSyncChunk(models.Model):
     """Checkpoint de resync v2: un chunk device×rango ya sincronizado.

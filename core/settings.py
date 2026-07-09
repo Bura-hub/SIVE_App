@@ -271,43 +271,49 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # Una sola fuente de verdad: todas las tareas periódicas aquí, con horarios escalonados
 # para evitar carreras (sync → fetch → cálculos).
+# Los cálculos (KPI mensual y chart diario) ya NO se programan por separado:
+# los encadena run_post_ingest_pipeline como callback del chord de ingesta
+# (barrera real: corren solo cuando el fetch de TODOS los dispositivos acabó).
+# Al cambiar nombres aquí, borrar las PeriodicTask viejas en el switchover
+# (el DatabaseScheduler añade/actualiza, pero no elimina entradas obsoletas).
 CELERY_BEAT_SCHEDULE = {
-    'fetch-device-metadata-daily': {
+    'sync-scada-metadata-hourly': {
         'task': 'scada_proxy.tasks.sync_scada_metadata',
         'schedule': crontab(minute=0),  # Cada hora en :00
     },
-    'fetch-historical-measurements-hourly': {
+    'ingest-and-calculate-hourly': {
         'task': 'scada_proxy.tasks.fetch_historical_measurements_for_all_devices',
         'schedule': crontab(minute=10),  # Cada hora en :10 (después de sync)
-        'args': (int(timedelta(hours=2).total_seconds()),),
-    },
-    'calculate-monthly-consumption-kpi-daily': {
-        'task': 'indicators.tasks.calculate_monthly_consumption_kpi',
-        'schedule': crontab(minute=25),  # Cada hora en :25
-        'args': (),
-        'kwargs': {},
-        'options': {'queue': 'default'},
-    },
-    'calculate-daily-chart-data': {
-        'task': 'indicators.tasks.calculate_and_save_daily_data',
-        'schedule': crontab(minute=35),  # Cada hora en :35
-        'args': (),
-        'kwargs': {},
-        'options': {'queue': 'default'},
+        # Ventana de 3h con cadencia 1h: tolera caídas del connector de hasta
+        # ~2h sin pérdida (upserts idempotentes); >2h lo cubre el refetch de ayer.
+        'args': (int(timedelta(hours=3).total_seconds()),),
     },
     'check-devices-status-hourly': {
         'task': 'scada_proxy.tasks.check_devices_status',
         'schedule': crontab(minute=1),
     },
-    'repair-device-relationships-after-check': {
+    'repair-device-relationships-hourly': {
         'task': 'scada_proxy.tasks.repair_device_relationships',
         'schedule': crontab(minute=2),
+    },
+    'refetch-verify-yesterday-daily': {
+        'task': 'scada_proxy.tasks.refetch_and_verify_yesterday',
+        'schedule': crontab(hour=1, minute=30),  # Diario 01:30 Bogotá
     },
     'sync-external-energy-daily': {
         'task': 'external_energy.tasks.sync_external_energy_data',
         'schedule': crontab(hour=3, minute=0),  # Diario a las 03:00 (hora Bogotá)
     },
 }
+
+# Límites y entrega de tareas: ninguna tarea normal debería exceder 9 min
+# (las de reportes definen sus propios límites en el decorador). acks_late +
+# reject_on_worker_lost es seguro porque todas las escrituras son upserts
+# idempotentes; garantiza re-entrega si un worker muere a mitad de tarea.
+CELERY_TASK_SOFT_TIME_LIMIT = 540
+CELERY_TASK_TIME_LIMIT = 660
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
 # ========================= Configuración External Energy (XM) =========================
 
@@ -409,6 +415,13 @@ LOGGING = {
             'propagate': False,
         },
         'celery': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Emite el resultado de CADA tarea (succeeded/failed/retry + duración).
+        # Sin este logger el worker no deja rastro del desenlace de las tareas.
+        'celery.app.trace': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,

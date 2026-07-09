@@ -11,7 +11,8 @@ from datetime import datetime, time
 
 from django.test import TestCase
 
-from scada_proxy.models import Device, Institution, DeviceCategory, Measurement
+from scada_proxy.models import Device, Institution, DeviceCategory, Measurement, MeterMeasurement
+from scada_proxy.tasks import upsert_measurements_page
 from indicators.models import DailyChartData
 from indicators.energy import SAMPLE_INTERVAL_HOURS
 from indicators.tasks import calculate_and_save_daily_data, COLOMBIA_TZ
@@ -29,12 +30,12 @@ class ConsumptionNetGrossTests(TestCase):
         self.date = datetime(2026, 6, 15).date()
         base = COLOMBIA_TZ.localize(datetime.combine(self.date, time(12, 0)))
         # totalActivePower en kW: +150 (importa), -40 (inyecta/exporta), +100 (importa)
-        for i, power in enumerate([150.0, -40.0, 100.0]):
-            Measurement.objects.create(
-                device=self.device,
-                date=base.replace(minute=i * 2),
-                data={'totalActivePower': power},
-            )
+        # Insertadas por el helper real de ingesta (dual-write v1+v2): las
+        # tareas migradas leen las tablas tipadas v2.
+        upsert_measurements_page(self.device, [
+            (base.replace(minute=i * 2), {'totalActivePower': power})
+            for i, power in enumerate([150.0, -40.0, 100.0])
+        ])
 
     def test_daily_net_and_gross_consumption(self):
         calculate_and_save_daily_data(
@@ -53,13 +54,12 @@ class ConsumptionNetGrossTests(TestCase):
     def test_gross_equals_net_without_export(self):
         # Sin valores negativos, neto y bruto coinciden.
         Measurement.objects.all().delete()
+        MeterMeasurement.objects.all().delete()
         base = COLOMBIA_TZ.localize(datetime.combine(self.date, time(9, 0)))
-        for i, power in enumerate([80.0, 120.0]):
-            Measurement.objects.create(
-                device=self.device,
-                date=base.replace(minute=i * 2),
-                data={'totalActivePower': power},
-            )
+        upsert_measurements_page(self.device, [
+            (base.replace(minute=i * 2), {'totalActivePower': power})
+            for i, power in enumerate([80.0, 120.0])
+        ])
         calculate_and_save_daily_data(
             start_date_str=self.date.isoformat(),
             end_date_str=self.date.isoformat(),
