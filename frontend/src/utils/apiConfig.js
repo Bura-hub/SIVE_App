@@ -1,5 +1,7 @@
-// Configuración base de la API
-export const API_BASE_URL = process.env.REACT_APP_API_URL;
+// Configuración base de la API. Cadena vacía por defecto: permite despliegues
+// same-origin (p. ej. detrás de un reverse proxy con rutas relativas) sin que
+// `API_BASE_URL + endpoint` quede como "undefined/...".
+export const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 // Endpoints organizados por categoría
 export const ENDPOINTS = {
@@ -73,7 +75,10 @@ export const ENDPOINTS = {
  * @returns {string} - URL completa
  */
 export const buildApiUrl = (endpoint, params = {}) => {
-  const url = new URL(API_BASE_URL + endpoint);
+  // window.location.origin como base: si API_BASE_URL es absoluta, gana; si es
+  // vacía/relativa, la URL resuelve contra el origen actual en vez de lanzar
+  // "Invalid URL".
+  const url = new URL(API_BASE_URL + endpoint, window.location.origin);
   Object.keys(params).forEach(key => {
     if (params[key] !== undefined && params[key] !== null) {
       url.searchParams.append(key, params[key]);

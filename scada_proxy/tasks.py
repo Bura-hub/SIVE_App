@@ -100,11 +100,18 @@ def _fetch_all_devices(client, token):
     offset = 0
     all_devices = []
     total = None
-    while True:
+    # Tope de seguridad: si la API ignora 'offset' y no reporta 'total', el bucle
+    # podría no terminar nunca (devolvería siempre una página llena). Cortamos y
+    # marcamos la lista como INCOMPLETA para no desactivar dispositivos por error.
+    MAX_PAGES = 1000
+    truncated = False
+    for _ in range(MAX_PAGES):
         resp = client.get_devices(token, limit=DEVICES_PAGE_SIZE, offset=offset)
         data = resp.get('data', []) or []
         if total is None:
             total = resp.get('total')
+        if not data:
+            break
         all_devices.extend(data)
         # Última página: la API devolvió menos de lo pedido.
         if len(data) < DEVICES_PAGE_SIZE:
@@ -113,8 +120,15 @@ def _fetch_all_devices(client, token):
         # Si conocemos el total y ya lo alcanzamos, detenerse.
         if total is not None and len(all_devices) >= total:
             break
-    # Consideramos la lista completa si obtuvimos algo y (no hay total o coincide).
-    complete = bool(all_devices) and (total is None or len(all_devices) >= total)
+    else:
+        # Se agotó MAX_PAGES sin condición de fin natural → respuesta sospechosa.
+        truncated = True
+        logger.error(
+            f"_fetch_all_devices alcanzó el tope de {MAX_PAGES} páginas "
+            f"({len(all_devices)} dispositivos); la API podría ignorar 'offset'."
+        )
+    # Completa solo si NO se truncó y obtuvimos algo y (no hay total o coincide).
+    complete = (not truncated) and bool(all_devices) and (total is None or len(all_devices) >= total)
     return all_devices, total, complete
 
 
@@ -172,15 +186,24 @@ def sync_scada_metadata_core(client=None):
                 if institution_obj is None:
                     logger.warning(f"Institución {institution.get('id')} no encontrada para dispositivo {name}.")
 
+            defaults = {
+                'name': name,
+                'status': device_data.get('status', '') or '',
+                'is_active': True,
+            }
+            # Solo escribir las FK cuando se resolvieron. Un fallo de resolución
+            # (mapping ausente, orden de sync, categoría faltante) NO debe sobreescribir
+            # con None una relación válida existente y hacer desaparecer el dispositivo
+            # de los KPIs por categoría. La tarea repair_device_relationships completa
+            # las FK faltantes de dispositivos nuevos.
+            if category_obj is not None:
+                defaults['category'] = category_obj
+            if institution_obj is not None:
+                defaults['institution'] = institution_obj
+
             _, created = Device.objects.update_or_create(
                 scada_id=scada_id,
-                defaults={
-                    'name': name,
-                    'status': device_data.get('status', '') or '',
-                    'category': category_obj,
-                    'institution': institution_obj,
-                    'is_active': True,
-                },
+                defaults=defaults,
             )
             if created:
                 devices_created += 1

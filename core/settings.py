@@ -39,8 +39,15 @@ if not SECRET_KEY:
 # Modo debug desde variables de entorno
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
+def env_list(name, default=''):
+    """Lee una variable de entorno separada por comas → lista sin espacios ni vacíos.
+    Evita bugs sutiles: 'https://a, https://b' NO debe dejar ' https://b' (con espacio),
+    que nunca haría match contra un Origin entrante."""
+    return [item.strip() for item in os.getenv(name, default).split(',') if item.strip()]
+
+
 # Lista de hosts permitidos desde variables de entorno
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 
 # --- Despliegue bajo un subpath detrás de un reverse proxy (p. ej. /sivet) ---
 # FORCE_SCRIPT_NAME hace que Django genere sus URLs (admin, DRF, login, redirecciones)
@@ -93,7 +100,7 @@ MIDDLEWARE = [
 # ========================= CORS =========================
 
 # CORS dinámico desde variables de entorno
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if os.getenv('CORS_ALLOWED_ORIGINS') else []
+CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS')
 
 # Restringe CORS a orígenes definidos explícitamente
 CORS_ALLOW_ALL_ORIGINS = False
@@ -103,11 +110,7 @@ CORS_ALLOW_ALL_ORIGINS = False
 # Orígenes de confianza para CSRF (Django >= 4 los exige para POST cross-origin,
 # p. ej. el login del /admin desde una IP/puerto distintos). Se leen del entorno
 # (definidos en .env / docker-compose) igual que CORS.
-CSRF_TRUSTED_ORIGINS = (
-    os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
-    if os.getenv('CSRF_TRUSTED_ORIGINS')
-    else []
-)
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
 
 # ========================= Enrutamiento =========================
 

@@ -503,23 +503,28 @@ class UserProfileView(APIView):
             
             # Actualizar campos del usuario
             user = request.user
-            for field in user_fields:
-                if field in update_data:
-                    setattr(user, field, update_data[field])
-            
-            # Validar y guardar usuario
-            user.full_clean()
-            user.save()
-            
-            # Actualizar campos del perfil
-            for field in profile_fields:
-                if field in update_data:
-                    setattr(profile, field, update_data[field])
+            changed_user = [f for f in user_fields if f in update_data]
+            for field in changed_user:
+                setattr(user, field, update_data[field])
 
-            # Validar el perfil (p. ej. phone_regex) antes de guardar: save() por sí
+            # Validar SOLO los campos cambiados (excluir el resto): una actualización
+            # parcial no debe fallar por datos previos inválidos en campos no tocados.
+            if changed_user:
+                exclude_user = [f.name for f in user._meta.fields if f.name not in changed_user]
+                user.full_clean(exclude=exclude_user)
+                user.save(update_fields=changed_user)
+
+            # Actualizar campos del perfil
+            changed_profile = [f for f in profile_fields if f in update_data]
+            for field in changed_profile:
+                setattr(profile, field, update_data[field])
+
+            # Validar solo los campos cambiados (p. ej. phone_regex): save() por sí
             # solo no ejecuta los validadores del modelo.
-            profile.full_clean()
-            profile.save()
+            if changed_profile:
+                exclude_profile = [f.name for f in profile._meta.fields if f.name not in changed_profile]
+                profile.full_clean(exclude=exclude_profile)
+                profile.save(update_fields=changed_profile)
 
             # Serializar respuesta
             serializer = UserProfileSerializer(profile)

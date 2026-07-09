@@ -55,15 +55,23 @@ class XMRealAPIService:
         pydataxm no expone un parámetro de timeout, por lo que la llamada se ejecuta en un
         hilo aparte y se acota el tiempo máximo de espera del ciclo request/response de Django.
         """
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(api_client.request_data, metric_id, entity, start, end)
-            try:
-                return future.result(timeout=self.request_timeout)
-            except concurrent.futures.TimeoutError:
-                raise TimeoutError(
-                    f"La consulta a XM '{metric_id}' superó el timeout de "
-                    f"{self.request_timeout}s"
-                )
+        # NO usar `with ThreadPoolExecutor(...)`: su __exit__ hace shutdown(wait=True)
+        # y bloquearía hasta que el hilo colgado termine, anulando el timeout. Se
+        # cierra con wait=False para devolver el control de inmediato (el hilo huérfano
+        # terminará por su cuenta; Python no permite matarlo).
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(api_client.request_data, metric_id, entity, start, end)
+        try:
+            result = future.result(timeout=self.request_timeout)
+            executor.shutdown(wait=False)
+            return result
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            executor.shutdown(wait=False)
+            raise TimeoutError(
+                f"La consulta a XM '{metric_id}' superó el timeout de "
+                f"{self.request_timeout}s"
+            )
 
     def _extract_series(self, df, date_column='Date'):
         """Normaliza un DataFrame de la API de XM a una lista de registros {'datetime', 'value'}.
@@ -151,10 +159,18 @@ class XMRealAPIService:
 
         Conserva None para valores faltantes: las vistas filtran None/NaN pero conservan los
         ceros legítimos (demanda/generación/importación/exportación 0 son datos reales).
+
+        Si la serie es HORARIA (varios registros por día, p. ej. Gene/DemaCome/emisiones),
+        se incluye la hora en la etiqueta para no colapsar las 24 muestras diarias a una
+        sola clave de fecha. Si es DIARIA, se mantiene solo 'YYYY-MM-DD' (sin cambios).
         """
+        days = [rec['datetime'].date() if hasattr(rec['datetime'], 'date') else rec['datetime']
+                for rec in records]
+        hourly = len(days) != len(set(days))  # hay más de un registro por día
+        fmt = '%Y-%m-%d %H:%M' if hourly else '%Y-%m-%d'
         return [
             {
-                'date': rec['datetime'].strftime('%Y-%m-%d'),
+                'date': rec['datetime'].strftime(fmt),
                 'value': rec['value'],
             }
             for rec in records

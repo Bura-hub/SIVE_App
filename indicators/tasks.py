@@ -79,9 +79,9 @@ def calculate_monthly_consumption_kpi(self):
         logger.info(f"Rango mes anterior: {start_previous_month} -> {end_previous_month}")
 
         # Obtener los dispositivos activos de cada categoría
-        electric_meters = Device.objects.filter(category__name='electricMeter', is_active=True)
-        inverters = Device.objects.filter(category__name='inverter', is_active=True)
-        weather_stations = Device.objects.filter(category__name='weatherStation', is_active=True) 
+        electric_meters = Device.objects.filter(category__name__iexact='electricMeter', is_active=True)
+        inverters = Device.objects.filter(category__name__iexact='inverter', is_active=True)
+        weather_stations = Device.objects.filter(category__name__iexact='weatherStation', is_active=True) 
         
         logger.info(f"Dispositivos encontrados:")
         logger.info(f"  - Medidores eléctricos: {electric_meters.count()} dispositivos")
@@ -305,9 +305,9 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
         logger.info(f"Rango de fechas a procesar en Colombia: {start_date.date()} -> {end_date.date()}")
         
         # 2. Obtener los dispositivos eléctricos, inversores y estaciones meteorológicas
-        electric_meters: QuerySet[Device] = Device.objects.filter(category__name='electricMeter', is_active=True)
-        inverters: QuerySet[Device] = Device.objects.filter(category__name='inverter', is_active=True)
-        weather_stations: QuerySet[Device] = Device.objects.filter(category__name='weatherStation', is_active=True)
+        electric_meters: QuerySet[Device] = Device.objects.filter(category__name__iexact='electricMeter', is_active=True)
+        inverters: QuerySet[Device] = Device.objects.filter(category__name__iexact='inverter', is_active=True)
+        weather_stations: QuerySet[Device] = Device.objects.filter(category__name__iexact='weatherStation', is_active=True)
         
         logger.info(f"Dispositivos encontrados para cálculo diario:")
         logger.info(f"  - Medidores eléctricos: {electric_meters.count()} dispositivos")
@@ -467,7 +467,7 @@ def calculate_electric_meter_data(self, time_range='daily', start_date_str=None,
         logger.info(f"Calculando datos para rango: {time_range}, desde {start_date} hasta {end_date}")
 
         # Obtener medidores eléctricos filtrados
-        electric_meters = Device.objects.filter(category__name='electricMeter', is_active=True)
+        electric_meters = Device.objects.filter(category__name__iexact='electricMeter', is_active=True)
         
         if institution_id:
             electric_meters = electric_meters.filter(institution_id=institution_id)
@@ -707,7 +707,7 @@ def calculate_electric_meter_energy_consumption(
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else get_colombia_date()
         
         # Obtener medidores eléctricos
-        meters_query = Device.objects.filter(category__name='electricMeter', is_active=True)
+        meters_query = Device.objects.filter(category__name__iexact='electricMeter', is_active=True)
         if institution_id:
             meters_query = meters_query.filter(institution_id=institution_id)
         if device_id:
@@ -1126,7 +1126,7 @@ def calculate_all_electric_meter_indicators(time_range='daily', start_date=None,
         from scada_proxy.models import Device, DeviceCategory
         
         # Obtener todos los medidores eléctricos
-        electric_meter_category = DeviceCategory.objects.filter(name='electricMeter').first()
+        electric_meter_category = DeviceCategory.objects.filter(name__iexact='electricMeter').first()
         if not electric_meter_category:
             return "No se encontró la categoría de medidores eléctricos"
         
@@ -1525,7 +1525,7 @@ def calculate_inverter_data(time_range='daily', start_date_str=None, end_date_st
         logger.info(f"Calculando datos para rango: {time_range}, desde {start_date} hasta {end_date}")
 
         # Obtener inversores filtrados
-        inverters = Device.objects.filter(category__name='inverter', is_active=True)
+        inverters = Device.objects.filter(category__name__iexact='inverter', is_active=True)
         
         if institution_id:
             inverters = inverters.filter(institution_id=institution_id)
@@ -1644,7 +1644,7 @@ def calculate_electrical_data(self, time_range='daily', start_date_str=None, end
         logger.info(f"Calculando datos eléctricos para rango: {time_range}, desde {start_date} hasta {end_date}")
 
         # Obtener medidores eléctricos filtrados
-        electric_meters = Device.objects.filter(category__name='electricMeter', is_active=True)
+        electric_meters = Device.objects.filter(category__name__iexact='electricMeter', is_active=True)
         
         if institution_id:
             electric_meters = electric_meters.filter(institution_id=institution_id)
@@ -1768,7 +1768,7 @@ def calculate_weather_station_indicators(time_range='daily', start_date_str=None
         
         # Paso 2: Obtener dispositivos
         # Filtrar por categoría de estación meteorológica (category_id=3 según variables.json)
-        weather_stations = Device.objects.filter(category__name='weatherStation', is_active=True)
+        weather_stations = Device.objects.filter(category__name__iexact='weatherStation', is_active=True)
         
         if institution_id:
             weather_stations = weather_stations.filter(institution_id=institution_id)

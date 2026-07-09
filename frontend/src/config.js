@@ -1,7 +1,8 @@
 // Configuración del backend
 const config = {
-    // URL base del backend Django
-    API_BASE_URL: process.env.REACT_APP_API_URL,
+    // URL base del backend Django. Vacío por defecto → rutas relativas same-origin
+    // (evita "undefined/..." si REACT_APP_API_URL no está definido en build-time).
+    API_BASE_URL: process.env.REACT_APP_API_URL || '',
     
     // Endpoints de autenticación
     ENDPOINTS: {
