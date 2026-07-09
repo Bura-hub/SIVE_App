@@ -4,6 +4,9 @@
 # Production WSGI Server
 gunicorn==23.0.0
 
+# Servido de estáticos (admin/DRF/Swagger) desde gunicorn, sin servidor aparte
+whitenoise==6.8.2
+
 # Production Database Connection Pooling
 django-db-connection-pool==1.0.0
 

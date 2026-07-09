@@ -42,6 +42,13 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 # Lista de hosts permitidos desde variables de entorno
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# --- Despliegue bajo un subpath detrás de un reverse proxy (p. ej. /sivet) ---
+# FORCE_SCRIPT_NAME hace que Django genere sus URLs (admin, DRF, login, redirecciones)
+# con este prefijo. Vacío por defecto → despliegue en la raíz "/" y dev local sin cambios.
+FORCE_SCRIPT_NAME = os.getenv('FORCE_SCRIPT_NAME') or None
+# Confiar en el Host reenviado por el proxy (Apache) cuando termina TLS por nosotros.
+USE_X_FORWARDED_HOST = os.getenv('USE_X_FORWARDED_HOST', 'False').lower() == 'true'
+
 # ========================= Aplicaciones Registradas =========================
 
 INSTALLED_APPS = [
@@ -71,6 +78,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise sirve los estáticos (admin/DRF/Swagger) directamente desde gunicorn,
+    # sin depender de un servidor de archivos aparte. Debe ir justo tras SecurityMiddleware.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # CORS antes del CommonMiddleware
     'django.middleware.common.CommonMiddleware',
@@ -166,8 +176,18 @@ USE_TZ = True
 
 # ========================= Archivos Estáticos =========================
 
-STATIC_URL = 'static/'
+# Bajo un subpath (p. ej. /sivet) debe apuntarse a una ruta propia como
+# /sivet/django-static/ para NO colisionar con los estáticos del frontend React
+# (/sivet/static/). Por defecto conserva 'static/' (raíz / dev local).
+STATIC_URL = os.getenv('STATIC_URL', 'static/')
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+
+# WhiteNoise: compresión de estáticos (sin manifest, para no romper collectstatic si
+# alguna referencia de admin/DRF faltara). Sirve STATIC_URL desde gunicorn.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 
 # ========================= Configuración por defecto de PK =========================
 
@@ -435,16 +455,17 @@ if not DEBUG:
     # Evita que el navegador "adivine" content-types (X-Content-Type-Options: nosniff)
     SECURE_CONTENT_TYPE_NOSNIFF = True
 
-    # HSTS: el navegador fuerza HTTPS para el dominio durante 1 año.
-    # Activar únicamente cuando todo el dominio (y sus subdominios) sirva HTTPS
-    # de forma estable.
-    SECURE_HSTS_SECONDS = 31536000  # 1 año
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+    # HSTS: opt-in por entorno. Por defecto DESACTIVADO (0) porque el dominio
+    # mte.udenar.edu.co es COMPARTIDO con otras apps; un HSTS con includeSubDomains/
+    # preload emitido por SIVET afectaría a todo el dominio. El header HSTS debe
+    # gestionarlo el dueño del dominio a nivel de Apache, no una sola app.
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() == 'true'
+    SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'False').lower() == 'true'
 
-    # Si Django corre detrás de un proxy/balanceador que termina TLS (p. ej.
-    # nginx con certificado), descomentar para que request.is_secure() detecte
-    # HTTPS a partir del header X-Forwarded-Proto que setea el proxy.
-    # NO activarlo sin un proxy de confianza que sobrescriba ese header: un
-    # cliente podría falsificarlo y hacerse pasar por una conexión segura.
-    # SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    # Detrás de un proxy/balanceador que termina TLS (Apache con el certificado
+    # Let's Encrypt del dominio), activar por env para que request.is_secure()
+    # reconozca HTTPS desde X-Forwarded-Proto. Requiere un proxy de CONFIANZA que
+    # sobrescriba ese header (Apache lo hace); nunca activarlo con acceso directo.
+    if os.getenv('BEHIND_TLS_PROXY', 'False').lower() == 'true':
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
