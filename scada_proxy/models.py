@@ -88,3 +88,92 @@ class TaskProgress(models.Model):
 
     def __str__(self):
         return f"Task {self.task_id} - {self.status}"
+
+
+# =========================
+# Mediciones v2 — tablas anchas tipadas por categoría (una columna float8
+# por métrica; nombres = claves exactas del connector, ver
+# measurements_schema.py). Reemplazan a Measurement (jsonb) tras el
+# switchover; conviven con ella durante la transición (dual-write).
+# =========================
+from .measurements_schema import METER_METRICS, INVERTER_METRICS, WEATHER_METRICS
+
+
+class MeterMeasurement(models.Model):
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='meter_measurements')
+    date = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['device', 'date'], name='uq_meter_meas_device_date'),
+        ]
+
+    def __str__(self):
+        return f"{self.device.name} - {self.date}"
+
+
+class InverterMeasurement(models.Model):
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='inverter_measurements')
+    date = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['device', 'date'], name='uq_inverter_meas_device_date'),
+        ]
+
+    def __str__(self):
+        return f"{self.device.name} - {self.date}"
+
+
+class WeatherStationMeasurement(models.Model):
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='weather_measurements')
+    date = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['device', 'date'], name='uq_weather_meas_device_date'),
+        ]
+
+    def __str__(self):
+        return f"{self.device.name} - {self.date}"
+
+
+# Los campos de métricas se generan desde el catálogo canónico: una columna
+# FloatField(null=True) por métrica (clave ausente en el connector → NULL).
+for _name in METER_METRICS:
+    MeterMeasurement.add_to_class(_name, models.FloatField(null=True))
+for _name in INVERTER_METRICS:
+    InverterMeasurement.add_to_class(_name, models.FloatField(null=True))
+for _name in WEATHER_METRICS:
+    WeatherStationMeasurement.add_to_class(_name, models.FloatField(null=True))
+
+# Modelo → categoría (para la ingesta y el resync)
+CATEGORY_TO_MODEL = {
+    'electricMeter': MeterMeasurement,
+    'inverter': InverterMeasurement,
+    'weatherStation': WeatherStationMeasurement,
+}
+
+
+class MeasurementSyncChunk(models.Model):
+    """Checkpoint de resync v2: un chunk device×rango ya sincronizado.
+
+    Permite reanudar el comando resync_measurements_v2 tras interrupciones
+    y auditar huecos de sincronización.
+    """
+    STATUS_CHOICES = [('pending', 'pending'), ('done', 'done'), ('failed', 'failed')]
+
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='sync_chunks')
+    start = models.DateTimeField()
+    end = models.DateTimeField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    rows = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['device', 'start', 'end'], name='uq_sync_chunk_device_range'),
+        ]
+
+    def __str__(self):
+        return f"{self.device_id} {self.start:%Y-%m-%d}..{self.end:%Y-%m-%d} {self.status}"
