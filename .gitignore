@@ -32,3 +32,14 @@ reports/
 
 # Backups
 backups/
+# --- Artefactos del entorno de sesión de Claude Code (no versionar) ---
+.claude/
+.claude.json
+.cache/
+.npm/
+.config/
+.local/
+.bash_history
+Dockerfile.claude
+iniciobash.txt
+scada_devices_full.json
