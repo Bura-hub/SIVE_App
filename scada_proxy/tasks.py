@@ -10,8 +10,13 @@ import pytz
 from django.db import models
 
 # Importa tu cliente SCADA y tus modelos
+from django.conf import settings
 from .scada_client import ScadaConnectorClient
-from .models import Institution, DeviceCategory, Device, Measurement, TaskProgress
+from .models import (
+    Institution, DeviceCategory, Device, Measurement, TaskProgress,
+    CATEGORY_TO_MODEL,
+)
+from .measurements_schema import metrics_for_category
 
 logger = logging.getLogger(__name__)
 scada_client = ScadaConnectorClient()
@@ -250,13 +255,114 @@ def sync_scada_metadata(self):
     return sync_scada_metadata_core()
 
 
+def _parse_measurement_date(date_str):
+    """Parsea la fecha de una medición del connector a datetime aware (Bogotá)."""
+    dt = parse_datetime(date_str) if date_str else None
+    if dt is None:
+        return None
+    if is_naive(dt):
+        return make_aware(dt, timezone=COLOMBIA_TZ)
+    return dt.astimezone(COLOMBIA_TZ)
+
+
+def _iter_measurement_pages(token, device_scada_id, from_dt, to_dt, page_size=1000):
+    """Itera las páginas del connector y entrega listas de (dt, data_dict) válidas."""
+    offset = 0
+    while True:
+        response = scada_client.get_measurements(
+            token,
+            device_id=device_scada_id,
+            from_date=from_dt.isoformat(timespec='seconds'),
+            to_date=to_dt.isoformat(timespec='seconds'),
+            limit=page_size,
+            offset=offset,
+        )
+        page = response.get('data', [])
+        if not page:
+            return
+
+        rows = []
+        for entry in page:
+            data_dict = entry.get('data', {})
+            dt = _parse_measurement_date(entry.get('date'))
+            if dt is None or not data_dict:
+                logger.warning(f"Medición incompleta o fecha inválida: {str(entry)[:200]}")
+                continue
+            rows.append((dt, data_dict))
+        if rows:
+            yield rows
+
+        if len(page) < page_size:
+            return
+        offset += page_size
+
+
+def upsert_measurements_page(device, rows, write_v1=None, write_v2=True):
+    """Upsert masivo de una página de mediciones (v1 jsonb y/o v2 tipadas).
+
+    `rows` es una lista de (datetime_aware, data_dict). Deduplica por fecha
+    (última gana: el UNIQUE (device,date) no admite el mismo par dos veces en
+    un solo ON CONFLICT). Devuelve el número de filas procesadas.
+
+    Dual-write: v1 se controla con settings.MEASUREMENTS_WRITE_V1 (default
+    True hasta el switchover); v2 siempre, salvo categoría desconocida.
+    """
+    if write_v1 is None:
+        write_v1 = getattr(settings, 'MEASUREMENTS_WRITE_V1', True)
+
+    deduped = {}
+    for dt, data in rows:
+        deduped[dt] = data
+    if not deduped:
+        return 0
+
+    category_name = device.category.name if device.category_id else None
+    v2_model = CATEGORY_TO_MODEL.get(category_name) if write_v2 else None
+    v2_metrics = metrics_for_category(category_name) if v2_model else None
+    if write_v2 and v2_model is None:
+        logger.warning(
+            f"Dispositivo {device.id} ({device.name}) con categoría desconocida "
+            f"'{category_name}': se omite la escritura v2 de esta página."
+        )
+
+    with transaction.atomic():
+        if write_v1:
+            Measurement.objects.bulk_create(
+                [Measurement(device=device, date=dt, data=data) for dt, data in deduped.items()],
+                update_conflicts=True,
+                unique_fields=['device', 'date'],
+                update_fields=['data'],
+            )
+        if v2_model is not None:
+            metric_set = set(v2_metrics)
+            unknown = set()
+            objs = []
+            for dt, data in deduped.items():
+                fields = {k: v for k, v in data.items() if k in metric_set}
+                unknown.update(k for k in data if k not in metric_set)
+                objs.append(v2_model(device=device, date=dt, **fields))
+            v2_model.objects.bulk_create(
+                objs,
+                update_conflicts=True,
+                unique_fields=['device', 'date'],
+                update_fields=v2_metrics,
+            )
+            if unknown:
+                logger.warning(
+                    f"Métricas desconocidas ignoradas en v2 para device {device.id} "
+                    f"({category_name}): {sorted(unknown)} — si son nuevas del "
+                    f"connector, añadirlas a measurements_schema.py + migración."
+                )
+    return len(deduped)
+
+
 @shared_task(bind=True, retry_backoff=10, max_retries=5,
              autoretry_for=(requests.exceptions.RequestException,))
 def fetch_and_save_measurements_for_device(self, device_scada_id: str, django_device_id: int, from_datetime_str: str, to_datetime_str: str):
     """
     Obtiene y guarda mediciones para un dispositivo SCADA.
-    Cada medición se guarda como un solo JSON por timestamp.
-    Usa update_or_create para evitar duplicados.
+    Upsert masivo por página (bulk_create con update_conflicts), dual-write
+    v1 (jsonb) + v2 (tablas tipadas por categoría) durante la transición.
     """
     try:
         token = scada_client.get_token()
@@ -279,59 +385,11 @@ def fetch_and_save_measurements_for_device(self, device_scada_id: str, django_de
 
         logger.info(f"Obteniendo mediciones para dispositivo {device_scada_id} desde {from_dt} hasta {to_dt} (hora Colombia)")
 
-        page_size = 1000
-        offset = 0
-        total_created, total_updated = 0, 0
+        total_rows = 0
+        for rows in _iter_measurement_pages(token, device_scada_id, from_dt, to_dt):
+            total_rows += upsert_measurements_page(device_instance, rows)
 
-        while True:
-            measurements_response = scada_client.get_measurements(
-                token,
-                device_id=device_scada_id,
-                from_date=from_dt.isoformat(timespec='seconds'),
-                to_date=to_dt.isoformat(timespec='seconds'),
-                limit=page_size,
-                offset=offset
-            )
-            measurements_data = measurements_response.get('data', [])
-
-            if not measurements_data:
-                break
-
-            for measurement_entry in measurements_data:
-                date_str = measurement_entry.get('date')
-                data_dict = measurement_entry.get('data', {})
-
-                if not date_str or not data_dict:
-                    logger.warning(f"Medición incompleta: {measurement_entry}")
-                    continue
-
-                dt = parse_datetime(date_str)
-                if dt is None:
-                    logger.warning(f"Fecha inválida: {date_str}")
-                    continue
-
-                if is_naive(dt):  # Hacer aware si está en naive
-                    dt = make_aware(dt, timezone=COLOMBIA_TZ)
-                else:
-                    # Convertir a zona horaria de Colombia si ya tiene timezone
-                    dt = dt.astimezone(COLOMBIA_TZ)
-
-                _, created = Measurement.objects.update_or_create(
-                    device=device_instance,
-                    date=dt,
-                    defaults={"data": data_dict}
-                )
-
-                if created:
-                    total_created += 1
-                else:
-                    total_updated += 1
-
-            if len(measurements_data) < page_size:
-                break
-            offset += page_size
-
-        logger.info(f"Dispositivo {device_scada_id}: {total_created} nuevas, {total_updated} actualizadas")
+        logger.info(f"Dispositivo {device_scada_id}: {total_rows} mediciones upserted (bulk)")
 
     except Device.DoesNotExist:
         logger.error(f"Dispositivo con id {django_device_id} no encontrado.")
