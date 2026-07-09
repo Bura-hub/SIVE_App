@@ -100,9 +100,13 @@ class ConsumptionSummaryView(APIView):
                 # Si el registro no existe, devolvemos valores por defecto en lugar de un error.
                 kpi_record = MonthlyConsumptionKPI()
 
-            # --- Consumo Total ---
+            # --- Consumo Total (NETO: importación − exportación, net metering) ---
             total_consumption_current_month = kpi_record.total_consumption_current_month
             total_consumption_previous_month = kpi_record.total_consumption_previous_month
+
+            # --- Consumo Bruto (solo energía tomada de la red; inyección clampeada a 0) ---
+            total_gross_consumption_current_month = kpi_record.total_gross_consumption_current_month
+            total_gross_consumption_previous_month = kpi_record.total_gross_consumption_previous_month
             
             # --- Generación Total ---
             total_generation_current_month = kpi_record.total_generation_current_month
@@ -348,11 +352,19 @@ class ConsumptionSummaryView(APIView):
                     "previousMonthUnit": base_unit_name
                 }
 
-            # KPI de Consumo Total
+            # KPI de Consumo Total (NETO)
             consumption_kpi = calculate_kpi_metrics(
                 total_consumption_current_month,
                 total_consumption_previous_month,
                 "Consumo total",
+                "kWh"
+            )
+
+            # KPI de Consumo Bruto (solo importación de red)
+            gross_consumption_kpi = calculate_kpi_metrics(
+                total_gross_consumption_current_month,
+                total_gross_consumption_previous_month,
+                "Consumo bruto (red)",
                 "kWh"
             )
 
@@ -441,6 +453,7 @@ class ConsumptionSummaryView(APIView):
 
             kpi_data = {
                 "totalConsumption": consumption_kpi,
+                "grossConsumption": gross_consumption_kpi,
                 "totalGeneration": generation_kpi,
                 "energyBalance": energy_balance_kpi,
                 "averageInstantaneousPower": avg_power_kpi,

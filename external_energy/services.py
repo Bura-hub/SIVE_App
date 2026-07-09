@@ -260,8 +260,9 @@ class XMRealAPIService:
     def fetch_emissions_data(self, start_date, end_date):
         """Obtiene datos de emisiones desde la API de XM.
 
-        `factorEmisionCO2e` es una métrica DIARIA (columna 'Value', no 'Values_HourXX'), por
-        lo que `_extract_series` la normaliza por la rama de métricas diarias.
+        `factorEmisionCO2e` (Entity=Sistema, gCO2e/kWh) es una métrica HORARIA
+        (Type=HourlyEntities, columnas 'Values_HourXX') confirmada contra el catálogo real de
+        XM; `_extract_series` la normaliza por la rama horaria.
         """
         try:
             if not self.api_available:
@@ -272,7 +273,7 @@ class XMRealAPIService:
 
             api_client = pydataxm.ReadDB()
 
-            # Consultar factor de emisión de CO2 equivalente (métrica diaria)
+            # Consultar factor de emisión de CO2 equivalente (métrica horaria)
             df_emissions = self._request_data_with_timeout(
                 api_client,
                 "factorEmisionCO2e",  # Factor de emisión CO2 equivalente
@@ -293,10 +294,8 @@ class XMRealAPIService:
     def fetch_exports_data(self, start_date, end_date):
         """Obtiene datos de exportaciones de energía desde la API de XM.
 
-        NOTA: El identificador de métrica 'ExpoEner' no pudo confirmarse contra el catálogo de
-        XM en este entorno (sin acceso a pydataxm). Verificar contra la documentación oficial
-        de XM; `_extract_series` soporta tanto series horarias como diarias según lo que
-        devuelva la API.
+        'ExpoEner' (Entity=Sistema, kWh, Type=HourlyEntities) queda CONFIRMADO contra el
+        catálogo real de XM (get_collections). `_extract_series` soporta series horarias y diarias.
         """
         try:
             if not self.api_available:
@@ -310,7 +309,7 @@ class XMRealAPIService:
             # Consultar exportaciones de energía
             df_exports = self._request_data_with_timeout(
                 api_client,
-                "ExpoEner",           # Exportaciones de energía (verificar ID en catálogo XM)
+                "ExpoEner",           # Exportaciones de energía (confirmado en catálogo XM, kWh)
                 "Sistema",            # Entidad Sistema
                 dt.date(start_date.year, start_date.month, start_date.day),
                 dt.date(end_date.year, end_date.month, end_date.day),
@@ -328,10 +327,8 @@ class XMRealAPIService:
     def fetch_imports_data(self, start_date, end_date):
         """Obtiene datos de importaciones de energía desde la API de XM.
 
-        NOTA: El identificador de métrica 'ImpoEner' no pudo confirmarse contra el catálogo de
-        XM en este entorno (sin acceso a pydataxm). Verificar contra la documentación oficial
-        de XM; `_extract_series` soporta tanto series horarias como diarias según lo que
-        devuelva la API.
+        'ImpoEner' (Entity=Sistema, kWh, Type=HourlyEntities) queda CONFIRMADO contra el
+        catálogo real de XM (get_collections). `_extract_series` soporta series horarias y diarias.
         """
         try:
             if not self.api_available:
@@ -345,7 +342,7 @@ class XMRealAPIService:
             # Consultar importaciones de energía
             df_imports = self._request_data_with_timeout(
                 api_client,
-                "ImpoEner",           # Importaciones de energía (verificar ID en catálogo XM)
+                "ImpoEner",           # Importaciones de energía (confirmado en catálogo XM, kWh)
                 "Sistema",            # Entidad Sistema
                 dt.date(start_date.year, start_date.month, start_date.day),
                 dt.date(end_date.year, end_date.month, end_date.day),

@@ -1,7 +1,7 @@
 from celery import shared_task
 from datetime import datetime, timedelta, timezone
-from django.db.models import Sum, Avg, F, FloatField, Max, Count, Min, Q, QuerySet
-from django.db.models.functions import Cast, TruncDay
+from django.db.models import Sum, Avg, F, FloatField, Max, Count, Min, Q, QuerySet, Value
+from django.db.models.functions import Cast, TruncDay, Greatest
 import logging
 import calendar
 from django.utils import timezone as django_timezone
@@ -96,26 +96,33 @@ def calculate_monthly_consumption_kpi(self):
         # mediana ~0.9, máx ~74), así que NO se divide por 1000.
         # ANTES: se guardaba la SUMA cruda de la potencia como si fuera kWh (sin integrar
         # Δt y con el mensual incoherente con el diario).
-        current_month_consumption_sum = consumption_energy_kwh(
-            Measurement.objects.filter(
-                device__in=electric_meters,
-                date__date__range=(start_current_month, end_current_month),
-                data__totalActivePower__isnull=False
-            ).aggregate(
-                total_sum=Sum(Cast(F('data__totalActivePower'), FloatField()))
-            )['total_sum']
+        # Consumo NETO = Σ(totalActivePower) incluyendo negativos (inyección a la red,
+        # net metering). Consumo BRUTO = Σ(max(totalActivePower, 0)), solo energía tomada
+        # de la red (los periodos de exportación cuentan como 0). Ambos en kW → factor 1.
+        # `Greatest(x, 0)` clampa los negativos a nivel de agregación en la BD.
+        current_agg = Measurement.objects.filter(
+            device__in=electric_meters,
+            date__date__range=(start_current_month, end_current_month),
+            data__totalActivePower__isnull=False
+        ).aggregate(
+            net_sum=Sum(Cast(F('data__totalActivePower'), FloatField())),
+            gross_sum=Sum(Greatest(Cast(F('data__totalActivePower'), FloatField()), Value(0.0)))
         )
+        current_month_consumption_sum = consumption_energy_kwh(current_agg['net_sum'])
+        current_month_gross_consumption_sum = consumption_energy_kwh(current_agg['gross_sum'])
 
-        previous_month_consumption_sum = consumption_energy_kwh(
-            Measurement.objects.filter(
-                device__in=electric_meters,
-                date__date__range=(start_previous_month, end_previous_month),
-                data__totalActivePower__isnull=False
-            ).aggregate(
-                total_sum=Sum(Cast(F('data__totalActivePower'), FloatField()))
-            )['total_sum']
+        previous_agg = Measurement.objects.filter(
+            device__in=electric_meters,
+            date__date__range=(start_previous_month, end_previous_month),
+            data__totalActivePower__isnull=False
+        ).aggregate(
+            net_sum=Sum(Cast(F('data__totalActivePower'), FloatField())),
+            gross_sum=Sum(Greatest(Cast(F('data__totalActivePower'), FloatField()), Value(0.0)))
         )
-        logger.info(f"Consumo total - Mes actual: {current_month_consumption_sum:.2f} kWh, Mes anterior: {previous_month_consumption_sum:.2f} kWh")
+        previous_month_consumption_sum = consumption_energy_kwh(previous_agg['net_sum'])
+        previous_month_gross_consumption_sum = consumption_energy_kwh(previous_agg['gross_sum'])
+        logger.info(f"Consumo NETO - Mes actual: {current_month_consumption_sum:.2f} kWh, Mes anterior: {previous_month_consumption_sum:.2f} kWh")
+        logger.info(f"Consumo BRUTO - Mes actual: {current_month_gross_consumption_sum:.2f} kWh, Mes anterior: {previous_month_gross_consumption_sum:.2f} kWh")
 
         # --- Cálculo de Generación Total (Inversores) ---
         logger.info("Calculando generación total (inversores)...")
@@ -250,6 +257,8 @@ def calculate_monthly_consumption_kpi(self):
             defaults={
                 'total_consumption_current_month': current_month_consumption_sum,
                 'total_consumption_previous_month': previous_month_consumption_sum,
+                'total_gross_consumption_current_month': current_month_gross_consumption_sum,
+                'total_gross_consumption_previous_month': previous_month_gross_consumption_sum,
                 'total_generation_current_month': current_month_generation_sum,
                 'total_generation_previous_month': previous_month_generation_sum,
                 'avg_instantaneous_power_current_month': avg_instantaneous_power_current,
@@ -334,6 +343,10 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
                     Cast(F('data__totalActivePower'), FloatField()),
                     filter=Q(device__in=electric_meter_ids, data__totalActivePower__isnull=False)
                 ),
+                daily_gross_consumption=Sum(
+                    Greatest(Cast(F('data__totalActivePower'), FloatField()), Value(0.0)),
+                    filter=Q(device__in=electric_meter_ids, data__totalActivePower__isnull=False)
+                ),
                 daily_generation=Sum(
                     Cast(F('data__acPower'), FloatField()),
                     filter=Q(device__in=inverter_ids, data__acPower__isnull=False)
@@ -368,6 +381,7 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
             )
             
             daily_consumption_sum = daily_aggregation.get('daily_consumption')
+            daily_gross_consumption_sum = daily_aggregation.get('daily_gross_consumption')
             daily_generation_sum = daily_aggregation.get('daily_generation')
             daily_temp_avg = daily_temp_aggregation.get('avg_daily_temp') or 0.0
             avg_wind_speed = daily_wind_aggregation.get('avg_wind_speed') or 0.0
@@ -379,6 +393,7 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
             # ANTES: el consumo solo dividía /1000 (sin integrar Δt) y la generación
             # promediaba sobre la flota (avg_power_w · 24), dividiendo por el nº de inversores.
             daily_consumption_kwh = consumption_energy_kwh(daily_consumption_sum)
+            daily_gross_consumption_kwh = consumption_energy_kwh(daily_gross_consumption_sum)
             daily_generation_kwh = generation_energy_kwh(daily_generation_sum)
 
             # Calcular balance energético (ambos en kWh)
@@ -387,7 +402,8 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
             daily_data_obj, created = DailyChartData.objects.update_or_create(
                 date=single_date,
                 defaults={
-                    'daily_consumption': daily_consumption_kwh,  # Ahora en kWh
+                    'daily_consumption': daily_consumption_kwh,  # NETO, en kWh
+                    'daily_gross_consumption': daily_gross_consumption_kwh,  # BRUTO, en kWh
                     'daily_generation': daily_generation_kwh,    # Ahora en kWh
                     'daily_balance': daily_balance_sum,
                     'avg_daily_temp': daily_temp_avg,

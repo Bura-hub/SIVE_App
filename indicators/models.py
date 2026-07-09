@@ -5,9 +5,12 @@ class MonthlyConsumptionKPI(models.Model):
     Modelo para almacenar los KPIs de consumo, generación y balance total mensual pre-calculados.
     Solo debe haber una instancia de este modelo.
     """
-    total_consumption_current_month = models.FloatField(default=0.0, help_text="Consumo total acumulado del mes actual en kWh.")
-    total_consumption_previous_month = models.FloatField(default=0.0, help_text="Consumo total acumulado del mes anterior en kWh.")
-    
+    total_consumption_current_month = models.FloatField(default=0.0, help_text="Consumo NETO acumulado del mes actual en kWh (importación − exportación, net metering).")
+    total_consumption_previous_month = models.FloatField(default=0.0, help_text="Consumo NETO acumulado del mes anterior en kWh (importación − exportación, net metering).")
+
+    total_gross_consumption_current_month = models.FloatField(default=0.0, help_text="Consumo BRUTO acumulado del mes actual en kWh (solo energía tomada de la red; inyección clampeada a 0).")
+    total_gross_consumption_previous_month = models.FloatField(default=0.0, help_text="Consumo BRUTO acumulado del mes anterior en kWh (solo energía tomada de la red; inyección clampeada a 0).")
+
     total_generation_current_month = models.FloatField(default=0.0, help_text="Generación total acumulada del mes actual en kWh.")
     total_generation_previous_month = models.FloatField(default=0.0, help_text="Generación total acumulada del mes anterior en kWh.")
 
@@ -44,7 +47,8 @@ class DailyChartData(models.Model):
     ideales para mostrar en gráficos.
     """
     date = models.DateField(unique=True, help_text="Fecha del registro.")
-    daily_consumption = models.FloatField(default=0.0, help_text="Consumo total diario en kWh.")
+    daily_consumption = models.FloatField(default=0.0, help_text="Consumo NETO diario en kWh (importación − exportación, net metering).")
+    daily_gross_consumption = models.FloatField(default=0.0, help_text="Consumo BRUTO diario en kWh (solo energía tomada de la red; inyección clampeada a 0).")
     daily_generation = models.FloatField(default=0.0, help_text="Generación total diaria en kWh.")  # Cambiar a kWh
     daily_balance = models.FloatField(default=0.0, help_text="Balance energético diario en kWh.")
     avg_daily_temp = models.FloatField(default=0.0, help_text="Temperatura promedio diaria en °C.")
