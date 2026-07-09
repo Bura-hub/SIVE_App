@@ -20,7 +20,10 @@ from celery.result import AsyncResult
 from celery import current_app
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse, OpenApiTypes
-from .models import Institution, DeviceCategory, Device, Measurement, TaskProgress
+from .models import (
+    Institution, DeviceCategory, Device, TaskProgress, CATEGORY_TO_MODEL,
+)
+from .measurements_schema import CATEGORY_METRICS
 from .serializers import (
     InstitutionSerializer, DeviceCategorySerializer, DeviceSerializer,
     MeasurementSerializer, TaskProgressSerializer, SCADAResponseSerializer,
@@ -335,31 +338,54 @@ class LocalDeviceListView(generics.ListAPIView):
     responses={200: MeasurementSerializer(many=True)}
 )
 class HistoricalMeasurementsView(generics.ListAPIView):
-    queryset = Measurement.objects.all()
     serializer_class = MeasurementSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    # El modelo Measurement solo tiene 'date' (y 'data' JSON). 'timestamp'/'value' no existen.
+    # v2: las mediciones viven en 3 tablas tipadas (una por categoría). Los
+    # filtros se aplican por tabla y se combinan; el filtro por dispositivo
+    # solo produce filas en la tabla de su categoría. La respuesta conserva el
+    # contrato v1: el campo `data` se reconstruye desde las columnas tipadas
+    # (columna NULL ⇔ clave ausente en el antiguo jsonb).
     ordering_fields = ['date']
 
-    def get_queryset(self):
-        qs = Measurement.objects.all()
+    def list(self, request, *args, **kwargs):
+        device_param = request.query_params.get('device')
+        from_date = self._parse_date(request.query_params.get('from_date'))
+        to_date = self._parse_date(request.query_params.get('to_date'))
 
-        device_param = self.request.query_params.get('device')
-        if device_param:
-            if device_param.isdigit():  # Si es un número entero
-                qs = qs.filter(device__id=int(device_param))
-            else:  # Si no es número, asumimos que es un SCADA_ID
-                qs = qs.filter(device__scada_id=device_param)
+        # Mismo contrato que OrderingFilter con ordering_fields=['date']:
+        # solo 'date'/'-date' son válidos; por defecto '-date' (el antiguo
+        # Meta.ordering del modelo Measurement v1).
+        ordering = request.query_params.get('ordering')
+        if ordering not in ('date', '-date'):
+            ordering = '-date'
 
-        from_date = self._parse_date(self.request.query_params.get('from_date'))
-        to_date = self._parse_date(self.request.query_params.get('to_date'))
-        if from_date:
-            qs = qs.filter(date__gte=from_date)
-        if to_date:
-            qs = qs.filter(date__lte=to_date)
+        rows = []
+        for category_name, model in CATEGORY_TO_MODEL.items():
+            qs = model.objects.all()
 
-        return qs
+            if device_param:
+                if device_param.isdigit():  # Si es un número entero
+                    qs = qs.filter(device__id=int(device_param))
+                else:  # Si no es número, asumimos que es un SCADA_ID
+                    qs = qs.filter(device__scada_id=device_param)
+
+            if from_date:
+                qs = qs.filter(date__gte=from_date)
+            if to_date:
+                qs = qs.filter(date__lte=to_date)
+
+            metrics = CATEGORY_METRICS[category_name]
+            for obj in qs.select_related('device').order_by(ordering).iterator(chunk_size=2000):
+                obj.data = {
+                    metric: value for metric in metrics
+                    if (value := getattr(obj, metric)) is not None
+                }
+                rows.append(obj)
+
+        rows.sort(key=lambda o: o.date, reverse=(ordering == '-date'))
+
+        serializer = self.get_serializer(rows, many=True)
+        return Response(serializer.data)
 
     def _parse_date(self, date_str):
         try:
@@ -403,9 +429,11 @@ class DailySummaryMeasurementsView(ScadaProxyView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Validar 'variable_key': se interpola directamente en lookups ORM sobre el
-        # JSONField, así que debe ser un identificador seguro (letras, dígitos y '_'),
-        # sin '__' para evitar inyectar lookups anidados o transformaciones.
+        # Validar 'variable_key': se interpola directamente en lookups ORM (nombre
+        # de columna del esquema v2), así que debe ser un identificador seguro
+        # (letras, dígitos y '_'), sin '__' para evitar inyectar lookups anidados
+        # o transformaciones. Además se valida contra el catálogo de métricas de
+        # la categoría del dispositivo más abajo.
         if not re.fullmatch(r'[A-Za-z0-9_]+', variable_key) or '__' in variable_key:
             return Response(
                 {"detail": "El parámetro 'variable_key' no es válido."},
@@ -413,29 +441,40 @@ class DailySummaryMeasurementsView(ScadaProxyView):
             )
 
         try:
-            # Construye el filtro dinámico para JSONField
-            value_field = Cast(F(f"data__{variable_key}"), FloatField())
+            # v2: la variable es una columna tipada en la tabla de la categoría
+            # del dispositivo; se resuelve el dispositivo para elegir la tabla.
+            # Si es un entero, busca por device_id; de lo contrario, por scada_id
+            try:
+                if device_id.isdigit():
+                    device = Device.objects.select_related('category').get(id=int(device_id))
+                else:
+                    device = Device.objects.select_related('category').get(scada_id=device_id)
+            except Device.DoesNotExist:
+                # Igual que en v1 con un dispositivo inexistente: sin filas
+                return Response([])
 
-            queryset = Measurement.objects.filter(
+            category_name = device.category.name if device.category else None
+            model = CATEGORY_TO_MODEL.get(category_name)
+            metrics = CATEGORY_METRICS.get(category_name, [])
+            if model is None or variable_key not in metrics:
+                # Igual que en v1 con una clave inexistente en `data`: sin filas
+                return Response([])
+
+            queryset = model.objects.filter(
+                device=device,
                 date__range=(from_date, to_date),
-                **{f"data__{variable_key}__isnull": False}
+                **{f"{variable_key}__isnull": False}
             )
-
-            # Si es un entero, filtra por device_id; de lo contrario, por scada_id
-            if device_id.isdigit():
-                queryset = queryset.filter(device_id=int(device_id))
-            else:
-                queryset = queryset.filter(device__scada_id=device_id)
 
             summary = (
                 queryset
                 .annotate(day=TruncDay('date'))
                 .values('day')
                 .annotate(
-                    average=Avg(value_field),
-                    max=Max(value_field),
-                    min=Min(value_field),
-                    sum=Sum(value_field),
+                    average=Avg(variable_key),
+                    max=Max(variable_key),
+                    min=Min(variable_key),
+                    sum=Sum(variable_key),
                 )
                 .order_by('day')
             )

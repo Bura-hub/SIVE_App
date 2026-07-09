@@ -28,10 +28,15 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 import django  # noqa: E402
 django.setup()  # noqa: E402
 
-from django.db.models import Sum, Count, F, FloatField, Min, Max  # noqa: E402
-from django.db.models.functions import Cast  # noqa: E402
+from django.db.models import Sum, Count, Min, Max  # noqa: E402
 
-from scada_proxy.models import Measurement, Device  # noqa: E402
+from scada_proxy.models import (  # noqa: E402
+    Device,
+    MeterMeasurement,
+    InverterMeasurement,
+    WeatherStationMeasurement,
+    CATEGORY_TO_MODEL,
+)
 from indicators.models import (  # noqa: E402
     MonthlyConsumptionKPI,
     DailyChartData,
@@ -54,17 +59,24 @@ def hr(title):
 
 
 def power_sum(qs, field):
-    """Σ de un campo JSON de potencia, casteado a float, ignorando nulos."""
-    return qs.filter(**{f"data__{field}__isnull": False}).aggregate(
-        s=Sum(Cast(F(f"data__{field}"), FloatField()))
-    )["s"]
+    """Σ de una columna de potencia (v2, tipada), ignorando nulos."""
+    return qs.filter(**{f"{field}__isnull": False}).aggregate(s=Sum(field))["s"]
+
+
+def measurement_model(device):
+    """Modelo de mediciones v2 según la categoría del dispositivo."""
+    category_name = device.category.name if device.category else None
+    return CATEGORY_TO_MODEL.get(category_name)
 
 
 def detect_delta_t(device, sample=2000):
     """Estima Δt (horas) como la mediana de las diferencias entre mediciones
     consecutivas de un dispositivo."""
+    model = measurement_model(device)
+    if model is None:
+        return None
     dates = list(
-        Measurement.objects.filter(device=device)
+        model.objects.filter(device=device)
         .order_by("-date")
         .values_list("date", flat=True)[:sample]
     )
@@ -98,9 +110,14 @@ def main():
     meters = list(Device.objects.filter(category__name="electricMeter"))
     inverters = list(Device.objects.filter(category__name="inverter"))
     hr("INVENTARIO")
+    total_measurements = (
+        MeterMeasurement.objects.count()
+        + InverterMeasurement.objects.count()
+        + WeatherStationMeasurement.objects.count()
+    )
     print(f"  Medidores eléctricos: {len(meters)}")
     print(f"  Inversores:           {len(inverters)}")
-    print(f"  Mediciones totales:   {Measurement.objects.count():,}")
+    print(f"  Mediciones totales:   {total_measurements:,}")
 
     # ---------- 1. Δt empírico ----------
     hr("1. INTERVALO DE MUESTREO (Δt) EMPÍRICO")
@@ -122,19 +139,20 @@ def main():
 
     # ---------- 2. Calidad de datos (potencia) ----------
     hr("2. CALIDAD DE DATOS — potencia activa (medidores)")
-    for field, label, devs in (("totalActivePower", "totalActivePower", meters),
-                               ("acPower", "acPower", inverters)):
-        qs = Measurement.objects.filter(device__in=devs, **{f"data__{field}__isnull": False})
+    for model, field, label, devs in (
+            (MeterMeasurement, "totalActivePower", "totalActivePower", meters),
+            (InverterMeasurement, "acPower", "acPower", inverters)):
+        qs = model.objects.filter(device__in=devs, **{f"{field}__isnull": False})
         agg = qs.aggregate(
             n=Count("id"),
-            mn=Min(Cast(F(f"data__{field}"), FloatField())),
-            mx=Max(Cast(F(f"data__{field}"), FloatField())),
+            mn=Min(field),
+            mx=Max(field),
         )
         n = agg["n"] or 0
         if not n:
             print(f"  {label}: sin datos")
             continue
-        neg = qs.filter(**{f"data__{field}__lt": 0}).count()
+        neg = qs.filter(**{f"{field}__lt": 0}).count()
         # magnitud típica: media
         avg = (power_sum(qs, field) or 0.0) / n
         print(f"  {label}: n={n:,}  min={agg['mn']:.2f}  max={agg['mx']:.2f}  "
@@ -145,12 +163,15 @@ def main():
 
     # ---------- 3. Determinación de unidades vs contadores ----------
     hr("3. UNIDADES (W vs kW): integración de potencia vs contadores acumulados")
+    # Rangos aware Bogotá equivalentes al antiguo date__date / date__date__range
+    from indicators.tasks import colombia_day_range  # import tardío
     ec = ElectricMeterEnergyConsumption.objects.filter(time_range="daily").order_by("-date")
     checked = 0
     ratios = []
     for rec in ec[:50]:
+        day_a, day_b = colombia_day_range(rec.date, rec.date)
         integ = power_sum(
-            Measurement.objects.filter(device=rec.device, date__date=rec.date),
+            MeterMeasurement.objects.filter(device=rec.device, date__gte=day_a, date__lt=day_b),
             "totalActivePower",
         )
         if not integ:
@@ -188,11 +209,12 @@ def main():
     from indicators.tasks import get_colombia_date  # import tardío
     today = get_colombia_date()
     start = today - timedelta(days=args.days)
+    win_a, win_b = colombia_day_range(start, today)
     cons = consumption_energy_kwh(
-        power_sum(Measurement.objects.filter(device__in=meters, date__date__range=(start, today)),
+        power_sum(MeterMeasurement.objects.filter(device__in=meters, date__gte=win_a, date__lt=win_b),
                   "totalActivePower"))
     gen = generation_energy_kwh(
-        power_sum(Measurement.objects.filter(device__in=inverters, date__date__range=(start, today)),
+        power_sum(InverterMeasurement.objects.filter(device__in=inverters, date__gte=win_a, date__lt=win_b),
                   "acPower"))
     print(f"  Ventana recalculada: {start} → {today} ({args.days} días)")
     print(f"    Consumo (canónico)   = {cons:,.2f} kWh")

@@ -12,7 +12,10 @@ import os
 import tempfile
 import csv
 
-from scada_proxy.models import Measurement, Device, Institution, DeviceCategory, TaskProgress
+from scada_proxy.models import (
+    Device, Institution, DeviceCategory, TaskProgress,
+    MeterMeasurement, InverterMeasurement, WeatherStationMeasurement,
+)
 from .energy import consumption_energy_kwh, generation_energy_kwh, SAMPLE_INTERVAL_HOURS
 from .models import (
     ElectricMeterEnergyConsumption, 
@@ -39,6 +42,24 @@ def get_colombia_now():
 def get_colombia_date():
     """Obtiene la fecha actual en zona horaria de Colombia"""
     return get_colombia_now().date()
+
+def colombia_day_range(start_date, end_date):
+    """Rango datetime aware [start 00:00, end+1día 00:00) en hora de Bogotá.
+
+    Equivalente exacto al lookup `date__date__range=(start, end)` (inclusivo)
+    con TIME_ZONE=America/Bogota, pero expresado como comparación de
+    timestamps, que SÍ puede usar el índice (device, date).
+    """
+    start_dt = COLOMBIA_TZ.localize(datetime.combine(start_date, datetime.min.time()))
+    end_dt = COLOMBIA_TZ.localize(datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
+    return start_dt, end_dt
+
+def _row_get(row, key, default=0):
+    """Equivalente v2 de `Measurement.data.get(key, default)` sobre filas dict
+    de `.values()`: en las tablas tipadas una columna NULL ⇔ clave ausente en
+    el antiguo jsonb, así que NULL debe producir el mismo valor por defecto."""
+    value = row[key]
+    return default if value is None else value
 
 @shared_task(bind=True, retry_backoff=60, max_retries=3)
 def calculate_monthly_consumption_kpi(self):
@@ -100,25 +121,28 @@ def calculate_monthly_consumption_kpi(self):
         # net metering). Consumo BRUTO = Σ(max(totalActivePower, 0)), solo energía tomada
         # de la red (los periodos de exportación cuentan como 0). Ambos en kW → factor 1.
         # `Greatest(x, 0)` clampa los negativos a nivel de agregación en la BD.
-        current_agg = Measurement.objects.filter(
-            device__in=electric_meters,
-            date__date__range=(start_current_month, end_current_month),
-            data__totalActivePower__isnull=False
-        ).aggregate(
-            net_sum=Sum(Cast(F('data__totalActivePower'), FloatField())),
-            gross_sum=Sum(Greatest(Cast(F('data__totalActivePower'), FloatField()), Value(0.0)))
-        )
+        # Rangos aware [inicio 00:00, fin+1día 00:00) en Bogotá: mismos límites
+        # que el antiguo date__date__range inclusivo, pero como comparación de
+        # timestamps que usa el índice UNIQUE (device, date). Lecturas sobre el
+        # esquema v2 (columnas tipadas): sin Cast ni parseo de jsonb.
+        cur_a, cur_b = colombia_day_range(start_current_month, end_current_month)
+        prev_a, prev_b = colombia_day_range(start_previous_month, end_previous_month)
+
+        def _meter_window(a, b):
+            return MeterMeasurement.objects.filter(
+                device__in=electric_meters,
+                date__gte=a, date__lt=b,
+                totalActivePower__isnull=False,
+            ).aggregate(
+                net_sum=Sum('totalActivePower'),
+                gross_sum=Sum(Greatest(F('totalActivePower'), Value(0.0))),
+            )
+
+        current_agg = _meter_window(cur_a, cur_b)
         current_month_consumption_sum = consumption_energy_kwh(current_agg['net_sum'])
         current_month_gross_consumption_sum = consumption_energy_kwh(current_agg['gross_sum'])
 
-        previous_agg = Measurement.objects.filter(
-            device__in=electric_meters,
-            date__date__range=(start_previous_month, end_previous_month),
-            data__totalActivePower__isnull=False
-        ).aggregate(
-            net_sum=Sum(Cast(F('data__totalActivePower'), FloatField())),
-            gross_sum=Sum(Greatest(Cast(F('data__totalActivePower'), FloatField()), Value(0.0)))
-        )
+        previous_agg = _meter_window(prev_a, prev_b)
         previous_month_consumption_sum = consumption_energy_kwh(previous_agg['net_sum'])
         previous_month_gross_consumption_sum = consumption_energy_kwh(previous_agg['gross_sum'])
         logger.info(f"Consumo NETO - Mes actual: {current_month_consumption_sum:.2f} kWh, Mes anterior: {previous_month_consumption_sum:.2f} kWh")
@@ -133,121 +157,60 @@ def calculate_monthly_consumption_kpi(self):
         # ANTES: se agrupaba por día y se calculaba (Σ acPower / nº mediciones de la flota) · 24,
         # es decir, la potencia media POR MUESTRA de la flota × 24 h → energía de UN inversor
         # "promedio", no la suma de los N inversores. Eso dividía la generación total por N.
-        current_month_generation_sum = generation_energy_kwh(
-            Measurement.objects.filter(
+        def _inverter_window(a, b):
+            # Suma (para energía) y promedio (potencia instantánea) de acPower
+            # en UNA sola query por ventana.
+            return InverterMeasurement.objects.filter(
                 device__in=inverters,
-                date__date__range=(start_current_month, end_current_month),
-                data__acPower__isnull=False
-            ).aggregate(
-                total_sum=Sum(Cast(F('data__acPower'), FloatField()))
-            )['total_sum']
-        )
+                date__gte=a, date__lt=b,
+                acPower__isnull=False,
+            ).aggregate(total_sum=Sum('acPower'), avg_value=Avg('acPower'))
 
-        previous_month_generation_sum = generation_energy_kwh(
-            Measurement.objects.filter(
-                device__in=inverters,
-                date__date__range=(start_previous_month, end_previous_month),
-                data__acPower__isnull=False
-            ).aggregate(
-                total_sum=Sum(Cast(F('data__acPower'), FloatField()))
-            )['total_sum']
-        )
+        inv_current = _inverter_window(cur_a, cur_b)
+        inv_previous = _inverter_window(prev_a, prev_b)
 
+        current_month_generation_sum = generation_energy_kwh(inv_current['total_sum'])
+        previous_month_generation_sum = generation_energy_kwh(inv_previous['total_sum'])
         logger.info(f"Generación total - Mes actual: {current_month_generation_sum:.2f} kWh, Mes anterior: {previous_month_generation_sum:.2f} kWh")
 
         # --- Cálculo de Potencia Instantánea Promedio (Inversores) ---
-        logger.info("Calculando potencia instantánea promedio (inversores)...")
-        avg_instantaneous_power_current = Measurement.objects.filter(
-            device__in=inverters,
-            date__date__range=(start_current_month, end_current_month),
-            data__acPower__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__acPower'), FloatField()))
-        )['avg_value'] or 0.0
-
-        avg_instantaneous_power_previous = Measurement.objects.filter(
-            device__in=inverters,
-            date__date__range=(start_previous_month, end_previous_month),
-            data__acPower__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__acPower'), FloatField()))
-        )['avg_value'] or 0.0
+        avg_instantaneous_power_current = inv_current['avg_value'] or 0.0
+        avg_instantaneous_power_previous = inv_previous['avg_value'] or 0.0
         logger.info(f"Potencia instantánea promedio - Mes actual: {avg_instantaneous_power_current:.2f} W, Mes anterior: {avg_instantaneous_power_previous:.2f} W")
 
-        # --- Cálculo: Temperatura Promedio Diaria (Estaciones Meteorológicas) ---
-        logger.info("Calculando temperatura promedio diaria (estaciones meteorológicas)...")
-        avg_daily_temp_current = Measurement.objects.filter(
-            device__in=weather_stations,
-            date__date__range=(start_current_month, end_current_month),
-            data__temperature__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__temperature'), FloatField()))
-        )['avg_value'] or 0.0
+        # --- Métricas meteorológicas (temperatura, humedad, viento, irradiancia) ---
+        # Una sola query por ventana: Avg de SQL ignora NULL por métrica, así
+        # que el resultado es idéntico a los antiguos filtros isnull separados.
+        logger.info("Calculando promedios meteorológicos (estaciones)...")
 
-        avg_daily_temp_previous = Measurement.objects.filter(
-            device__in=weather_stations,
-            date__date__range=(start_previous_month, end_previous_month),
-            data__temperature__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__temperature'), FloatField()))
-        )['avg_value'] or 0.0
+        def _weather_window(a, b):
+            return WeatherStationMeasurement.objects.filter(
+                device__in=weather_stations,
+                date__gte=a, date__lt=b,
+            ).aggregate(
+                temp=Avg('temperature'),
+                humidity=Avg('humidity'),
+                wind=Avg('windSpeed'),
+                irradiance=Avg('irradiance'),
+            )
+
+        wx_current = _weather_window(cur_a, cur_b)
+        wx_previous = _weather_window(prev_a, prev_b)
+
+        avg_daily_temp_current = wx_current['temp'] or 0.0
+        avg_daily_temp_previous = wx_previous['temp'] or 0.0
         logger.info(f"Temperatura promedio diaria - Mes actual: {avg_daily_temp_current:.2f} °C, Mes anterior: {avg_daily_temp_previous:.2f} °C")
 
-        # --- Cálculo: Humedad Relativa Promedio (Estaciones Meteorológicas) ---
-        logger.info("Calculando humedad relativa promedio (estaciones meteorológicas)...")
-        avg_relative_humidity_current = Measurement.objects.filter(
-            device__in=weather_stations,
-            date__date__range=(start_current_month, end_current_month),
-            data__humidity__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__humidity'), FloatField()))
-        )['avg_value'] or 0.0
-
-        avg_relative_humidity_previous = Measurement.objects.filter(
-            device__in=weather_stations,
-            date__date__range=(start_previous_month, end_previous_month),
-            data__humidity__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__humidity'), FloatField()))
-        )['avg_value'] or 0.0
+        avg_relative_humidity_current = wx_current['humidity'] or 0.0
+        avg_relative_humidity_previous = wx_previous['humidity'] or 0.0
         logger.info(f"Humedad relativa promedio - Mes actual: {avg_relative_humidity_current:.2f} %RH, Mes anterior: {avg_relative_humidity_previous:.2f} %RH")
 
-        # --- Cálculo: Velocidad del Viento Promedio (Estaciones Meteorológicas) ---
-        logger.info("Calculando velocidad del viento promedio (estaciones meteorológicas)...")
-        avg_wind_speed_current = Measurement.objects.filter(
-            device__in=weather_stations,
-            date__date__range=(start_current_month, end_current_month),
-            data__windSpeed__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__windSpeed'), FloatField()))
-        )['avg_value'] or 0.0
-
-        avg_wind_speed_previous = Measurement.objects.filter(
-            device__in=weather_stations,
-            date__date__range=(start_previous_month, end_previous_month),
-            data__windSpeed__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__windSpeed'), FloatField()))
-        )['avg_value'] or 0.0
+        avg_wind_speed_current = wx_current['wind'] or 0.0
+        avg_wind_speed_previous = wx_previous['wind'] or 0.0
         logger.info(f"Velocidad del viento promedio - Mes actual: {avg_wind_speed_current:.2f} km/h, Mes anterior: {avg_wind_speed_previous:.2f} km/h")
 
-        # --- Cálculo: Irradiancia Solar Promedio (Estaciones Meteorológicas) ---
-        logger.info("Calculando irradiancia solar promedio (estaciones meteorológicas)...")
-        avg_irradiance_current = Measurement.objects.filter(
-            device__in=weather_stations,
-            date__date__range=(start_current_month, end_current_month),
-            data__irradiance__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__irradiance'), FloatField()))
-        )['avg_value'] or 0.0
-
-        avg_irradiance_previous = Measurement.objects.filter(
-            device__in=weather_stations,
-            date__date__range=(start_previous_month, end_previous_month),
-            data__irradiance__isnull=False
-        ).aggregate(
-            avg_value=Avg(Cast(F('data__irradiance'), FloatField()))
-        )['avg_value'] or 0.0
+        avg_irradiance_current = wx_current['irradiance'] or 0.0
+        avg_irradiance_previous = wx_previous['irradiance'] or 0.0
         logger.info(f"Irradiancia solar promedio - Mes actual: {avg_irradiance_current:.2f} W/m², Mes anterior: {avg_irradiance_previous:.2f} W/m²")
 
         # Guardar en la base de datos
@@ -330,62 +293,52 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
         
         logger.info(f"Iniciando procesamiento de {((end_date - start_date).days + 1)} días...")
         
+        # v2: 3 queries agrupadas por día de Bogotá sobre TODO el rango (antes:
+        # 4 queries por CADA día). TruncDay(tzinfo=COLOMBIA_TZ) reproduce el
+        # corte del antiguo `date__date=<día>` con TIME_ZONE=America/Bogota.
+        range_a, range_b = colombia_day_range(start_date.date(), end_date.date())
+        day_trunc = TruncDay('date', tzinfo=COLOMBIA_TZ)
+
+        meter_by_day = {
+            r['d'].date(): r for r in MeterMeasurement.objects.filter(
+                device__in=electric_meter_ids,
+                date__gte=range_a, date__lt=range_b,
+                totalActivePower__isnull=False,
+            ).annotate(d=day_trunc).values('d').annotate(
+                net=Sum('totalActivePower'),
+                gross=Sum(Greatest(F('totalActivePower'), Value(0.0))),
+            )
+        }
+        inverter_by_day = {
+            r['d'].date(): r for r in InverterMeasurement.objects.filter(
+                device__in=inverter_ids,
+                date__gte=range_a, date__lt=range_b,
+                acPower__isnull=False,
+            ).annotate(d=day_trunc).values('d').annotate(gen=Sum('acPower'))
+        }
+        weather_by_day = {
+            r['d'].date(): r for r in WeatherStationMeasurement.objects.filter(
+                device__in=weather_station_ids,
+                date__gte=range_a, date__lt=range_b,
+            ).annotate(d=day_trunc).values('d').annotate(
+                temp=Avg('temperature'), wind=Avg('windSpeed'), irr=Avg('irradiance'),
+            )
+        }
+
         while current_date <= end_date:
             single_date = current_date.date()
             logger.info(f"Procesando fecha en Colombia: {single_date}")
-            
-            # Agregación para consumo y generación
-            daily_aggregation = Measurement.objects.filter(
-                date__date=single_date,
-                device__in=list(electric_meter_ids) + list(inverter_ids)
-            ).aggregate(
-                daily_consumption=Sum(
-                    Cast(F('data__totalActivePower'), FloatField()),
-                    filter=Q(device__in=electric_meter_ids, data__totalActivePower__isnull=False)
-                ),
-                daily_gross_consumption=Sum(
-                    Greatest(Cast(F('data__totalActivePower'), FloatField()), Value(0.0)),
-                    filter=Q(device__in=electric_meter_ids, data__totalActivePower__isnull=False)
-                ),
-                daily_generation=Sum(
-                    Cast(F('data__acPower'), FloatField()),
-                    filter=Q(device__in=inverter_ids, data__acPower__isnull=False)
-                )
-            )
 
-            # Agregación para la temperatura media diaria
-            daily_temp_aggregation = Measurement.objects.filter(
-                date__date=single_date,
-                device__in=weather_station_ids,
-                data__temperature__isnull=False # CAMBIO: Se usa el campo 'temperature'
-            ).aggregate(
-                avg_daily_temp=Avg(Cast(F('data__temperature'), FloatField())) # CAMBIO: Se usa el campo 'temperature'
-            )
-            
-            # Agregación para la velocidad del viento promedio diaria
-            daily_wind_aggregation = Measurement.objects.filter(
-                date__date=single_date,
-                device__in=weather_station_ids,
-                data__windSpeed__isnull=False
-            ).aggregate(
-                avg_wind_speed=Avg(Cast(F('data__windSpeed'), FloatField()))
-            )
-            
-            # Agregación para la irradiancia solar promedio diaria
-            daily_irradiance_aggregation = Measurement.objects.filter(
-                date__date=single_date,
-                device__in=weather_station_ids,
-                data__irradiance__isnull=False
-            ).aggregate(
-                avg_irradiance=Avg(Cast(F('data__irradiance'), FloatField()))
-            )
-            
-            daily_consumption_sum = daily_aggregation.get('daily_consumption')
-            daily_gross_consumption_sum = daily_aggregation.get('daily_gross_consumption')
-            daily_generation_sum = daily_aggregation.get('daily_generation')
-            daily_temp_avg = daily_temp_aggregation.get('avg_daily_temp') or 0.0
-            avg_wind_speed = daily_wind_aggregation.get('avg_wind_speed') or 0.0
-            avg_irradiance = daily_irradiance_aggregation.get('avg_irradiance') or 0.0
+            m_day = meter_by_day.get(single_date, {})
+            i_day = inverter_by_day.get(single_date, {})
+            w_day = weather_by_day.get(single_date, {})
+
+            daily_consumption_sum = m_day.get('net')
+            daily_gross_consumption_sum = m_day.get('gross')
+            daily_generation_sum = i_day.get('gen')
+            daily_temp_avg = w_day.get('temp') or 0.0
+            avg_wind_speed = w_day.get('wind') or 0.0
+            avg_irradiance = w_day.get('irr') or 0.0
 
             # Consumo y generación con la fórmula canónica Σ(P)·Δt (ver indicators/energy.py),
             # idéntica a la del KPI mensual. La unidad de potencia difiere por métrica:
@@ -516,11 +469,12 @@ def _calculate_daily_data(meter, start_date, end_date):
     while current_date <= end_date:
         logger.info(f"  Procesando fecha: {current_date}")
         
-        # Obtener mediciones del día
-        daily_measurements = Measurement.objects.filter(
+        # Obtener mediciones del día (v2: columnas tipadas, rango aware Bogotá)
+        day_a, day_b = colombia_day_range(current_date, current_date)
+        daily_measurements = MeterMeasurement.objects.filter(
             device=meter,
-            date__date=current_date,
-            data__totalActivePower__isnull=False
+            date__gte=day_a, date__lt=day_b,
+            totalActivePower__isnull=False
         ).order_by('date')
 
         if not daily_measurements.exists():
@@ -530,21 +484,21 @@ def _calculate_daily_data(meter, start_date, end_date):
 
         # Calcular métricas diarias
         daily_stats = daily_measurements.aggregate(
-            total_consumption=Sum(Cast(F('data__totalActivePower'), FloatField())),
-            peak_demand=Max(Cast(F('data__totalActivePower'), FloatField())),
-            avg_demand=Avg(Cast(F('data__totalActivePower'), FloatField())),
+            total_consumption=Sum('totalActivePower'),
+            peak_demand=Max('totalActivePower'),
+            avg_demand=Avg('totalActivePower'),
             measurement_count=Count('id'),
             last_measurement=Max('date')
         )
 
         # Calcular consumo acumulado (diferencia entre primera y última medición)
-        first_measurement = daily_measurements.first()
-        last_measurement = daily_measurements.last()
-        
+        first_measurement = daily_measurements.values('totalActivePower').first()
+        last_measurement = daily_measurements.values('totalActivePower').last()
+
         cumulative_consumption = 0.0
         if first_measurement and last_measurement:
-            first_value = first_measurement.data.get('totalActivePower', 0)
-            last_value = last_measurement.data.get('totalActivePower', 0)
+            first_value = _row_get(first_measurement, 'totalActivePower')
+            last_value = _row_get(last_measurement, 'totalActivePower')
             cumulative_consumption = max(0, last_value - first_value)
 
         # Crear o actualizar registro de consumo
@@ -569,7 +523,9 @@ def _calculate_daily_data(meter, start_date, end_date):
             records_updated += 1
 
         # Calcular datos para gráficos (consumo por hora)
-        hourly_consumption = _calculate_hourly_consumption(daily_measurements)
+        hourly_consumption = _calculate_hourly_consumption(
+            daily_measurements.values('date', 'totalActivePower').iterator(chunk_size=2000)
+        )
         
         # Encontrar hora pico
         peak_hour = 0
@@ -611,11 +567,12 @@ def _calculate_monthly_data(meter, start_date, end_date):
         
         logger.info(f"  Procesando mes: {current_date.month}/{current_date.year}")
         
-        # Obtener mediciones del mes
-        monthly_measurements = Measurement.objects.filter(
+        # Obtener mediciones del mes (v2: columnas tipadas, rango aware Bogotá)
+        month_a, month_b = colombia_day_range(current_date, month_end)
+        monthly_measurements = MeterMeasurement.objects.filter(
             device=meter,
-            date__date__range=(current_date, month_end),
-            data__totalActivePower__isnull=False
+            date__gte=month_a, date__lt=month_b,
+            totalActivePower__isnull=False
         ).order_by('date')
 
         if not monthly_measurements.exists():
@@ -625,21 +582,21 @@ def _calculate_monthly_data(meter, start_date, end_date):
 
         # Calcular métricas mensuales
         monthly_stats = monthly_measurements.aggregate(
-            total_consumption=Sum(Cast(F('data__totalActivePower'), FloatField())),
-            peak_demand=Max(Cast(F('data__totalActivePower'), FloatField())),
-            avg_demand=Avg(Cast(F('data__totalActivePower'), FloatField())),
+            total_consumption=Sum('totalActivePower'),
+            peak_demand=Max('totalActivePower'),
+            avg_demand=Avg('totalActivePower'),
             measurement_count=Count('id'),
             last_measurement=Max('date')
         )
 
         # Calcular consumo acumulado del mes
-        first_measurement = monthly_measurements.first()
-        last_measurement = monthly_measurements.last()
-        
+        first_measurement = monthly_measurements.values('totalActivePower').first()
+        last_measurement = monthly_measurements.values('totalActivePower').last()
+
         cumulative_consumption = 0.0
         if first_measurement and last_measurement:
-            first_value = first_measurement.data.get('totalActivePower', 0)
-            last_value = last_measurement.data.get('totalActivePower', 0)
+            first_value = _row_get(first_measurement, 'totalActivePower')
+            last_value = _row_get(last_measurement, 'totalActivePower')
             cumulative_consumption = max(0, last_value - first_value)
 
         # Crear o actualizar registro de consumo
@@ -669,13 +626,15 @@ def _calculate_monthly_data(meter, start_date, end_date):
 
 def _calculate_hourly_consumption(measurements):
     """
-    Calcula el consumo por hora del día basado en las mediciones
+    Calcula el consumo por hora del día basado en las mediciones.
+
+    Recibe filas dict (v2: `.values('date', 'totalActivePower')`).
     """
     hourly_data = defaultdict(list)
-    
-    for measurement in measurements:
-        hour = measurement.date.hour
-        power_value = measurement.data.get('totalActivePower', 0)
+
+    for row in measurements:
+        hour = row['date'].hour
+        power_value = _row_get(row, 'totalActivePower')
         hourly_data[hour].append(power_value)
     
     # Calcular promedio por hora
@@ -742,50 +701,55 @@ def _calculate_daily_energy_data(meter, start_date, end_date):
     records_created = 0
     records_updated = 0
     
+    energy_fields = (
+        'importedActivePowerHigh', 'importedActivePowerLow',
+        'exportedActivePowerHigh', 'exportedActivePowerLow',
+    )
+
     current_date = start_date
     while current_date <= end_date:
-        # Obtener mediciones del día
-        day_start = datetime.combine(current_date, datetime.min.time())
-        day_end = datetime.combine(current_date, datetime.max.time())
-        
-        measurements = Measurement.objects.filter(
+        # Obtener mediciones del día (v2: rango aware Bogotá, equivalente al
+        # antiguo date__range con datetimes naive interpretados en TIME_ZONE)
+        day_a, day_b = colombia_day_range(current_date, current_date)
+
+        measurements = MeterMeasurement.objects.filter(
             device=meter,
-            date__range=(day_start, day_end),
-            data__importedActivePowerLow__isnull=False,
-            data__importedActivePowerHigh__isnull=False
+            date__gte=day_a, date__lt=day_b,
+            importedActivePowerLow__isnull=False,
+            importedActivePowerHigh__isnull=False
         ).order_by('date')
-        
+
         if measurements.exists():
             # Primera y última medición del día
-            first_measurement = measurements.first()
-            last_measurement = measurements.last()
-            
+            first_measurement = measurements.values(*energy_fields).first()
+            last_measurement = measurements.values('date', *energy_fields).last()
+
             # Calcular energía importada según fórmula del documento
-            start_imported_high = first_measurement.data.get('importedActivePowerHigh', 0) * 1000  # MWh a kWh
-            start_imported_low = first_measurement.data.get('importedActivePowerLow', 0)
+            start_imported_high = _row_get(first_measurement, 'importedActivePowerHigh') * 1000  # MWh a kWh
+            start_imported_low = _row_get(first_measurement, 'importedActivePowerLow')
             start_total = start_imported_high + start_imported_low
-            
-            end_imported_high = last_measurement.data.get('importedActivePowerHigh', 0) * 1000  # MWh a kWh
-            end_imported_low = last_measurement.data.get('importedActivePowerLow', 0)
+
+            end_imported_high = _row_get(last_measurement, 'importedActivePowerHigh') * 1000  # MWh a kWh
+            end_imported_low = _row_get(last_measurement, 'importedActivePowerLow')
             end_total = end_imported_high + end_imported_low
-            
+
             # Energía diaria importada = diferencia entre final e inicio del día
             daily_imported_energy = max(0, end_total - start_total)
-            
+
             # Calcular energía exportada de manera similar
-            start_exported_high = first_measurement.data.get('exportedActivePowerHigh', 0) * 1000
-            start_exported_low = first_measurement.data.get('exportedActivePowerLow', 0)
+            start_exported_high = _row_get(first_measurement, 'exportedActivePowerHigh') * 1000
+            start_exported_low = _row_get(first_measurement, 'exportedActivePowerLow')
             start_exported_total = start_exported_high + start_exported_low
-            
-            end_exported_high = last_measurement.data.get('exportedActivePowerHigh', 0) * 1000
-            end_exported_low = last_measurement.data.get('exportedActivePowerLow', 0)
+
+            end_exported_high = _row_get(last_measurement, 'exportedActivePowerHigh') * 1000
+            end_exported_low = _row_get(last_measurement, 'exportedActivePowerLow')
             end_exported_total = end_exported_high + end_exported_low
-            
+
             daily_exported_energy = max(0, end_exported_total - start_exported_total)
-            
+
             # Balance neto
             net_energy_consumption = daily_imported_energy - daily_exported_energy
-            
+
             # Crear o actualizar registro
             consumption_record, created = ElectricMeterEnergyConsumption.objects.update_or_create(
                 device=meter,
@@ -801,7 +765,7 @@ def _calculate_daily_energy_data(meter, start_date, end_date):
                     'total_exported_energy': daily_exported_energy,
                     'net_energy_consumption': net_energy_consumption,
                     'measurement_count': measurements.count(),
-                    'last_measurement_date': last_measurement.date
+                    'last_measurement_date': last_measurement['date']
                 }
             )
             
@@ -819,54 +783,59 @@ def _calculate_monthly_energy_data(meter, start_date, end_date):
     records_created = 0
     records_updated = 0
     
+    energy_fields = (
+        'importedActivePowerHigh', 'importedActivePowerLow',
+        'exportedActivePowerHigh', 'exportedActivePowerLow',
+    )
+
     # Agrupar por mes
     current_date = start_date.replace(day=1)  # Primer día del mes
     while current_date <= end_date:
         month_end = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         month_end = min(month_end, end_date)
-        
-        # Obtener mediciones del mes
-        month_start = datetime.combine(current_date, datetime.min.time())
-        month_end_datetime = datetime.combine(month_end, datetime.max.time())
-        
-        measurements = Measurement.objects.filter(
+
+        # Obtener mediciones del mes (v2: rango aware Bogotá, equivalente al
+        # antiguo date__range con datetimes naive interpretados en TIME_ZONE)
+        month_a, month_b = colombia_day_range(current_date, month_end)
+
+        measurements = MeterMeasurement.objects.filter(
             device=meter,
-            date__range=(month_start, month_end_datetime),
-            data__importedActivePowerLow__isnull=False,
-            data__importedActivePowerHigh__isnull=False
+            date__gte=month_a, date__lt=month_b,
+            importedActivePowerLow__isnull=False,
+            importedActivePowerHigh__isnull=False
         ).order_by('date')
-        
+
         if measurements.exists():
             # Primera y última medición del mes
-            first_measurement = measurements.first()
-            last_measurement = measurements.last()
-            
+            first_measurement = measurements.values(*energy_fields).first()
+            last_measurement = measurements.values('date', *energy_fields).last()
+
             # Calcular energía importada según fórmula del documento
-            start_imported_high = first_measurement.data.get('importedActivePowerHigh', 0) * 1000  # MWh a kWh
-            start_imported_low = first_measurement.data.get('importedActivePowerLow', 0)
+            start_imported_high = _row_get(first_measurement, 'importedActivePowerHigh') * 1000  # MWh a kWh
+            start_imported_low = _row_get(first_measurement, 'importedActivePowerLow')
             start_total = start_imported_high + start_imported_low
-            
-            end_imported_high = last_measurement.data.get('importedActivePowerHigh', 0) * 1000  # MWh a kWh
-            end_imported_low = last_measurement.data.get('importedActivePowerLow', 0)
+
+            end_imported_high = _row_get(last_measurement, 'importedActivePowerHigh') * 1000  # MWh a kWh
+            end_imported_low = _row_get(last_measurement, 'importedActivePowerLow')
             end_total = end_imported_high + end_imported_low
-            
+
             # Energía mensual importada = diferencia entre final e inicio del mes
             monthly_imported_energy = max(0, end_total - start_total)
-            
+
             # Calcular energía exportada de manera similar
-            start_exported_high = first_measurement.data.get('exportedActivePowerHigh', 0) * 1000
-            start_exported_low = first_measurement.data.get('exportedActivePowerLow', 0)
+            start_exported_high = _row_get(first_measurement, 'exportedActivePowerHigh') * 1000
+            start_exported_low = _row_get(first_measurement, 'exportedActivePowerLow')
             start_exported_total = start_exported_high + start_exported_low
-            
-            end_exported_high = last_measurement.data.get('exportedActivePowerHigh', 0) * 1000
-            end_exported_low = last_measurement.data.get('exportedActivePowerLow', 0)
+
+            end_exported_high = _row_get(last_measurement, 'exportedActivePowerHigh') * 1000
+            end_exported_low = _row_get(last_measurement, 'exportedActivePowerLow')
             end_exported_total = end_exported_high + end_exported_low
-            
+
             monthly_exported_energy = max(0, end_exported_total - start_exported_total)
-            
+
             # Balance neto
             net_energy_consumption = monthly_imported_energy - monthly_exported_energy
-            
+
             # Crear o actualizar registro
             consumption_record, created = ElectricMeterEnergyConsumption.objects.update_or_create(
                 device=meter,
@@ -882,7 +851,7 @@ def _calculate_monthly_energy_data(meter, start_date, end_date):
                     'total_exported_energy': monthly_exported_energy,
                     'net_energy_consumption': net_energy_consumption,
                     'measurement_count': measurements.count(),
-                    'last_measurement_date': last_measurement.date
+                    'last_measurement_date': last_measurement['date']
                 }
             )
             
@@ -904,7 +873,7 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
     try:
         from datetime import datetime, timedelta
         from django.db.models import Max, Min, Avg
-        from scada_proxy.models import Device, Institution, Measurement
+        from scada_proxy.models import Device, Institution
         from .models import ElectricMeterIndicators
         
         # Parsear la fecha
@@ -928,27 +897,30 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
             else:
                 end_date = date.replace(month=date.month + 1, day=1)
         
-        # Obtener todas las mediciones del período
-        measurements = Measurement.objects.filter(
+        # Obtener todas las mediciones del período (v2: rango aware Bogotá,
+        # equivalente al antiguo date__gte/lt con objetos date interpretados
+        # a medianoche en TIME_ZONE=America/Bogota)
+        start_dt, end_dt = colombia_day_range(start_date, end_date - timedelta(days=1))
+        measurements = MeterMeasurement.objects.filter(
             device=device,
-            date__gte=start_date,
-            date__lt=end_date
+            date__gte=start_dt,
+            date__lt=end_dt
         ).order_by('date')
-        
+
         if not measurements.exists():
             return f"No hay mediciones para {device.name} en {date}"
-        
+
         # Inicializar variables para cálculos
         imported_energy_low_start = None
         imported_energy_high_start = None
         exported_energy_low_start = None
         exported_energy_high_start = None
-        
+
         imported_energy_low_end = None
         imported_energy_high_end = None
         exported_energy_low_end = None
         exported_energy_high_end = None
-        
+
         total_active_power_values = []
         power_factor_values = []
         voltage_phases = []
@@ -957,62 +929,70 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
         current_thd_values = []
         current_tdd_values = []
         
-        # Procesar cada medición
-        for measurement in measurements:
-            data = measurement.data
-            
+        # Procesar cada medición (v2: filas dict con solo las columnas usadas)
+        meter_fields = (
+            'importedActivePowerLow', 'importedActivePowerHigh',
+            'exportedActivePowerLow', 'exportedActivePowerHigh',
+            'totalActivePower', 'totalPowerFactor',
+            'voltagePhaseA', 'voltagePhaseB', 'voltagePhaseC',
+            'currentPhaseA', 'currentPhaseB', 'currentPhaseC',
+            'voltageTHDPhaseA', 'voltageTHDPhaseB', 'voltageTHDPhaseC',
+            'currentTHDPhaseA', 'currentTHDPhaseB', 'currentTHDPhaseC',
+            'currentTDDPhaseA', 'currentTDDPhaseB', 'currentTDDPhaseC',
+        )
+        for data in measurements.values(*meter_fields).iterator(chunk_size=2000):
             # Energía acumulada (primer y último valor)
             if imported_energy_low_start is None:
-                imported_energy_low_start = data.get('importedActivePowerLow', 0)
-                imported_energy_high_start = data.get('importedActivePowerHigh', 0)
-                exported_energy_low_start = data.get('exportedActivePowerLow', 0)
-                exported_energy_high_start = data.get('exportedActivePowerHigh', 0)
-            
-            imported_energy_low_end = data.get('importedActivePowerLow', 0)
-            imported_energy_high_end = data.get('importedActivePowerHigh', 0)
-            exported_energy_low_end = data.get('exportedActivePowerLow', 0)
-            exported_energy_high_end = data.get('exportedActivePowerHigh', 0)
-            
+                imported_energy_low_start = _row_get(data, 'importedActivePowerLow')
+                imported_energy_high_start = _row_get(data, 'importedActivePowerHigh')
+                exported_energy_low_start = _row_get(data, 'exportedActivePowerLow')
+                exported_energy_high_start = _row_get(data, 'exportedActivePowerHigh')
+
+            imported_energy_low_end = _row_get(data, 'importedActivePowerLow')
+            imported_energy_high_end = _row_get(data, 'importedActivePowerHigh')
+            exported_energy_low_end = _row_get(data, 'exportedActivePowerLow')
+            exported_energy_high_end = _row_get(data, 'exportedActivePowerHigh')
+
             # Potencia activa para demanda pico
-            total_active_power = data.get('totalActivePower', 0)
+            total_active_power = _row_get(data, 'totalActivePower')
             if total_active_power is not None:
                 total_active_power_values.append(total_active_power)
-            
+
             # Factor de potencia
-            power_factor = data.get('totalPowerFactor', 0)
+            power_factor = _row_get(data, 'totalPowerFactor')
             if power_factor is not None:
                 power_factor_values.append(power_factor)
-            
+
             # Voltajes por fase
-            voltage_a = data.get('voltagePhaseA', 0)
-            voltage_b = data.get('voltagePhaseB', 0)
-            voltage_c = data.get('voltagePhaseC', 0)
+            voltage_a = _row_get(data, 'voltagePhaseA')
+            voltage_b = _row_get(data, 'voltagePhaseB')
+            voltage_c = _row_get(data, 'voltagePhaseC')
             if all(v is not None for v in [voltage_a, voltage_b, voltage_c]):
                 voltage_phases.append([voltage_a, voltage_b, voltage_c])
-            
+
             # Corrientes por fase
-            current_a = data.get('currentPhaseA', 0)
-            current_b = data.get('currentPhaseB', 0)
-            current_c = data.get('currentPhaseC', 0)
+            current_a = _row_get(data, 'currentPhaseA')
+            current_b = _row_get(data, 'currentPhaseB')
+            current_c = _row_get(data, 'currentPhaseC')
             if all(c is not None for c in [current_a, current_b, current_c]):
                 current_phases.append([current_a, current_b, current_c])
-            
+
             # THD y TDD
-            voltage_thd_a = data.get('voltageTHDPhaseA', 0)
-            voltage_thd_b = data.get('voltageTHDPhaseB', 0)
-            voltage_thd_c = data.get('voltageTHDPhaseC', 0)
+            voltage_thd_a = _row_get(data, 'voltageTHDPhaseA')
+            voltage_thd_b = _row_get(data, 'voltageTHDPhaseB')
+            voltage_thd_c = _row_get(data, 'voltageTHDPhaseC')
             if all(thd is not None for thd in [voltage_thd_a, voltage_thd_b, voltage_thd_c]):
                 voltage_thd_values.extend([voltage_thd_a, voltage_thd_b, voltage_thd_c])
-            
-            current_thd_a = data.get('currentTHDPhaseA', 0)
-            current_thd_b = data.get('currentTHDPhaseB', 0)
-            current_thd_c = data.get('currentTHDPhaseC', 0)
+
+            current_thd_a = _row_get(data, 'currentTHDPhaseA')
+            current_thd_b = _row_get(data, 'currentTHDPhaseB')
+            current_thd_c = _row_get(data, 'currentTHDPhaseC')
             if all(thd is not None for thd in [current_thd_a, current_thd_b, current_thd_c]):
                 current_thd_values.extend([current_thd_a, current_thd_b, current_thd_c])
-            
-            current_tdd_a = data.get('currentTDDPhaseA', 0)
-            current_tdd_b = data.get('currentTDDPhaseB', 0)
-            current_tdd_c = data.get('currentTDDPhaseC', 0)
+
+            current_tdd_a = _row_get(data, 'currentTDDPhaseA')
+            current_tdd_b = _row_get(data, 'currentTDDPhaseB')
+            current_tdd_c = _row_get(data, 'currentTDDPhaseC')
             if all(tdd is not None for tdd in [current_tdd_a, current_tdd_b, current_tdd_c]):
                 current_tdd_values.extend([current_tdd_a, current_tdd_b, current_tdd_c])
         
@@ -1190,7 +1170,7 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
     try:
         from datetime import datetime, timedelta
         from django.db.models import Max, Min, Avg, StdDev
-        from scada_proxy.models import Device, Institution, Measurement
+        from scada_proxy.models import Device, Institution
         from .models import InverterIndicators, InverterChartData
         
         # Parsear la fecha
@@ -1214,13 +1194,16 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
             else:
                 end_date = date.replace(month=date.month + 1, day=1)
         
-        # Obtener todas las mediciones del período
-        measurements = Measurement.objects.filter(
+        # Obtener todas las mediciones del período (v2: rango aware Bogotá,
+        # equivalente al antiguo date__gte/lt con objetos date interpretados
+        # a medianoche en TIME_ZONE=America/Bogota)
+        start_dt, end_dt = colombia_day_range(start_date, end_date - timedelta(days=1))
+        measurements = InverterMeasurement.objects.filter(
             device=device,
-            date__gte=start_date,
-            date__lt=end_date
+            date__gte=start_dt,
+            date__lt=end_dt
         ).order_by('date')
-        
+
         if not measurements.exists():
             return f"No hay mediciones para {device.name} en {date}"
         
@@ -1236,57 +1219,60 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
         irradiance_values = []
         temperature_values = []
         
-        # Procesar cada medición
-        for measurement in measurements:
-            data = measurement.data
-            
+        # Procesar cada medición (v2: filas dict con solo las columnas usadas)
+        inverter_fields = (
+            'acPower', 'dcPower', 'reactivePower', 'apparentPower',
+            'powerFactor', 'acFrequency',
+            'acVoltagePhaseA', 'acVoltagePhaseB', 'acVoltagePhaseC',
+            'acCurrentPhaseA', 'acCurrentPhaseB', 'acCurrentPhaseC',
+        )
+        for data in measurements.values(*inverter_fields).iterator(chunk_size=2000):
             # Potencia AC y DC
-            ac_power = data.get('acPower', 0)
-            dc_power = data.get('dcPower', 0)
+            ac_power = _row_get(data, 'acPower')
+            dc_power = _row_get(data, 'dcPower')
             if ac_power is not None:
                 ac_power_values.append(ac_power)
             if dc_power is not None:
                 dc_power_values.append(dc_power)
-            
+
             # Potencia reactiva y aparente
-            reactive_power = data.get('reactivePower', 0)
-            apparent_power = data.get('apparentPower', 0)
+            reactive_power = _row_get(data, 'reactivePower')
+            apparent_power = _row_get(data, 'apparentPower')
             if reactive_power is not None:
                 reactive_power_values.append(reactive_power)
             if apparent_power is not None:
                 apparent_power_values.append(apparent_power)
-            
+
             # Factor de potencia
-            power_factor = data.get('powerFactor', 0)
+            power_factor = _row_get(data, 'powerFactor')
             if power_factor is not None:
                 power_factor_values.append(power_factor)
-            
+
             # Frecuencia
-            frequency = data.get('acFrequency', 0)
+            frequency = _row_get(data, 'acFrequency')
             if frequency is not None:
                 frequency_values.append(frequency)
-            
+
             # Voltajes por fase
-            voltage_a = data.get('acVoltagePhaseA', 0)
-            voltage_b = data.get('acVoltagePhaseB', 0)
-            voltage_c = data.get('acVoltagePhaseC', 0)
+            voltage_a = _row_get(data, 'acVoltagePhaseA')
+            voltage_b = _row_get(data, 'acVoltagePhaseB')
+            voltage_c = _row_get(data, 'acVoltagePhaseC')
             if all(v is not None for v in [voltage_a, voltage_b, voltage_c]):
                 voltage_phases.append([voltage_a, voltage_b, voltage_c])
-            
+
             # Corrientes por fase
-            current_a = data.get('acCurrentPhaseA', 0)
-            current_b = data.get('acCurrentPhaseB', 0)
-            current_c = data.get('acCurrentPhaseC', 0)
+            current_a = _row_get(data, 'acCurrentPhaseA')
+            current_b = _row_get(data, 'acCurrentPhaseB')
+            current_c = _row_get(data, 'acCurrentPhaseC')
             if all(c is not None for c in [current_a, current_b, current_c]):
                 current_phases.append([current_a, current_b, current_c])
-            
-            # Datos meteorológicos (si están disponibles)
-            irradiance = data.get('irradiance', 0)
-            temperature = data.get('temperature', 0)
-            if irradiance is not None:
-                irradiance_values.append(irradiance)
-            if temperature is not None:
-                temperature_values.append(temperature)
+
+            # Datos meteorológicos: la categoría 'inverter' NO tiene columnas
+            # irradiance/temperature en v2 (esas claves tampoco existían en el
+            # jsonb v1, donde data.get(K, 0) devolvía siempre el default 0).
+            # Se conserva el comportamiento exacto apendeando 0 por medición.
+            irradiance_values.append(0)
+            temperature_values.append(0)
         
         # Calcular indicadores
 
@@ -1427,7 +1413,9 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
         )
         
         # Crear datos para gráficos
-        hourly_data = _calculate_hourly_inverter_data(measurements)
+        hourly_data = _calculate_hourly_inverter_data(
+            measurements.values('date', 'acPower', 'dcPower').iterator(chunk_size=2000)
+        )
         
         chart_data, chart_created = InverterChartData.objects.update_or_create(
             device=device,
@@ -1445,7 +1433,9 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
 
 def _calculate_hourly_inverter_data(measurements):
     """
-    Calcula datos por hora para gráficos de inversores
+    Calcula datos por hora para gráficos de inversores.
+
+    Recibe filas dict (v2: `.values('date', 'acPower', 'dcPower')`).
     """
     hourly_efficiency = [0] * 24
     hourly_generation = [0] * 24
@@ -1453,26 +1443,23 @@ def _calculate_hourly_inverter_data(measurements):
     hourly_temperature = [0] * 24
     hourly_dc_power = [0] * 24
     hourly_ac_power = [0] * 24
-    
+
     hourly_counts = [0] * 24
-    
-    for measurement in measurements:
-        hour = measurement.date.hour
-        data = measurement.data
-        
+
+    for row in measurements:
+        hour = row['date'].hour
+
         # Acumular valores por hora
-        if data.get('acPower') is not None:
-            hourly_ac_power[hour] += data['acPower']
+        if row['acPower'] is not None:
+            hourly_ac_power[hour] += row['acPower']
             hourly_counts[hour] += 1
-        
-        if data.get('dcPower') is not None:
-            hourly_dc_power[hour] += data['dcPower']
-        
-        if data.get('irradiance') is not None:
-            hourly_irradiance[hour] += data['irradiance']
-        
-        if data.get('temperature') is not None:
-            hourly_temperature[hour] += data['temperature']
+
+        if row['dcPower'] is not None:
+            hourly_dc_power[hour] += row['dcPower']
+
+        # v2: la categoría 'inverter' no tiene columnas irradiance/temperature
+        # (en v1 data.get(...) devolvía None y nunca se acumulaba nada):
+        # hourly_irradiance y hourly_temperature quedan en 0, como antes.
     
     # Calcular promedios por hora
     for hour in range(24):
@@ -1815,10 +1802,10 @@ def calculate_daily_weather_indicators(station, measurements, start_date, end_da
     """
     total_processed = 0
     
-    # Agrupar mediciones por día
+    # Agrupar mediciones por día (filas dict v2: measurement['date'])
     daily_measurements = {}
     for measurement in measurements:
-        day = measurement.date.date()
+        day = measurement['date'].date()
         if day not in daily_measurements:
             daily_measurements[day] = []
         daily_measurements[day].append(measurement)
@@ -1862,10 +1849,10 @@ def calculate_monthly_weather_indicators(station, measurements, start_date, end_
     """
     total_processed = 0
     
-    # Agrupar mediciones por mes
+    # Agrupar mediciones por mes (filas dict v2: measurement['date'])
     monthly_measurements = {}
     for measurement in measurements:
-        month_start = measurement.date.date().replace(day=1)
+        month_start = measurement['date'].date().replace(day=1)
         if month_start not in monthly_measurements:
             monthly_measurements[month_start] = []
         monthly_measurements[month_start].append(measurement)
@@ -1897,10 +1884,13 @@ def calculate_monthly_weather_indicators(station, measurements, start_date, end_
 def calculate_single_day_weather_indicators(measurements):
     """
     Calcula indicadores meteorológicos para un día específico.
+
+    Recibe filas dict (v2: `.values('date', <columnas meteorológicas>)`);
+    una columna NULL equivale a la clave ausente del antiguo jsonb.
     """
     if not measurements:
         return {}
-    
+
     # Extraer datos de las mediciones
     irradiance_values = []
     temperature_values = []
@@ -1908,32 +1898,30 @@ def calculate_single_day_weather_indicators(measurements):
     wind_speed_values = []
     wind_direction_values = []
     precipitation_values = []
-    
-    for measurement in measurements:
-        data = measurement.data
-        
+
+    for data in measurements:
         # Irradiancia (W/m²)
-        if 'irradiance' in data and data['irradiance'] is not None:
+        if data['irradiance'] is not None:
             irradiance_values.append(float(data['irradiance']))
-        
+
         # Temperatura (°C)
-        if 'temperature' in data and data['temperature'] is not None:
+        if data['temperature'] is not None:
             temperature_values.append(float(data['temperature']))
-        
+
         # Humedad (%)
-        if 'humidity' in data and data['humidity'] is not None:
+        if data['humidity'] is not None:
             humidity_values.append(float(data['humidity']))
-        
+
         # Velocidad del viento (km/h)
-        if 'windSpeed' in data and data['windSpeed'] is not None:
+        if data['windSpeed'] is not None:
             wind_speed_values.append(float(data['windSpeed']))
-        
+
         # Dirección del viento (°)
-        if 'windDirection' in data and data['windDirection'] is not None:
+        if data['windDirection'] is not None:
             wind_direction_values.append(float(data['windDirection']))
-        
+
         # Precipitación (cm/día)
-        if 'precipitation' in data and data['precipitation'] is not None:
+        if data['precipitation'] is not None:
             precipitation_values.append(float(data['precipitation']))
     
     # Calcular indicadores
@@ -1986,8 +1974,8 @@ def calculate_single_day_weather_indicators(measurements):
     
     # Metadatos
     indicators['measurement_count'] = len(measurements)
-    indicators['last_measurement_date'] = measurements[len(measurements)-1].date if measurements else None
-    
+    indicators['last_measurement_date'] = measurements[len(measurements)-1]['date'] if measurements else None
+
     return indicators
 
 
@@ -1998,13 +1986,13 @@ def calculate_single_month_weather_indicators(measurements):
     if not measurements:
         return {}
     
-    # Agrupar por día y calcular promedios mensuales
+    # Agrupar por día y calcular promedios mensuales (filas dict v2)
     daily_indicators = []
     current_day = None
     day_measurements = []
-    
+
     for measurement in measurements:
-        day = measurement.date.date()
+        day = measurement['date'].date()
         if current_day != day:
             if day_measurements:
                 daily_indicators.append(calculate_single_day_weather_indicators(day_measurements))
@@ -2047,7 +2035,7 @@ def calculate_single_month_weather_indicators(measurements):
     
     # Metadatos
     monthly_indicators['measurement_count'] = sum(ind.get('measurement_count', 0) for ind in daily_indicators)
-    monthly_indicators['last_measurement_date'] = measurements[len(measurements)-1].date if measurements else None
+    monthly_indicators['last_measurement_date'] = measurements[len(measurements)-1]['date'] if measurements else None
     
     return monthly_indicators
 
@@ -2055,28 +2043,29 @@ def calculate_single_month_weather_indicators(measurements):
 def calculate_single_day_weather_chart_data(measurements):
     """
     Calcula datos de gráficos para un día específico.
+
+    Recibe filas dict (v2: `.values('date', <columnas meteorológicas>)`).
     """
     if not measurements:
         return {}
-    
+
     # Agrupar mediciones por hora
     hourly_data = {i: {'irradiance': [], 'temperature': [], 'humidity': [], 'wind_speed': [], 'wind_direction': [], 'precipitation': []} for i in range(24)}
-    
-    for measurement in measurements:
-        hour = measurement.date.hour
-        data = measurement.data
-        
-        if 'irradiance' in data and data['irradiance'] is not None:
+
+    for data in measurements:
+        hour = data['date'].hour
+
+        if data['irradiance'] is not None:
             hourly_data[hour]['irradiance'].append(float(data['irradiance']))
-        if 'temperature' in data and data['temperature'] is not None:
+        if data['temperature'] is not None:
             hourly_data[hour]['temperature'].append(float(data['temperature']))
-        if 'humidity' in data and data['humidity'] is not None:
+        if data['humidity'] is not None:
             hourly_data[hour]['humidity'].append(float(data['humidity']))
-        if 'windSpeed' in data and data['windSpeed'] is not None:
+        if data['windSpeed'] is not None:
             hourly_data[hour]['wind_speed'].append(float(data['windSpeed']))
-        if 'windDirection' in data and data['windDirection'] is not None:
+        if data['windDirection'] is not None:
             hourly_data[hour]['wind_direction'].append(float(data['windDirection']))
-        if 'precipitation' in data and data['precipitation'] is not None:
+        if data['precipitation'] is not None:
             hourly_data[hour]['precipitation'].append(float(data['precipitation']))
     
     # Calcular promedios por hora
@@ -2206,15 +2195,20 @@ def _calculate_daily_weather_station_data(station, start_date, end_date):
         logger.info(f"  Procesando fecha: {current_date}")
         
         try:
-            # Obtener mediciones para el día específico
-            measurements = Measurement.objects.filter(
+            # Obtener mediciones para el día específico (v2: columnas tipadas,
+            # rango aware Bogotá equivalente al antiguo date__date)
+            day_a, day_b = colombia_day_range(current_date, current_date)
+            measurements = WeatherStationMeasurement.objects.filter(
                 device=station,
-                date__date=current_date
+                date__gte=day_a, date__lt=day_b
             ).order_by('date')
-            
+
             if measurements.exists():
-                # Convertir QuerySet a lista para evitar problemas de indexación
-                measurements_list = list(measurements)
+                # Filas dict con las columnas usadas por los cálculos
+                measurements_list = list(measurements.values(
+                    'date', 'irradiance', 'temperature', 'humidity',
+                    'windSpeed', 'windDirection', 'precipitation',
+                ))
                 
                 # Calcular indicadores para el día
                 indicators = calculate_single_day_weather_indicators(measurements_list)
@@ -2270,15 +2264,20 @@ def _calculate_monthly_weather_station_data(station, start_date, end_date):
         logger.info(f"  Procesando mes: {current_date.strftime('%Y-%m')}")
         
         try:
-            # Obtener mediciones para el mes
-            measurements = Measurement.objects.filter(
+            # Obtener mediciones para el mes (v2: columnas tipadas, rango aware
+            # Bogotá equivalente al antiguo date__date__range)
+            month_a, month_b = colombia_day_range(current_date, month_end)
+            measurements = WeatherStationMeasurement.objects.filter(
                 device=station,
-                date__date__range=(current_date, month_end)
+                date__gte=month_a, date__lt=month_b
             ).order_by('date')
-            
+
             if measurements.exists():
-                # Convertir QuerySet a lista para evitar problemas de indexación
-                measurements_list = list(measurements)
+                # Filas dict con las columnas usadas por los cálculos
+                measurements_list = list(measurements.values(
+                    'date', 'irradiance', 'temperature', 'humidity',
+                    'windSpeed', 'windDirection', 'precipitation',
+                ))
                 
                 # Calcular indicadores para el mes
                 indicators = calculate_single_month_weather_indicators(measurements_list)
