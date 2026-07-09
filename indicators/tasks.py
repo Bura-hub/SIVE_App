@@ -13,7 +13,7 @@ import tempfile
 import csv
 
 from scada_proxy.models import Measurement, Device, Institution, DeviceCategory, TaskProgress
-from .energy import energy_kwh_from_power_sum, SAMPLE_INTERVAL_HOURS
+from .energy import consumption_energy_kwh, generation_energy_kwh, SAMPLE_INTERVAL_HOURS
 from .models import (
     ElectricMeterEnergyConsumption, 
     MonthlyConsumptionKPI, 
@@ -91,11 +91,12 @@ def calculate_monthly_consumption_kpi(self):
         # --- Cálculo de Consumo Total (Medidores Eléctricos) ---
         logger.info("Calculando consumo total (medidores eléctricos)...")
         # Cambiar el cálculo de consumo para que sea consistente
-        # Energía consumida = Σ(potencia activa) · Δt / 1000 (ver indicators/energy.py).
+        # Energía consumida = Σ(totalActivePower) · Δt (ver indicators/energy.py).
+        # totalActivePower está en kW (confirmado por scripts/audit_indicators.py:
+        # mediana ~0.9, máx ~74), así que NO se divide por 1000.
         # ANTES: se guardaba la SUMA cruda de la potencia como si fuera kWh (sin integrar
-        # Δt y, en el mensual, sin dividir /1000), inflando el consumo enormemente y
-        # dejándolo incoherente con el cálculo diario.
-        current_month_consumption_sum = energy_kwh_from_power_sum(
+        # Δt y con el mensual incoherente con el diario).
+        current_month_consumption_sum = consumption_energy_kwh(
             Measurement.objects.filter(
                 device__in=electric_meters,
                 date__date__range=(start_current_month, end_current_month),
@@ -105,7 +106,7 @@ def calculate_monthly_consumption_kpi(self):
             )['total_sum']
         )
 
-        previous_month_consumption_sum = energy_kwh_from_power_sum(
+        previous_month_consumption_sum = consumption_energy_kwh(
             Measurement.objects.filter(
                 device__in=electric_meters,
                 date__date__range=(start_previous_month, end_previous_month),
@@ -120,10 +121,12 @@ def calculate_monthly_consumption_kpi(self):
         logger.info("Calculando generación total (inversores)...")
         # Energía generada = Σ(acPower de TODOS los inversores) · Δt / 1000, misma fórmula
         # canónica que el consumo (ver indicators/energy.py).
+        # acPower está en Watts (confirmado por auditoría: mediana ~2936, máx ~16266),
+        # por eso aquí SÍ se divide por 1000 (a diferencia del consumo).
         # ANTES: se agrupaba por día y se calculaba (Σ acPower / nº mediciones de la flota) · 24,
         # es decir, la potencia media POR MUESTRA de la flota × 24 h → energía de UN inversor
         # "promedio", no la suma de los N inversores. Eso dividía la generación total por N.
-        current_month_generation_sum = energy_kwh_from_power_sum(
+        current_month_generation_sum = generation_energy_kwh(
             Measurement.objects.filter(
                 device__in=inverters,
                 date__date__range=(start_current_month, end_current_month),
@@ -133,7 +136,7 @@ def calculate_monthly_consumption_kpi(self):
             )['total_sum']
         )
 
-        previous_month_generation_sum = energy_kwh_from_power_sum(
+        previous_month_generation_sum = generation_energy_kwh(
             Measurement.objects.filter(
                 device__in=inverters,
                 date__date__range=(start_previous_month, end_previous_month),
@@ -370,13 +373,13 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
             avg_wind_speed = daily_wind_aggregation.get('avg_wind_speed') or 0.0
             avg_irradiance = daily_irradiance_aggregation.get('avg_irradiance') or 0.0
 
-            # Consumo y generación con la MISMA fórmula canónica Σ(P)·Δt/1000
-            # (ver indicators/energy.py), idéntica a la del KPI mensual.
-            # ANTES: el consumo solo dividía /1000 (sin integrar Δt → ~30× alto) y la
-            # generación promediaba sobre la flota (avg_power_w · 24), dividiendo por el
-            # nº de inversores. Ahora ambos son coherentes entre sí y con el mensual.
-            daily_consumption_kwh = energy_kwh_from_power_sum(daily_consumption_sum)
-            daily_generation_kwh = energy_kwh_from_power_sum(daily_generation_sum)
+            # Consumo y generación con la fórmula canónica Σ(P)·Δt (ver indicators/energy.py),
+            # idéntica a la del KPI mensual. La unidad de potencia difiere por métrica:
+            # consumo (totalActivePower) en kW; generación (acPower) en W (÷1000).
+            # ANTES: el consumo solo dividía /1000 (sin integrar Δt) y la generación
+            # promediaba sobre la flota (avg_power_w · 24), dividiendo por el nº de inversores.
+            daily_consumption_kwh = consumption_energy_kwh(daily_consumption_sum)
+            daily_generation_kwh = generation_energy_kwh(daily_generation_sum)
 
             # Calcular balance energético (ambos en kWh)
             daily_balance_sum = daily_generation_kwh - daily_consumption_kwh

@@ -38,9 +38,12 @@ from indicators.models import (  # noqa: E402
     ElectricMeterEnergyConsumption,
 )
 from indicators.energy import (  # noqa: E402
+    consumption_energy_kwh,
+    generation_energy_kwh,
     energy_kwh_from_power_sum,
     SAMPLE_INTERVAL_HOURS,
-    WATTS_PER_KILOWATT,
+    POWER_UNIT_KW,
+    POWER_UNIT_WATTS,
 )
 
 
@@ -89,8 +92,8 @@ def main():
     hr("CONFIGURACIÓN DE LA FÓRMULA CANÓNICA (indicators/energy.py)")
     print(f"  SAMPLE_INTERVAL_HOURS (Δt) = {SAMPLE_INTERVAL_HOURS:.6f} h "
           f"({SAMPLE_INTERVAL_HOURS*60:.1f} min)  →  {1/SAMPLE_INTERVAL_HOURS:.0f} muestras/hora")
-    print(f"  WATTS_PER_KILOWATT         = {WATTS_PER_KILOWATT}  "
-          f"(1000 = potencia en Watts; 1 = potencia ya en kW)")
+    print(f"  Unidad consumo (totalActivePower): factor {POWER_UNIT_KW}  (1 = kW, sin /1000)")
+    print(f"  Unidad generación (acPower):       factor {POWER_UNIT_WATTS}  (1000 = W, /1000)")
 
     meters = list(Device.objects.filter(category__name="electricMeter"))
     inverters = list(Device.objects.filter(category__name="inverter"))
@@ -152,7 +155,7 @@ def main():
         )
         if not integ:
             continue
-        integrated_kwh = energy_kwh_from_power_sum(integ)  # supuesto actual (W)
+        integrated_kwh = consumption_energy_kwh(integ)  # totalActivePower en kW (factor confirmado)
         counter_kwh = rec.total_imported_energy or rec.net_energy_consumption
         if not counter_kwh:
             continue
@@ -164,11 +167,11 @@ def main():
         ratios.sort()
         med_ratio = ratios[len(ratios) // 2]
         print(f"  Comparadas {checked} filas medidor-día.")
-        print(f"  ratio mediano (energía_contador / energía_integrada_supuesto_W) = {med_ratio:.4f}")
+        print(f"  ratio mediano (energía_contador / energía_integrada_kW) = {med_ratio:.4f}")
         if 0.5 <= med_ratio <= 2:
-            print("  ✅ ratio ≈ 1  → el supuesto Watts (÷1000) es CORRECTO.")
+            print("  ✅ ratio ≈ 1  → el factor kW del consumo (sin /1000) es CORRECTO.")
         elif 500 <= med_ratio <= 2000:
-            print("  ⚠️  ratio ≈ 1000  → la potencia YA viene en kW: poner WATTS_PER_KILOWATT=1.")
+            print("  ⚠️  ratio ≈ 1000  → totalActivePower estaría en W: usar POWER_UNIT_WATTS.")
         elif 0.0005 <= med_ratio <= 0.002:
             print("  ⚠️  ratio ≈ 1/1000  → factor invertido: revisar la conversión.")
         else:
@@ -185,10 +188,10 @@ def main():
     from indicators.tasks import get_colombia_date  # import tardío
     today = get_colombia_date()
     start = today - timedelta(days=args.days)
-    cons = energy_kwh_from_power_sum(
+    cons = consumption_energy_kwh(
         power_sum(Measurement.objects.filter(device__in=meters, date__date__range=(start, today)),
                   "totalActivePower"))
-    gen = energy_kwh_from_power_sum(
+    gen = generation_energy_kwh(
         power_sum(Measurement.objects.filter(device__in=inverters, date__date__range=(start, today)),
                   "acPower"))
     print(f"  Ventana recalculada: {start} → {today} ({args.days} días)")
@@ -205,8 +208,8 @@ def main():
         print("  (no hay MonthlyConsumptionKPI almacenado todavía)")
 
     hr("FIN DE LA AUDITORÍA")
-    print("Si el ratio de la sección 3 ≈ 1, las correcciones de energía quedan confirmadas.")
-    print("Si ≈ 1000, ajustar indicators/energy.py: WATTS_PER_KILOWATT = 1.")
+    print("Unidades confirmadas: consumo en kW (factor 1), generación en W (÷1000).")
+    print("Si el ratio de la sección 3 se aleja de 1, revisar POWER_UNIT_* en indicators/energy.py.")
 
 
 if __name__ == "__main__":
