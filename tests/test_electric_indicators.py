@@ -1,25 +1,24 @@
-import pytest
 from django.test import TestCase
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from indicators.models import ElectricMeterIndicators
 from indicators.tasks import calculate_electric_meter_indicators
-from scada_proxy.models import Device, Institution, DeviceCategory
-from unittest.mock import patch, MagicMock
+from scada_proxy.models import Device, Institution, DeviceCategory, Measurement
 
 class ElectricMeterIndicatorsTestCase(TestCase):
     def setUp(self):
         """Configuración inicial para las pruebas"""
         # Crear categoría de medidor eléctrico
         self.category = DeviceCategory.objects.create(
+            scada_id='CAT_ELECTRICMETER',
             name='electricmeter',
             description='Medidor Eléctrico'
         )
-        
+
         # Crear institución
         self.institution = Institution.objects.create(
-            name='Test Institution',
-            code='TEST'
+            scada_id='INST_TEST',
+            name='Test Institution'
         )
         
         # Crear dispositivo (medidor eléctrico)
@@ -76,43 +75,44 @@ class ElectricMeterIndicatorsTestCase(TestCase):
             avg_power_factor=0.95
         )
         
-        expected_str = f"{self.device.name} - {self.institution.name} - {self.test_date} - Diario"
+        expected_str = f"{self.device.name} - {self.test_date} ({indicators.get_time_range_display()})"
         self.assertEqual(str(indicators), expected_str)
 
-    @patch('indicators.tasks.Measurement.objects.filter')
-    def test_calculate_electric_meter_indicators_task(self, mock_measurements):
-        """Prueba la tarea de cálculo de indicadores eléctricos"""
-        # Mock de mediciones simuladas
-        mock_measurement1 = MagicMock()
-        mock_measurement1.importedActivePowerLow = 100.0
-        mock_measurement1.importedActivePowerHigh = 0.5  # MWh
-        mock_measurement1.exportedActivePowerLow = 25.0
-        mock_measurement1.exportedActivePowerHigh = 0.1  # MWh
-        mock_measurement1.instantaneousPower = 150.0
-        mock_measurement1.powerFactor = 0.95
-        mock_measurement1.voltageUnbalance = 2.1
-        mock_measurement1.currentUnbalance = 1.8
-        mock_measurement1.voltageTHD = 3.2
-        mock_measurement1.currentTHD = 2.9
-        mock_measurement1.currentTDD = 2.5
-        mock_measurement1.timestamp = timezone.now()
-        
-        mock_measurement2 = MagicMock()
-        mock_measurement2.importedActivePowerLow = 200.0
-        mock_measurement2.importedActivePowerHigh = 1.0  # MWh
-        mock_measurement2.exportedActivePowerLow = 50.0
-        mock_measurement2.exportedActivePowerHigh = 0.2  # MWh
-        mock_measurement2.instantaneousPower = 300.0
-        mock_measurement2.powerFactor = 0.98
-        mock_measurement2.voltageUnbalance = 1.5
-        mock_measurement2.currentUnbalance = 1.2
-        mock_measurement2.voltageTHD = 2.8
-        mock_measurement2.currentTHD = 2.5
-        mock_measurement2.currentTDD = 2.1
-        mock_measurement2.timestamp = timezone.now() + timedelta(hours=1)
-        
-        mock_measurements.return_value = [mock_measurement1, mock_measurement2]
-        
+    def test_calculate_electric_meter_indicators_task(self):
+        """Prueba la tarea de cálculo de indicadores eléctricos con mediciones reales."""
+        # La tarea lee measurement.data (JSONField) y opera sobre el queryset real
+        # (order_by/exists/count), así que creamos mediciones reales dentro del día.
+        # Mediodía aware: cae dentro de [test_date, test_date+1) para cualquier offset de TZ.
+        base = timezone.make_aware(datetime.combine(self.test_date, time(12, 0)))
+        Measurement.objects.create(
+            device=self.device,
+            date=base,
+            data={
+                'importedActivePowerLow': 100.0, 'importedActivePowerHigh': 0.5,
+                'exportedActivePowerLow': 25.0, 'exportedActivePowerHigh': 0.1,
+                'totalActivePower': 150.0, 'totalPowerFactor': 0.95,
+                'voltagePhaseA': 220.0, 'voltagePhaseB': 221.0, 'voltagePhaseC': 219.0,
+                'currentPhaseA': 10.0, 'currentPhaseB': 10.5, 'currentPhaseC': 9.5,
+                'voltageTHDPhaseA': 3.2, 'voltageTHDPhaseB': 3.0, 'voltageTHDPhaseC': 3.1,
+                'currentTHDPhaseA': 2.9, 'currentTHDPhaseB': 2.7, 'currentTHDPhaseC': 2.8,
+                'currentTDDPhaseA': 2.5, 'currentTDDPhaseB': 2.3, 'currentTDDPhaseC': 2.4,
+            },
+        )
+        Measurement.objects.create(
+            device=self.device,
+            date=base + timedelta(minutes=2),
+            data={
+                'importedActivePowerLow': 200.0, 'importedActivePowerHigh': 1.0,
+                'exportedActivePowerLow': 50.0, 'exportedActivePowerHigh': 0.2,
+                'totalActivePower': 300.0, 'totalPowerFactor': 0.98,
+                'voltagePhaseA': 222.0, 'voltagePhaseB': 220.0, 'voltagePhaseC': 218.0,
+                'currentPhaseA': 12.0, 'currentPhaseB': 11.5, 'currentPhaseC': 12.5,
+                'voltageTHDPhaseA': 2.8, 'voltageTHDPhaseB': 2.6, 'voltageTHDPhaseC': 2.7,
+                'currentTHDPhaseA': 2.5, 'currentTHDPhaseB': 2.4, 'currentTHDPhaseC': 2.3,
+                'currentTDDPhaseA': 2.1, 'currentTDDPhaseB': 2.0, 'currentTDDPhaseC': 1.9,
+            },
+        )
+
         # Ejecutar la tarea
         result = calculate_electric_meter_indicators(
             self.device.id,
@@ -127,7 +127,7 @@ class ElectricMeterIndicatorsTestCase(TestCase):
             time_range='daily'
         )
         
-        self.assertTrue(indicators.exists())
+        self.assertTrue(indicators.exists(), result)
         indicator = indicators.first()
         
         # Verificar cálculos básicos
@@ -155,8 +155,8 @@ class ElectricMeterIndicatorsTestCase(TestCase):
             avg_power_factor=0.95
         )
         
-        # Verificar que el modelo es válido
-        self.assertTrue(indicators.full_clean())
+        # full_clean() no lanza y devuelve None cuando el modelo es válido
+        self.assertIsNone(indicators.full_clean())
 
     def test_electric_meter_indicators_time_range_choices(self):
         """Prueba las opciones de rango de tiempo"""
@@ -178,4 +178,5 @@ class ElectricMeterIndicatorsTestCase(TestCase):
         self.assertEqual(indicators.get_time_range_display(), 'Mensual')
 
 if __name__ == '__main__':
+    import pytest  # import perezoso: solo requerido para ejecución standalone
     pytest.main([__file__])

@@ -229,6 +229,10 @@ services:
     networks:
       - mte_network_prod
     restart: unless-stopped
+    # Beat no expone HTTP; se desactiva el HEALTHCHECK heredado del Dockerfile
+    # (curl :8000) que lo marca unhealthy falsamente. inspect ping no aplica a beat.
+    healthcheck:
+      test: ["NONE"]
     logging:
       driver: "json-file"
       options:
