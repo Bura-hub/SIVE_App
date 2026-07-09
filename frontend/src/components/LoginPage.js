@@ -281,10 +281,11 @@ function LoginPage({ onLoginSuccess }) {
             return;
         }
         
-        // Validar contraseña
-        const passwordValidation = validatePassword(password);
-        if (!passwordValidation.isValid) {
-            setMessage({ text: passwordValidation.message, type: 'error' });
+        // En el login no se valida complejidad de la contraseña: el backend
+        // decide si las credenciales son válidas (la complejidad solo se
+        // exige al registrar). Ver validateRegisterData para el registro.
+        if (!password) {
+            setMessage({ text: 'Ingresa tu contraseña', type: 'error' });
             return;
         }
         

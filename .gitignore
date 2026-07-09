@@ -43,3 +43,4 @@ backups/
 Dockerfile.claude
 iniciobash.txt
 scada_devices_full.json
+.audit/

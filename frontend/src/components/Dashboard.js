@@ -339,18 +339,14 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
       // Procesar y actualizar datos de gráficos
       updateCharts(currentMonthCharts, prevMonthCharts);
 
-      // Verificar estado de conexión SCADA (no fallar el dashboard si falla)
-      try {
-        const connData = await apiUtils.fetchWithAuth(
-          apiUtils.buildApiUrl(apiUtils.ENDPOINTS.scada.connectionStatus),
-          { ...apiUtils.getDefaultFetchOptions(authToken), signal },
-          handleAuthError
-        );
-        setScadaConnection({ connected: connData.connected, message: connData.message || '' });
-      } catch (scadaError) {
-        // Propagar cancelaciones y errores de sesión al manejador externo
-        if (scadaError.name === 'AbortError' || scadaError.isAuthError) throw scadaError;
-        setScadaConnection({ connected: false, message: 'No se pudo verificar la conexión SCADA.' });
+      // Estado de conexión SCADA: viene incluido en la respuesta de KPIs
+      // (evita una llamada extra a /scada/connection-status/ que responde 503
+      // cuando el SCADA remoto no está disponible y ensucia la consola)
+      if (kpisData.scadaConnection) {
+        setScadaConnection({
+          connected: kpisData.scadaConnection.connected === true,
+          message: kpisData.scadaConnection.message || ''
+        });
       }
     } catch (error) {
       // Ignorar peticiones canceladas (desmontaje del componente)

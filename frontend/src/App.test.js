@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('renderiza el formulario de inicio de sesión', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByPlaceholderText(/introduce tu usuario/i)).toBeInTheDocument();
+  expect(screen.getByPlaceholderText(/introduce tu contraseña/i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /iniciar sesión/i })).toBeInTheDocument();
 });
