@@ -69,6 +69,7 @@ jobs:
           tests.test_auth_security
           tests.test_electric_indicators
           tests.test_inverter_indicators
+          tests.test_weather_range_sanitization
           tests.test_consumption_net_gross
           --verbosity=2
 
