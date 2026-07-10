@@ -44,6 +44,7 @@ from indicators.services.date_ranges import (  # noqa: E402,F401
     get_colombia_date,
     get_colombia_now,
 )
+from indicators.services.device_calc import run_over_days, run_over_months  # noqa: E402
 
 def _row_get(row, key, default=0):
     """Equivalente v2 de `Measurement.data.get(key, default)` sobre filas dict
@@ -1054,56 +1055,13 @@ def calculate_inverter_data(time_range='daily', start_date_str=None, end_date_st
 
 
 def _calculate_daily_inverter_data(inverter, start_date, end_date):
-    """
-    Calcula datos diarios para un inversor específico
-    """
-    records_created = 0
-    records_updated = 0
-    
-    current_date = start_date
-    while current_date <= end_date:
-        logger.info(f"  Procesando fecha: {current_date}")
-        
-        # Calcular indicadores para el día
-        result = calculate_inverter_indicators(inverter.id, current_date.strftime('%Y-%m-%d'), 'daily')
-        
-        if "creado" in result:
-            records_created += 1
-        elif "actualizado" in result:
-            records_updated += 1
-        
-        current_date += timedelta(days=1)
-
-    return records_created, records_updated
+    """Datos diarios de un inversor (itera días delegando en el cálculo por día)."""
+    return run_over_days(inverter, start_date, end_date, calculate_inverter_indicators)
 
 
 def _calculate_monthly_inverter_data(inverter, start_date, end_date):
-    """
-    Calcula datos mensuales para un inversor específico
-    """
-    records_created = 0
-    records_updated = 0
-    
-    # Agrupar por mes
-    current_date = start_date.replace(day=1)  # Primer día del mes
-    while current_date <= end_date:
-        month_end = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        month_end = min(month_end, end_date)
-        
-        logger.info(f"  Procesando mes: {current_date.month}/{current_date.year}")
-        
-        # Calcular indicadores para el mes
-        result = calculate_inverter_indicators(inverter.id, current_date.strftime('%Y-%m-%d'), 'monthly')
-        
-        if "creado" in result:
-            records_created += 1
-        elif "actualizado" in result:
-            records_updated += 1
-        
-        # Avanzar al siguiente mes
-        current_date = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1)
-
-    return records_created, records_updated
+    """Datos mensuales de un inversor (itera meses delegando en el cálculo mensual)."""
+    return run_over_months(inverter, start_date, end_date, calculate_inverter_indicators)
 
 
 @shared_task(bind=True, retry_backoff=60, max_retries=3)
@@ -1173,56 +1131,13 @@ def calculate_electrical_data(self, time_range='daily', start_date_str=None, end
 
 
 def _calculate_daily_electrical_data(meter, start_date, end_date):
-    """
-    Calcula datos diarios para un medidor eléctrico específico
-    """
-    records_created = 0
-    records_updated = 0
-    
-    current_date = start_date
-    while current_date <= end_date:
-        logger.info(f"  Procesando fecha: {current_date}")
-        
-        # Calcular indicadores para el día
-        result = calculate_electric_meter_indicators(meter.id, current_date.strftime('%Y-%m-%d'), 'daily')
-        
-        if "creado" in result:
-            records_created += 1
-        elif "actualizado" in result:
-            records_updated += 1
-        
-        current_date += timedelta(days=1)
-
-    return records_created, records_updated
+    """Datos diarios de un medidor eléctrico (itera días delegando en el cálculo por día)."""
+    return run_over_days(meter, start_date, end_date, calculate_electric_meter_indicators)
 
 
 def _calculate_monthly_electrical_data(meter, start_date, end_date):
-    """
-    Calcula datos mensuales para un medidor eléctrico específico
-    """
-    records_created = 0
-    records_updated = 0
-    
-    # Agrupar por mes
-    current_date = start_date.replace(day=1)  # Primer día del mes
-    while current_date <= end_date:
-        month_end = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        month_end = min(month_end, end_date)
-        
-        logger.info(f"  Procesando mes: {current_date.month}/{current_date.year}")
-        
-        # Calcular indicadores para el mes
-        result = calculate_electric_meter_indicators(meter.id, current_date.strftime('%Y-%m-%d'), 'monthly')
-        
-        if "creado" in result:
-            records_created += 1
-        elif "actualizado" in result:
-            records_updated += 1
-        
-        # Avanzar al siguiente mes
-        current_date = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1)
-
-    return records_created, records_updated
+    """Datos mensuales de un medidor eléctrico (itera meses delegando en el cálculo mensual)."""
+    return run_over_months(meter, start_date, end_date, calculate_electric_meter_indicators)
 
 @shared_task
 def calculate_weather_station_indicators(time_range='daily', start_date_str=None, end_date_str=None, institution_id=None, device_id=None):

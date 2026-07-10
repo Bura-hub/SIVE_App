@@ -171,6 +171,24 @@ class ElectricMeterIndicatorsTestCase(TestCase):
         self.assertLess(ind.imported_energy_kwh, 100.0)
         self.assertGreater(ind.imported_energy_kwh, 0.0)
 
+    def test_iteracion_diaria_crea_un_indicador_por_dia(self):
+        """El envoltorio genérico (services/device_calc.run_over_days) crea un indicador
+        diario por cada día del rango."""
+        from scada_proxy.tasks import upsert_measurements_page
+        from indicators.tasks import _calculate_daily_electrical_data
+        day1 = self.test_date
+        day2 = self.test_date + timedelta(days=1)
+        for d in (day1, day2):
+            base = timezone.make_aware(datetime.combine(d, time(12, 0)))
+            upsert_measurements_page(self.device, [
+                (base, {'totalActivePower': 100.0, 'importedActivePowerHigh': 1, 'importedActivePowerLow': 0.0}),
+                (base + timedelta(minutes=2), {'totalActivePower': 100.0, 'importedActivePowerHigh': 1, 'importedActivePowerLow': 5.0}),
+            ])
+        created, updated = _calculate_daily_electrical_data(self.device, day1, day2)
+        self.assertEqual(created, 2)
+        self.assertEqual(
+            ElectricMeterIndicators.objects.filter(device=self.device, time_range='daily').count(), 2)
+
     def test_electric_meter_indicators_validation(self):
         """Prueba la validación de campos del modelo"""
         # Crear indicadores con valores válidos
