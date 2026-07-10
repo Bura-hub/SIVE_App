@@ -383,6 +383,12 @@ SPECTACULAR_SETTINGS = {
 
 # ========================= Configuración de Logging =========================
 
+# Archivo de log rotado. Se escribe en BASE_DIR (/app), que es escribible por el
+# usuario del contenedor; el volumen ./logs no se usa por problemas de permisos
+# (pertenece al host). El registro duradero real es `docker logs`; aquí solo se
+# acota el crecimiento del archivo con rotación (antes: FileHandler sin límite).
+_LOG_FILE = os.path.join(BASE_DIR, 'celery.log')
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -403,8 +409,10 @@ LOGGING = {
             'level': 'INFO',
         },
         'file': {
-            'class': 'logging.FileHandler',
-            'filename': 'celery.log',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': _LOG_FILE,
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB por archivo
+            'backupCount': 5,              # 5 archivos de respaldo (~50 MB máx)
             'formatter': 'verbose',
             'level': 'INFO',
         },

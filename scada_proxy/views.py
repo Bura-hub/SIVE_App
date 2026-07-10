@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
 import re
 import requests
@@ -348,10 +348,37 @@ class HistoricalMeasurementsView(generics.ListAPIView):
     # (columna NULL ⇔ clave ausente en el antiguo jsonb).
     ordering_fields = ['date']
 
+    # Cotas para no materializar millones de filas en memoria (antes: sin from/to
+    # la vista cargaba las 3 tablas v2 completas — ~9.2M filas — en una lista).
+    DEFAULT_WINDOW_DAYS = 7
+    MAX_WINDOW_DAYS = 31
+    DEFAULT_LIMIT = 1000
+    MAX_LIMIT = 5000
+
     def list(self, request, *args, **kwargs):
         device_param = request.query_params.get('device')
         from_date = self._parse_date(request.query_params.get('from_date'))
         to_date = self._parse_date(request.query_params.get('to_date'))
+
+        # Acotar SIEMPRE la ventana temporal: por defecto los últimos 7 días, y como
+        # mucho 31 días, para que la consulta a BD esté acotada aunque no se pasen fechas.
+        now = datetime.now(timezone.utc)
+        if to_date is None:
+            to_date = now
+        if from_date is None:
+            from_date = to_date - timedelta(days=self.DEFAULT_WINDOW_DAYS)
+        if to_date - from_date > timedelta(days=self.MAX_WINDOW_DAYS):
+            from_date = to_date - timedelta(days=self.MAX_WINDOW_DAYS)
+
+        # Paginación limit/offset: acota la memoria a 3*(offset+limit) filas.
+        def _int(name, default):
+            try:
+                return int(request.query_params.get(name, default))
+            except (TypeError, ValueError):
+                return default
+        limit = min(max(_int('limit', self.DEFAULT_LIMIT), 1), self.MAX_LIMIT)
+        offset = max(_int('offset', 0), 0)
+        cap = offset + limit
 
         # Mismo contrato que OrderingFilter con ordering_fields=['date']:
         # solo 'date'/'-date' son válidos; por defecto '-date' (el antiguo
@@ -362,7 +389,7 @@ class HistoricalMeasurementsView(generics.ListAPIView):
 
         rows = []
         for category_name, model in CATEGORY_TO_MODEL.items():
-            qs = model.objects.all()
+            qs = model.objects.filter(date__gte=from_date, date__lte=to_date)
 
             if device_param:
                 if device_param.isdigit():  # Si es un número entero
@@ -370,13 +397,10 @@ class HistoricalMeasurementsView(generics.ListAPIView):
                 else:  # Si no es número, asumimos que es un SCADA_ID
                     qs = qs.filter(device__scada_id=device_param)
 
-            if from_date:
-                qs = qs.filter(date__gte=from_date)
-            if to_date:
-                qs = qs.filter(date__lte=to_date)
-
             metrics = CATEGORY_METRICS[category_name]
-            for obj in qs.select_related('device').order_by(ordering).iterator(chunk_size=2000):
+            # [:cap] por tabla: los primeros (offset+limit) de cada tabla bastan para
+            # cubrir la página global tras el merge por fecha, sin cargar todo el rango.
+            for obj in qs.select_related('device').order_by(ordering)[:cap]:
                 obj.data = {
                     metric: value for metric in metrics
                     if (value := getattr(obj, metric)) is not None
@@ -384,8 +408,9 @@ class HistoricalMeasurementsView(generics.ListAPIView):
                 rows.append(obj)
 
         rows.sort(key=lambda o: o.date, reverse=(ordering == '-date'))
+        page = rows[offset:offset + limit]
 
-        serializer = self.get_serializer(rows, many=True)
+        serializer = self.get_serializer(page, many=True)
         return Response(serializer.data)
 
     def _parse_date(self, date_str):
