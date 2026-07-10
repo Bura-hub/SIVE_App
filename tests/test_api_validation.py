@@ -15,6 +15,7 @@ from django.test import TestCase, RequestFactory, override_settings
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from core.health_views import health_check
+from indicators.services.formatting import auto_energy_unit, format_energy_value
 from indicators.tasks import colombia_day_range
 from indicators.views import (
     ChartDataView,
@@ -51,6 +52,26 @@ class DateRangeResolverTests(TestCase):
         self.assertIsNone(err)
         self.assertEqual(start, date(2026, 7, 1))
         self.assertEqual(end, date(2026, 7, 10))
+
+
+class EnergyFormattingTests(TestCase):
+    """services/formatting.py: escalado de unidades de energía (usado por ChartDataView
+    y ConsumptionSummaryView tras la extracción de la Ola 5)."""
+
+    def test_auto_energy_unit(self):
+        self.assertEqual(auto_energy_unit(500), ("kWh", 1))
+        self.assertEqual(auto_energy_unit(5_000), ("MWh", 1_000))
+        self.assertEqual(auto_energy_unit(5_000_000), ("GWh", 1_000_000))
+
+    def test_format_kwh_escala_y_conserva_signo(self):
+        self.assertEqual(format_energy_value(1_500, "kWh"), ("1.50", "MWh"))
+        self.assertEqual(format_energy_value(-2_000_000, "kWh"), ("-2.00", "GWh"))
+        self.assertEqual(format_energy_value(500, "kWh"), ("500.00", "kWh"))
+
+    def test_format_watts_y_otras_unidades(self):
+        self.assertEqual(format_energy_value(1_500, "W"), ("1.50", "kW"))
+        self.assertEqual(format_energy_value(23.456, "°C"), ("23.5", "°C"))
+        self.assertEqual(format_energy_value(80.0, "%RH"), ("80.0", "%"))
 
 
 class ColombiaDayRangeTests(TestCase):
