@@ -1886,10 +1886,19 @@ def calculate_single_day_weather_indicators(measurements):
     # Se descartan lecturas fuera de rango físico (sensores saturados/averiados que
     # corrompían los promedios: irradiancia negativa o >1968 W/m², viento >400 km/h).
     for data in measurements:
-        # Irradiancia (W/m²): rango físico 0–1500
+        # Irradiancia (W/m²): rango físico 0–1100 y solo en horas de luz (06–18 local).
+        # Fuera de ese horario un valor alto es un sensor pegado que inflaba la
+        # acumulación diaria (llegaba a ~24 kWh/m² vs ~8 físico). Nariño es ~1°N, con
+        # día solar estable ~06–18 todo el año, así que la ventana no recorta energía real.
         irr = data['irradiance']
-        if irr is not None and 0.0 <= float(irr) <= 1500.0:
-            irradiance_values.append(float(irr))
+        if irr is not None and 0.0 <= float(irr) <= 1100.0:
+            ts = data['date']
+            try:
+                hour = ts.astimezone(COLOMBIA_TZ).hour
+            except (ValueError, AttributeError):
+                hour = 12  # sin tz utilizable: no descartar por hora
+            if 6 <= hour < 18:
+                irradiance_values.append(float(irr))
 
         # Temperatura (°C): rango plausible -20–60
         temp = data['temperature']
