@@ -71,6 +71,7 @@ jobs:
           tests.test_inverter_indicators
           tests.test_weather_range_sanitization
           tests.test_consumption_net_gross
+          tests.test_monthly_kpi
           --verbosity=2
 
   frontend-build:
