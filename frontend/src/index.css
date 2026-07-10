@@ -114,19 +114,8 @@ code {
   animation: fade-in 0.3s ease-out;
 }
 
-/* Animación de shimmer para los loaders */
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-.animate-shimmer {
-  animation: shimmer 2s infinite;
-}
+/* Shimmer para los loaders: keyframe y utilidad definidos en tailwind.config.js
+   (animate-shimmer); se eliminó el duplicado local. */
 
 /* Animación de partículas flotantes */
 @keyframes float {
@@ -165,15 +154,17 @@ code {
     content: '';
     position: absolute;
     top: 0;
-    left: -100%;
+    left: 0;
     width: 100%;
     height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-    transition: left 0.5s;
+    /* Barrido de brillo por transform (compositor) en lugar de animar `left` (layout) */
+    transform: translateX(-100%);
+    transition: transform 0.5s;
 }
 
 .login-card-enhanced:hover::before {
-    left: 100%;
+    transform: translateX(100%);
 }
 
 /* Contenedor del logo */
@@ -206,7 +197,7 @@ code {
     border: 2px solid #E5E7EB;
     border-radius: 1rem;
     outline: none;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease, background-color 0.3s ease;
     font-size: 1rem;
     color: #374151;
     background: rgba(255, 255, 255, 0.8);
@@ -236,7 +227,7 @@ code {
     cursor: pointer;
     padding: 0.25rem;
     border-radius: 0.375rem;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease;
 }
 
 .password-toggle:hover {
@@ -255,7 +246,7 @@ code {
     border: none;
     cursor: pointer;
     font-size: 1.1rem;
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
     position: relative;
     overflow: hidden;
     box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
@@ -265,15 +256,17 @@ code {
     content: '';
     position: absolute;
     top: 0;
-    left: -100%;
+    left: 0;
     width: 100%;
     height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s;
+    /* Barrido de brillo por transform (compositor) en lugar de animar `left` (layout) */
+    transform: translateX(-100%);
+    transition: transform 0.5s;
 }
 
 .enhanced-login-button:hover::before {
-    left: 100%;
+    transform: translateX(100%);
 }
 
 .enhanced-login-button:hover {
@@ -352,7 +345,7 @@ code {
     font-size: 0.875rem;
     font-weight: 500;
     text-decoration: none;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
     padding: 0.5rem 0.75rem;
     border-radius: 0.5rem;
 }
@@ -381,19 +374,7 @@ code {
     }
 }
 
-/* Animaciones adicionales */
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.5;
-    }
-}
-
-.animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
+/* animate-pulse: se usa la utilidad por defecto de Tailwind (se eliminó el override local) */
 
 /* Estilos para estados de tareas */
 .task-status {
@@ -431,7 +412,7 @@ code {
 
 /* Mejoras en las tarjetas de KPI */
 .kpi-card {
-  @apply relative overflow-hidden transition-all duration-300 hover:shadow-lg;
+  @apply relative overflow-hidden transition duration-150 hover:shadow-lg;
 }
 
 .kpi-card-update {
@@ -449,4 +430,23 @@ code {
 
 .chart-zoom-button {
   @apply p-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors;
+}
+
+/* Entrada del contenido del sidebar al expandir: solo opacity (compositor),
+   150 ms — el ancho cambia instantáneo y el fade enmascara el corte. */
+@keyframes sidebar-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.sidebar-fade-in {
+  animation: sidebar-fade-in 150ms ease-out;
+}
+
+/* Accesibilidad: desactivar animaciones/transiciones si el usuario lo prefiere */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

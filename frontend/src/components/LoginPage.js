@@ -414,7 +414,7 @@ function LoginPage({ onLoginSuccess }) {
             </div>
 
             {/* Card de login mejorado */}
-            <div className={`login-card-enhanced transform transition-all duration-1000 ease-out ${
+            <div className={`login-card-enhanced transform transition duration-300 ease-out ${
                 isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-8 opacity-0 scale-95'
             }`}>
                 {/* Logo con animación */}
@@ -521,7 +521,7 @@ function LoginPage({ onLoginSuccess }) {
                                     <button
                                         type="button"
                                         onClick={generateCaptcha}
-                                        className="captcha-refresh p-2 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors duration-200"
+                                        className="captcha-refresh p-2 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors duration-150"
                                         title="Generar nuevo código"
                                     >
                                         <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -857,7 +857,7 @@ function LoginPage({ onLoginSuccess }) {
                             <button
                                 type="submit"
                                 disabled={registerLoading}
-                                className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+                                className={`w-full py-3 px-4 rounded-lg font-medium transition duration-150 ${
                                     registerLoading 
                                         ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
                                         : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-4 focus:ring-blue-200'

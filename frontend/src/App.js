@@ -148,7 +148,7 @@ function App() {
         currentPage={currentPage}
       />
       {/* Contenedor principal de la página */}
-      <main className={`flex-1 p-8 bg-gray-100 rounded-tl-3xl shadow-inner transition-all duration-500 ease-in-out ${isSidebarMinimized ? 'ml-0' : ''}`}>
+      <main className="flex-1 p-8 bg-gray-100 rounded-tl-3xl shadow-inner">
         {/* Suspense muestra el fallback mientras se descarga el chunk de la pantalla */}
         <Suspense fallback={<PageLoader />}>
           {renderPageContent()} {/* Renderiza el componente correspondiente */}

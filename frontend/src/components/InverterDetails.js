@@ -5,6 +5,7 @@ import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import InverterFilters from './InverterFilters';
 import { buildApiUrl, ENDPOINTS } from '../utils/apiConfig';
+import { IconInverter, IconScale, IconActivity, IconWaveform, IconRefresh } from './icons';
 
 //###########################################################################
 // Importaciones Chart.js
@@ -231,11 +232,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           unit: "%", 
           change: "Sin datos", 
           status: "normal", 
-          icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M13 2L3 14h9l-1 8 11-12h-7z"></path>
-            <path d="M6 18l-2-2 2-2"></path>
-            <path d="M10 18l2-2-2-2"></path>
-          </svg>,
+          icon: <IconScale size={24} />,
           color: "text-orange-600"
         },
         frequencyStability: { 
@@ -244,11 +241,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           unit: "Hz", 
           change: "Sin datos", 
           status: "normal", 
-          icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 2v20"></path>
-            <path d="M2 12h20"></path>
-            <path d="M12 2a10 10 0 0 1 0 20"></path>
-          </svg>,
+          icon: <IconActivity size={24} />,
           color: "text-teal-600"
         },
         thdVoltage: { 
@@ -257,11 +250,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           unit: "%", 
           change: "Sin datos", 
           status: "normal", 
-          icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 12l2 2 4-4"></path>
-            <path d="M21 12c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z"></path>
-            <path d="M3 12c1 0 2-1 2-2s-1-2-2-2-2 1-2 2 1 2 2 2z"></path>
-          </svg>,
+          icon: <IconWaveform size={24} />,
           color: "text-pink-600"
         }
       };
@@ -381,11 +370,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         unit: "%", 
         change: getChangeText(averagePhaseUnbalance, "%"), 
         status: getStatus(averagePhaseUnbalance, { excellent: 1, good: 2, warning: 5 }, true), // Invertir lógica para desbalance
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M13 2L3 14h9l-1 8 11-12h-7z"></path>
-          <path d="M6 18l-2-2 2-2"></path>
-          <path d="M10 18l2-2-2-2"></path>
-        </svg>,
+        icon: <IconScale size={24} />,
         color: "text-orange-600"
       },
       frequencyStability: { 
@@ -394,11 +379,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         unit: "Hz", 
         change: getChangeText(averageFrequency, " Hz"), 
         status: getStatus(Math.abs(averageFrequency - 60), { excellent: 0.1, good: 0.5, warning: 1 }, true), // Invertir lógica para frecuencia
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M12 2v20"></path>
-          <path d="M2 12h20"></path>
-          <path d="M12 2a10 10 0 0 1 0 20"></path>
-        </svg>,
+        icon: <IconActivity size={24} />,
         color: "text-teal-600"
       },
       thdVoltage: { 
@@ -407,11 +388,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         unit: "%", 
         change: getChangeText(averageThdVoltage, "%"), 
         status: getStatus(averageThdVoltage, { excellent: 2, good: 5, warning: 8 }, true), // Invertir lógica para THD
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M9 12l2 2 4-4"></path>
-          <path d="M21 12c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z"></path>
-          <path d="M3 12c1 0 2-1 2-2s-1-2-2-2-2 1-2 2 1 2 2 2z"></path>
-        </svg>,
+        icon: <IconWaveform size={24} />,
         color: "text-pink-600"
       }
     };
@@ -903,12 +880,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         <div className="px-4 lg:px-8 py-8 lg:py-12">
           <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
             <div className="p-3 bg-white/20 rounded-xl self-start lg:self-auto">
-              <svg className="w-6 h-6 lg:w-8 lg:h-8 text-white" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
-              <rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect>
-              <path d="M7 12h2l1 2 2-4 1 2h2"></path>
-              <path d="M17 16h.01"></path>
-              <path d="M17 8h.01"></path>
-              </svg>
+              <IconInverter className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
         </div>
             <div>
               <h1 className="text-2xl lg:text-4xl font-bold text-white">Detalles de Inversores</h1>
@@ -1001,7 +973,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
               const styleColors = colorMap[item.color] || { bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
 
   return (
-                <div key={key} className={`${styleColors.bgColor} p-6 rounded-xl shadow-md border ${styleColors.borderColor} transform hover:scale-105 transition-all duration-300 hover:shadow-lg relative`}>
+                <div key={key} className={`${styleColors.bgColor} p-6 rounded-xl shadow-md border ${styleColors.borderColor} transform hover:scale-105 transition duration-300 hover:shadow-lg relative`}>
                   <div className="flex items-center justify-between mb-4">
                     <button
                       onClick={(e) => {
@@ -1019,7 +991,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                           setShowKpiInfo(key);
                         }
                       }}
-                      className={`p-2 rounded-lg ${styleColors.bgColor.replace('bg-', 'bg-').replace('-50', '-100')} hover:scale-110 transition-transform duration-200 cursor-pointer`}
+                      className={`p-2 rounded-lg ${styleColors.bgColor.replace('bg-', 'bg-').replace('-50', '-100')} hover:scale-110 transition-transform duration-150 cursor-pointer`}
                       title="Acerca de este KPI"
                     >
                       {item.icon}
@@ -1077,7 +1049,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           <button 
                 onClick={calculateInverterData}
                 disabled={inverterLoading}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition duration-150 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {inverterLoading ? (
                   <>
@@ -1088,9 +1060,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                   </>
                 ) : (
                   <>
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                    <IconRefresh className="w-4 h-4 mr-2" />
                     Calcular Datos de Inversores
                   </>
                 )}
@@ -1102,7 +1072,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         {/* Overlay de información detallada del KPI - Se superpone en toda la sección */}
         {showKpiInfo && getKpiDetailedInfo(showKpiInfo) && (
           <div 
-            className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition-all duration-500 ease-out transform ${
+            className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
               isAnimating 
                 ? 'opacity-0 scale-95 translate-y-4 backdrop-blur-none' 
                 : isOpening
@@ -1110,7 +1080,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                 : 'opacity-100 scale-100 translate-y-0 backdrop-blur-sm'
             }`}
           >
-            <div className={`flex justify-between items-start mb-6 transition-all duration-700 delay-100 ${
+            <div className={`flex justify-between items-start mb-6 transition duration-300 delay-100 ${
               isAnimating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
             }`}>
               <h3 className="font-bold text-gray-800 text-2xl">
@@ -1124,7 +1094,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                     setIsAnimating(false);
                   }, 500);
                 }}
-                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-150"
                 title="Cerrar"
               >
                 <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1134,7 +1104,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className={`bg-blue-50 p-4 rounded-xl border border-blue-200 transition-all duration-700 delay-200 ${
+              <div className={`bg-blue-50 p-4 rounded-xl border border-blue-200 transition duration-300 delay-200 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-blue-800">Descripción</span>
@@ -1143,7 +1113,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                 </p>
               </div>
               
-              <div className={`bg-green-50 p-4 rounded-xl border border-green-200 transition-all duration-700 delay-300 ${
+              <div className={`bg-green-50 p-4 rounded-xl border border-green-200 transition duration-300 delay-300 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-green-800">Cálculo</span>
@@ -1152,7 +1122,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                 </p>
               </div>
               
-              <div className={`bg-purple-50 p-4 rounded-xl border border-purple-200 transition-all duration-700 delay-400 ${
+              <div className={`bg-purple-50 p-4 rounded-xl border border-purple-200 transition duration-300 delay-400 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-purple-800">Fuente de datos</span>
@@ -1161,7 +1131,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                 </p>
               </div>
               
-              <div className={`bg-orange-50 p-4 rounded-xl border border-orange-200 transition-all duration-700 delay-500 ${
+              <div className={`bg-orange-50 p-4 rounded-xl border border-orange-200 transition duration-300 delay-500 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-orange-800">Unidades</span>
@@ -1170,7 +1140,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                 </p>
               </div>
               
-              <div className={`bg-teal-50 p-4 rounded-xl border border-teal-200 lg:col-span-2 transition-all duration-700 delay-600 ${
+              <div className={`bg-teal-50 p-4 rounded-xl border border-teal-200 lg:col-span-2 transition duration-300 delay-600 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-teal-800">Frecuencia</span>
@@ -1274,7 +1244,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
             <button
                       onClick={calculateInverterData}
                       disabled={inverterLoading}
-                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition duration-150 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {inverterLoading ? (
                         <>
@@ -1285,9 +1255,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         </>
                       ) : (
                         <>
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+                <IconRefresh className="w-5 h-5 mr-2" />
                           Calcular Datos de Inversores
                         </>
                       )}
@@ -1710,7 +1678,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                                           <tbody className="bg-white divide-y divide-gray-50">
                         {currentItems && Array.isArray(currentItems) && currentItems.length > 0 ? (
                         currentItems.map((item, index) => (
-                          <tr key={startIndex + index} className="hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 transition-all duration-200 border-b border-gray-50">
+                          <tr key={startIndex + index} className="hover:bg-red-50 transition-colors duration-150 border-b border-gray-50">
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-medium text-gray-900">
                                 {(() => {
@@ -1805,7 +1773,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         <button
                           onClick={goToPreviousPage}
                           disabled={currentPage === 1}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200 ${
+                          className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-150 ${
                             currentPage === 1
                               ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                               : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
@@ -1834,7 +1802,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               <button
                                 key={pageNum}
                                 onClick={() => goToPage(pageNum)}
-                                className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200 ${
+                                className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-150 ${
                                   currentPage === pageNum
                                     ? 'bg-red-600 text-white border-red-600'
                                     : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
@@ -1850,7 +1818,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         <button
                           onClick={goToNextPage}
                           disabled={currentPage === totalPages}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200 ${
+                          className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-150 ${
                             currentPage === totalPages
                               ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                               : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'

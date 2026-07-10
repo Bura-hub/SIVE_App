@@ -86,8 +86,8 @@ const statusIcons = {
 // Componente funcional que representa una tarjeta KPI mejorada
 export const KpiCard = ({ title, value, unit, change, status, description, icon, onClick }) => {
   const cardClasses = onClick 
-    ? "relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer hover:scale-105 active:scale-95 group"
-    : "relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 group";
+    ? "relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition duration-300 cursor-pointer hover:scale-105 active:scale-95 group"
+    : "relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition duration-300 group";
 
   const statusGradient = statusGradients[status] || "from-slate-50 to-gray-50 border-slate-200";
   const statusColor = statusColors[status] || "text-slate-600";
@@ -110,7 +110,7 @@ export const KpiCard = ({ title, value, unit, change, status, description, icon,
           </h3>
           <div className="relative">
             {/* Icono principal con efecto de brillo */}
-            <div className="p-3 bg-gradient-to-br from-gray-50 to-white rounded-xl shadow-sm border border-gray-100 group-hover:shadow-md transition-all duration-300">
+            <div className="p-3 bg-gradient-to-br from-gray-50 to-white rounded-xl shadow-sm border border-gray-100 group-hover:shadow-md transition duration-300">
               <div className="text-gray-600 group-hover:text-gray-800 transition-colors duration-300">
                 {icon}
               </div>

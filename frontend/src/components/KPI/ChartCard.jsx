@@ -351,7 +351,7 @@ export function ChartCard({
   return (
     <>
       {/* Contenedor principal de la tarjeta del gráfico */}
-      <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
+      <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition duration-300 border border-gray-100 overflow-hidden group">
         {/* Header elegante con título y controles */}
         <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between">
@@ -368,10 +368,10 @@ export function ChartCard({
             </div>
             
             {/* Botones de acciones con diseño mejorado */}
-            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition duration-300">
               <button
                 onClick={resetChartZoom}
-                className={`p-2 rounded-lg transition-all duration-200 hover:scale-105 group/btn relative ${
+                className={`p-2 rounded-lg transition duration-150 hover:scale-105 group/btn relative ${
                   isZoomed 
                     ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
                     : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
@@ -380,7 +380,7 @@ export function ChartCard({
                 disabled={!isZoomed}
               >
                 <ResetIcon />
-                <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity duration-150 whitespace-nowrap z-10">
                   {isZoomed ? 'Resetear Zoom' : 'Sin Zoom'}
                 </span>
                 {/* Indicador de zoom activo */}
@@ -390,11 +390,11 @@ export function ChartCard({
               </button>
               <button
                 onClick={() => setIsFullscreen(true)}
-                className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-105 group/btn relative"
+                className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition duration-150 hover:scale-105 group/btn relative"
                 title="Maximizar"
               >
                 <MaximizeIcon />
-                <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity duration-150 whitespace-nowrap z-10">
                   Maximizar
                 </span>
               </button>
@@ -408,7 +408,7 @@ export function ChartCard({
             <ChartComponent ref={chartRef} data={data} options={chartOptions} />
             
             {/* Overlay sutil para indicar interactividad */}
-            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-gray-50/20 pointer-events-none group-hover:to-gray-50/10 transition-all duration-300 rounded-lg"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-gray-50/20 pointer-events-none group-hover:to-gray-50/10 transition duration-300 rounded-lg"></div>
           </div>
         </div>
 
@@ -459,7 +459,7 @@ export function ChartCard({
               <div className="flex items-center space-x-3">
                 <button
                   onClick={resetChartZoom}
-                  className={`p-3 rounded-xl transition-all duration-200 hover:scale-105 relative ${
+                  className={`p-3 rounded-xl transition duration-150 hover:scale-105 relative ${
                     isZoomed 
                       ? 'text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg shadow-blue-500/25' 
                       : 'text-slate-400 bg-slate-100 hover:bg-slate-200 cursor-not-allowed'
@@ -475,7 +475,7 @@ export function ChartCard({
                 </button>
                 <button
                   onClick={() => setIsFullscreen(false)}
-                  className="p-3 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all duration-200 rounded-xl hover:scale-105"
+                  className="p-3 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition duration-150 rounded-xl hover:scale-105"
                   title="Cerrar"
                 >
                   <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -564,7 +564,7 @@ export function ChartCard({
                         <button
                           onClick={resetChartZoom}
                           disabled={!isZoomed}
-                          className={`w-full py-2 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+                          className={`w-full py-2 px-4 rounded-xl text-sm font-medium transition duration-150 ${
                             isZoomed
                               ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-md hover:shadow-lg transform hover:scale-105'
                               : 'bg-slate-100 text-slate-400 cursor-not-allowed'

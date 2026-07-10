@@ -3,6 +3,7 @@ import { KpiCard } from "./KPI/KpiCard";
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import { buildApiUrl, getDefaultFetchOptions } from '../utils/apiConfig';
+import { IconGlobe, IconRefresh } from './icons';
 
 // Componente para datos externos de energía - Integración XM
 const ExternalEnergyData = () => {
@@ -189,15 +190,17 @@ const ExternalEnergyData = () => {
             <div className="flex space-x-4">
               <button
                 onClick={fetchExternalEnergyData}
-                className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl font-medium hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="inline-flex items-center bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl font-medium hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-150 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
-                🔄 Reintentar Conexión
+                <IconRefresh className="w-4 h-4 mr-2" />
+                Reintentar Conexión
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+                className="inline-flex items-center bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition duration-150"
               >
-                🔄 Recargar Página
+                <IconRefresh className="w-4 h-4 mr-2" />
+                Recargar Página
               </button>
             </div>
           </div>
@@ -214,9 +217,7 @@ const ExternalEnergyData = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-white/20 rounded-xl">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+                <IconGlobe className="w-8 h-8 text-white" />
                 </div>
                 <div>
                 <h1 className="text-4xl font-bold text-white">Datos Energéticos Externos</h1>
@@ -259,7 +260,7 @@ const ExternalEnergyData = () => {
                 <button
                       key={period}
                       onClick={() => setDateRange(period)}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition duration-150 ${
                         dateRange === period
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -278,7 +279,7 @@ const ExternalEnergyData = () => {
               <button
                 onClick={fetchExternalEnergyData}
                 disabled={loading}
-                className="inline-flex items-center px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>
@@ -323,7 +324,7 @@ const ExternalEnergyData = () => {
               <button
                 key={section.key}
                 onClick={() => setActiveSection(section.key)}
-                className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition duration-150 ${
                   activeSection === section.key
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'

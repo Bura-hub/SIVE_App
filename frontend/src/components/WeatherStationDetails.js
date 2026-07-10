@@ -4,6 +4,7 @@ import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import WeatherStationFilters from './WeatherStationFilters';
 import { ENDPOINTS, buildApiUrl } from '../utils/apiConfig';
+import { IconCloudSun, IconRefresh, IconSun, IconWind, IconDroplets } from './icons';
 
 // Importaciones desde Chart.js y el plugin de zoom
 import {
@@ -191,6 +192,65 @@ const getPredominantWindDirection = (data) => {
   return directionNames[predominantDirection] || "N/A";
 };
 
+// Definición única de los KPIs meteorológicos base (iconos del módulo común;
+// windDirection y pvPower no tienen equivalente en el módulo y se definen aquí).
+const WEATHER_KPI_BASE = {
+  irradiance: {
+    title: "Irradiancia Acumulada",
+    value: "0.00",
+    unit: "kWh/m²",
+    change: "Este período",
+    status: "normal",
+    icon: <IconSun size={24} />,
+    color: "text-orange-600"
+  },
+  hsp: {
+    title: "Horas Solares Pico",
+    value: "0.0",
+    unit: "HSP",
+    change: "Equivalente solar",
+    status: "normal",
+    icon: <IconSun size={24} />,
+    color: "text-yellow-600"
+  },
+  windSpeed: {
+    title: "Velocidad del Viento",
+    value: "0.0",
+    unit: "km/h",
+    change: "Promedio del período",
+    status: "normal",
+    icon: <IconWind size={24} />,
+    color: "text-blue-600"
+  },
+  windDirection: {
+    title: "Dirección del Viento",
+    value: "N/A",
+    unit: "",
+    change: "Predominante",
+    status: "normal",
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>,
+    color: "text-indigo-600"
+  },
+  precipitation: {
+    title: "Precipitación Acumulada",
+    value: "0.00",
+    unit: "cm/día",
+    change: "Acumulado del período",
+    status: "normal",
+    icon: <IconDroplets size={24} />,
+    color: "text-cyan-600"
+  },
+  pvPower: {
+    title: "Potencia Fotovoltaica",
+    value: "0.0",
+    unit: "W",
+    change: "Basada en irradiancia",
+    status: "normal",
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect><path d="M7 12h2l1 2 2-4 1 2h2"></path><path d="M17 16h.01"></path><path d="M17 8h.01"></path></svg>,
+    color: "text-purple-600"
+  }
+};
+
 // Componente principal
 function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, navigateTo, isSidebarMinimized, setIsSidebarMinimized }) {
   // Estados consolidados
@@ -230,63 +290,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     setKpiData({});
   }, []);
 
-  // KPIs dinámicos basados en datos reales
-  const [kpiData, setKpiData] = useState({
-    irradiance: { 
-      title: "Irradiancia Acumulada", 
-      value: "0.00", 
-      unit: "kWh/m²", 
-      change: "Este período", 
-      status: "normal", 
-      icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66-1.41-1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 6.34-1.41-1.41"/><path d="m17.66 6.34l-1.41-1.41"/></svg>,
-      color: "text-orange-600"
-    },
-    hsp: { 
-      title: "Horas Solares Pico", 
-      value: "0.0", 
-      unit: "HSP", 
-      change: "Equivalente solar", 
-      status: "normal", 
-      icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v6"/><path d="M12 17v6"/><path d="M4.22 4.22l4.24 4.24"/><path d="M15.54 15.54l4.24 4.24"/><path d="M1 12h6"/><path d="M17 12h6"/><path d="M4.22 19.78l4.24-4.24"/><path d="M15.54 8.46l4.24-4.24"/></svg>,
-      color: "text-yellow-600"
-    },
-    windSpeed: { 
-      title: "Velocidad del Viento", 
-      value: "0.0", 
-      unit: "km/h", 
-      change: "Promedio del período", 
-      status: "normal", 
-      icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 8h10"/><path d="M4 12h16"/><path d="M8 16h8"/></svg>,
-      color: "text-blue-600"
-    },
-    windDirection: { 
-      title: "Dirección del Viento", 
-      value: "N/A", 
-      unit: "", 
-      change: "Predominante", 
-      status: "normal", 
-      icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>,
-      color: "text-indigo-600"
-    },
-    precipitation: { 
-      title: "Precipitación Acumulada", 
-      value: "0.00", 
-      unit: "cm/día", 
-      change: "Acumulado del período", 
-      status: "normal", 
-      icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/></svg>,
-      color: "text-cyan-600"
-    },
-    pvPower: { 
-      title: "Potencia Fotovoltaica", 
-      value: "0.0", 
-      unit: "W", 
-      change: "Basada en irradiancia", 
-      status: "normal", 
-      icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect><path d="M7 12h2l1 2 2-4 1 2h2"></path><path d="M17 16h.01"></path><path d="M17 8h.01"></path></svg>,
-      color: "text-purple-600"
-    }
-  });
+  // KPIs dinámicos basados en datos reales (definición base única)
+  const [kpiData, setKpiData] = useState(WEATHER_KPI_BASE);
 
   // Funciones optimizadas
   const showTransitionAnimation = (type = 'info', message = '', duration = 2000) => {
@@ -445,63 +450,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       return;
     }
     
-    // Obtener el estado inicial de kpiData para acceder a los iconos y colores
-    const initialKpiData = {
-      irradiance: { 
-        title: "Irradiancia Acumulada", 
-        value: "0.00", 
-        unit: "kWh/m²", 
-        change: "Este período", 
-        status: "normal", 
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66-1.41-1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 6.34-1.41-1.41"/><path d="m17.66 6.34l-1.41-1.41"/></svg>,
-        color: "text-orange-600"
-      },
-      hsp: { 
-        title: "Horas Solares Pico", 
-        value: "0.0", 
-        unit: "HSP", 
-        change: "Equivalente solar", 
-        status: "normal", 
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v6"/><path d="M12 17v6"/><path d="M4.22 4.22l4.24 4.24"/><path d="M15.54 15.54l4.24 4.24"/><path d="M1 12h6"/><path d="M17 12h6"/><path d="M4.22 19.78l4.24-4.24"/><path d="M15.54 8.46l4.24-4.24"/></svg>,
-        color: "text-yellow-600"
-      },
-      windSpeed: { 
-        title: "Velocidad del Viento", 
-        value: "0.0", 
-        unit: "km/h", 
-        change: "Promedio del período", 
-        status: "normal", 
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 8h10"/><path d="M4 12h16"/><path d="M8 16h8"/></svg>,
-        color: "text-blue-600"
-      },
-      windDirection: { 
-        title: "Dirección del Viento", 
-        value: "N/A", 
-        unit: "", 
-        change: "Predominante", 
-        status: "normal", 
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>,
-        color: "text-indigo-600"
-      },
-      precipitation: { 
-        title: "Precipitación Acumulada", 
-        value: "0.00", 
-        unit: "cm/día", 
-        change: "Acumulado del período", 
-        status: "normal", 
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/></svg>,
-        color: "text-cyan-600"
-      },
-      pvPower: { 
-        title: "Potencia Fotovoltaica", 
-        value: "0.0", 
-        unit: "W", 
-        change: "Basada en irradiancia", 
-        status: "normal", 
-        icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect><path d="M7 12h2l1 2 2-4 1 2h2"></path><path d="M17 16h.01"></path><path d="M17 8h.01"></path></svg>,
-        color: "text-purple-600"
-      }
-    };
+    // Iconos y colores base de los KPIs (definición única a nivel de módulo)
+    const initialKpiData = WEATHER_KPI_BASE;
     
     const kpis = {
       irradiance: {
@@ -802,14 +752,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         <div className="px-4 lg:px-8 py-8 lg:py-12">
           <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
             <div className="p-3 bg-white/20 rounded-xl self-start lg:self-auto">
-              <svg className="w-6 h-6 lg:w-8 lg:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="6" r="2"></circle>
-                <path d="M12 8v4"></path>
-                <path d="M6 20h12"></path>
-                <path d="M12 12l4 8"></path>
-                <path d="M12 12l-4 8"></path>
-                <path d="M4 10a8 8 0 0116 0"></path>
-              </svg>
+              <IconCloudSun className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
             </div>
             <div>
               <h1 className="text-2xl lg:text-4xl font-bold text-white">Estaciones Meteorológicas</h1>
@@ -905,7 +848,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 const styleColors = colorMap[item.color] || { bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
                 
                 return (
-                  <div key={key} className={`${styleColors.bgColor} p-6 rounded-xl shadow-md border ${styleColors.borderColor} transform hover:scale-105 transition-all duration-300 hover:shadow-lg relative`}>
+                  <div key={key} className={`${styleColors.bgColor} p-6 rounded-xl shadow-md border ${styleColors.borderColor} transform hover:scale-105 transition duration-300 hover:shadow-lg relative`}>
                     <div className="flex items-center justify-between mb-4">
                       <button
                         onClick={(e) => {
@@ -923,7 +866,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                             setShowKpiInfo(key);
                           }
                         }}
-                        className={`p-2 rounded-lg ${styleColors.bgColor.replace('bg-', 'bg-').replace('-50', '-100')} hover:scale-110 transition-transform duration-200 cursor-pointer`}
+                        className={`p-2 rounded-lg ${styleColors.bgColor.replace('bg-', 'bg-').replace('-50', '-100')} hover:scale-110 transition-transform duration-150 cursor-pointer`}
                         title="Acerca de este KPI"
                       >
                         {item.icon}
@@ -982,11 +925,9 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
               <button
                 onClick={calculateWeatherData}
                 disabled={weatherLoading}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition duration-150 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+                <IconRefresh className="w-4 h-4 mr-2" />
                 Calcular Datos Meteorológicos
               </button>
             </div>
@@ -996,7 +937,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         {/* Overlay de información detallada del KPI - Se superpone en toda la sección */}
         {showKpiInfo && getKpiDetailedInfo(showKpiInfo) && (
           <div 
-            className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition-all duration-500 ease-out transform ${
+            className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
               isAnimating 
                 ? 'opacity-0 scale-95 translate-y-4 backdrop-blur-none' 
                 : isOpening
@@ -1004,7 +945,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 : 'opacity-100 scale-100 translate-y-0 backdrop-blur-sm'
             }`}
           >
-            <div className={`flex justify-between items-start mb-6 transition-all duration-700 delay-100 ${
+            <div className={`flex justify-between items-start mb-6 transition duration-300 delay-100 ${
               isAnimating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
             }`}>
               <h3 className="font-bold text-gray-800 text-2xl">
@@ -1018,7 +959,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                     setIsAnimating(false);
                   }, 500);
                 }}
-                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-150"
                 title="Cerrar"
               >
                 <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1028,7 +969,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className={`bg-blue-50 p-4 rounded-xl border border-blue-200 transition-all duration-700 delay-200 ${
+              <div className={`bg-blue-50 p-4 rounded-xl border border-blue-200 transition duration-300 delay-200 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-blue-800">Descripción</span>
@@ -1037,7 +978,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 </p>
               </div>
               
-              <div className={`bg-green-50 p-4 rounded-xl border border-green-200 transition-all duration-700 delay-300 ${
+              <div className={`bg-green-50 p-4 rounded-xl border border-green-200 transition duration-300 delay-300 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-green-800">Cálculo</span>
@@ -1046,7 +987,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 </p>
               </div>
               
-              <div className={`bg-purple-50 p-4 rounded-xl border border-purple-200 transition-all duration-700 delay-400 ${
+              <div className={`bg-purple-50 p-4 rounded-xl border border-purple-200 transition duration-300 delay-400 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-purple-800">Fuente de datos</span>
@@ -1055,7 +996,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 </p>
               </div>
               
-              <div className={`bg-orange-50 p-4 rounded-xl border border-orange-200 transition-all duration-700 delay-500 ${
+              <div className={`bg-orange-50 p-4 rounded-xl border border-orange-200 transition duration-300 delay-500 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-orange-800">Unidades</span>
@@ -1064,7 +1005,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 </p>
               </div>
               
-              <div className={`bg-teal-50 p-4 rounded-xl border border-teal-200 lg:col-span-2 transition-all duration-700 delay-600 ${
+              <div className={`bg-teal-50 p-4 rounded-xl border border-teal-200 lg:col-span-2 transition duration-300 delay-600 ${
                 isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
               }`}>
                 <span className="text-base font-semibold text-teal-800">Frecuencia</span>
@@ -1653,7 +1594,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                     <tbody className="bg-white divide-y divide-y divide-gray-50">
                       {getCurrentPageData().length > 0 ? (
                         getCurrentPageData().map((item, index) => (
-                          <tr key={`${currentPage}-${index}`} className="hover:bg-gradient-to-r hover:from-orange-50 hover:to-amber-50 transition-all duration-200 border-b border-gray-50">
+                          <tr key={`${currentPage}-${index}`} className="hover:bg-orange-50 transition-colors duration-150 border-b border-gray-50">
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-medium text-gray-900">
                                 {(() => {
@@ -1751,7 +1692,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                         <button
                           onClick={() => handlePageChange(1)}
                           disabled={currentPage === 1}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition duration-150 ${
                             currentPage === 1
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                               : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-gray-400'
@@ -1766,7 +1707,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                         <button
                           onClick={() => handlePageChange(currentPage - 1)}
                           disabled={currentPage === 1}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition duration-150 ${
                             currentPage === 1
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                               : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-gray-400'
@@ -1795,7 +1736,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                               <button
                                 key={pageNum}
                                 onClick={() => handlePageChange(pageNum)}
-                                className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                className={`px-3 py-2 text-sm font-medium rounded-lg transition duration-150 ${
                                   currentPage === pageNum
                                     ? 'bg-orange-600 text-white'
                                     : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-gray-400'
@@ -1811,7 +1752,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                         <button
                           onClick={() => handlePageChange(currentPage + 1)}
                           disabled={currentPage === getTotalPages()}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition duration-150 ${
                             currentPage === getTotalPages()
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                               : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-gray-400'
@@ -1826,7 +1767,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                         <button
                           onClick={() => handlePageChange(getTotalPages())}
                           disabled={currentPage === getTotalPages()}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition duration-150 ${
                             currentPage === getTotalPages()
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                               : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-gray-400'

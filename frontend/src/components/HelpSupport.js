@@ -348,7 +348,7 @@ function HelpSupport({ onClose }) {
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all duration-200 p-3 rounded-full"
+                        className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition duration-150 p-3 rounded-full"
                     >
                         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -364,7 +364,7 @@ function HelpSupport({ onClose }) {
                                 <button
                                     key={section.id}
                                     onClick={() => setActiveSection(section.id)}
-                                    className={`w-full flex items-center px-6 py-4 rounded-2xl text-left transition-all duration-300 ${
+                                    className={`w-full flex items-center px-6 py-4 rounded-2xl text-left transition duration-300 ${
                                         activeSection === section.id
                                             ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/25 transform scale-105'
                                             : 'text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-md hover:scale-105 border border-transparent hover:border-slate-200'
@@ -392,7 +392,7 @@ function HelpSupport({ onClose }) {
 
                                 <div className="max-w-4xl mx-auto space-y-6">
                                     {helpContent[activeSection].content.map((item, index) => (
-                                        <div key={index} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-lg hover:shadow-xl transition-all duration-300">
+                                        <div key={index} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-lg hover:shadow-xl transition duration-300">
                                             <div className="flex items-start space-x-4">
                                                 <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
                                                     <span className="text-2xl">{item.icon}</span>
@@ -423,13 +423,13 @@ function HelpSupport({ onClose }) {
                                             <div className="flex justify-center space-x-4">
                                                 <button
                                                     onClick={() => setActiveSection('features')}
-                                                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+                                                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition duration-300 shadow-lg hover:shadow-xl"
                                                 >
                                                     Ver Características
                                                 </button>
                                                 <button
                                                     onClick={() => setActiveSection('navigation')}
-                                                    className="bg-white text-blue-600 px-6 py-3 rounded-xl font-semibold border-2 border-blue-200 hover:bg-blue-50 transition-all duration-300"
+                                                    className="bg-white text-blue-600 px-6 py-3 rounded-xl font-semibold border-2 border-blue-200 hover:bg-blue-50 transition duration-300"
                                                 >
                                                     Guía de Navegación
                                                 </button>
@@ -449,7 +449,7 @@ function HelpSupport({ onClose }) {
                                             </p>
                                             <button
                                                 onClick={() => setActiveSection('contact')}
-                                                className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-amber-700 hover:to-orange-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+                                                className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-amber-700 hover:to-orange-700 transition duration-300 shadow-lg hover:shadow-xl"
                                             >
                                                 Ver Información de Contacto
                                             </button>

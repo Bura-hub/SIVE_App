@@ -199,7 +199,7 @@ function ProfileImageUpload({ currentImageUrl, onImageUpdate, onImageDelete }) {
             {/* Zona de drag and drop */}
             <div
                 ref={dropZoneRef}
-                className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
+                className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition duration-300 ${
                     dragActive 
                         ? 'border-blue-500 bg-blue-50' 
                         : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'
@@ -229,7 +229,7 @@ function ProfileImageUpload({ currentImageUrl, onImageUpdate, onImageDelete }) {
                 {/* Botón de selección */}
                 <button
                     onClick={openFileSelector}
-                    className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+                    className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition duration-300 shadow-lg hover:shadow-xl"
                 >
                     Seleccionar Imagen
                 </button>
@@ -288,7 +288,7 @@ function ProfileImageUpload({ currentImageUrl, onImageUpdate, onImageDelete }) {
                                 <button
                                     onClick={handleUpload}
                                     disabled={isUploading}
-                                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-semibold hover:from-emerald-700 hover:to-teal-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isUploading ? (
                                         <div className="flex items-center space-x-2">
@@ -305,7 +305,7 @@ function ProfileImageUpload({ currentImageUrl, onImageUpdate, onImageDelete }) {
                                 <button
                                     onClick={handleDelete}
                                     disabled={isUploading}
-                                    className="px-4 py-2 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-lg font-semibold hover:from-red-700 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-4 py-2 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-lg font-semibold hover:from-red-700 hover:to-pink-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isUploading ? 'Eliminando...' : 'Eliminar'}
                                 </button>

@@ -113,15 +113,12 @@ const TransitionOverlay = ({ show, type = 'success', message = '', onComplete })
     const colors = getColors();
 
     return (
-        <div className={`fixed inset-0 bg-gradient-to-br ${colors.bg} bg-opacity-95 flex items-center justify-center z-50 backdrop-blur-sm transition-all duration-500`}>
+        <div className={`fixed inset-0 bg-gradient-to-br ${colors.bg} bg-opacity-95 flex items-center justify-center z-50 backdrop-blur-sm`}>
             <div className="flex flex-col items-center space-y-6 p-8">
                 <div className="relative">
-                    {/* Spinner principal */}
+                    {/* Spinner principal (único) */}
                     <div className={`animate-spin rounded-full h-20 w-20 border-4 ${colors.spinner}`}></div>
-                    
-                    {/* Spinner secundario con efecto ping */}
-                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-current animate-ping opacity-20"></div>
-                    
+
                     {/* Icono centrado */}
                     <div className="absolute inset-0 flex items-center justify-center">
                         {getIcon()}
@@ -137,9 +134,9 @@ const TransitionOverlay = ({ show, type = 'success', message = '', onComplete })
                     </p>
                 </div>
                 
-                {/* Barra de progreso */}
+                {/* Barra de progreso (estática) */}
                 <div className="w-64 bg-white bg-opacity-30 rounded-full h-2 overflow-hidden">
-                    <div className={`h-full bg-gradient-to-r ${colors.bg.replace('from-', '').replace('to-', '')} animate-pulse rounded-full`}></div>
+                    <div className={`h-full bg-gradient-to-r ${colors.bg.replace('from-', '').replace('to-', '')} rounded-full`}></div>
                 </div>
             </div>
         </div>

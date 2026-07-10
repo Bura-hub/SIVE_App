@@ -358,7 +358,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all duration-200 p-3 rounded-full"
+                        className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition duration-150 p-3 rounded-full"
                     >
                         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -400,7 +400,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
-                                    className={`w-full flex items-center px-6 py-4 rounded-2xl text-left transition-all duration-300 ${
+                                    className={`w-full flex items-center px-6 py-4 rounded-2xl text-left transition duration-300 ${
                                         activeTab === tab.id
                                             ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25 transform scale-105'
                                             : 'text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-md hover:scale-105 border border-transparent hover:border-slate-200'
@@ -446,7 +446,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                 type="text"
                                                 value={profileData.first_name}
                                                 onChange={(e) => setProfileData({...profileData, first_name: e.target.value})}
-                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white shadow-sm hover:shadow-md"
                                                 required
                                             />
                                         </div>
@@ -458,7 +458,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                 type="text"
                                                 value={profileData.last_name}
                                                 onChange={(e) => setProfileData({...profileData, last_name: e.target.value})}
-                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white shadow-sm hover:shadow-md"
                                                 required
                                             />
                                         </div>
@@ -472,7 +472,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                             type="email"
                                             value={profileData.email}
                                             onChange={(e) => setProfileData({...profileData, email: e.target.value})}
-                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white shadow-sm hover:shadow-md"
                                             required
                                         />
                                     </div>
@@ -485,7 +485,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                             type="tel"
                                             value={profileData.phone_number}
                                             onChange={(e) => setProfileData({...profileData, phone_number: e.target.value})}
-                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white shadow-sm hover:shadow-md"
                                             placeholder="+1 (555) 123-4567"
                                         />
                                     </div>
@@ -498,7 +498,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                             value={profileData.bio}
                                             onChange={(e) => setProfileData({...profileData, bio: e.target.value})}
                                             rows={4}
-                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md resize-none"
+                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white shadow-sm hover:shadow-md resize-none"
                                             placeholder="Cuéntanos sobre ti..."
                                         />
                                     </div>
@@ -511,7 +511,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                             type="date"
                                             value={profileData.date_of_birth}
                                             onChange={(e) => setProfileData({...profileData, date_of_birth: e.target.value})}
-                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white shadow-sm hover:shadow-md"
                                         />
                                     </div>
                                     
@@ -519,7 +519,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                         <button
                                             type="submit"
                                             disabled={loading}
-                                            className={`w-full py-4 px-6 rounded-2xl font-semibold text-lg transition-all duration-300 ${
+                                            className={`w-full py-4 px-6 rounded-2xl font-semibold text-lg transition duration-300 ${
                                                 loading
                                                     ? 'bg-slate-400 text-slate-200 cursor-not-allowed'
                                                     : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-500/25 shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
@@ -583,7 +583,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                         type={showPasswords.current ? "text" : "password"}
                                                         value={passwordData.current_password}
                                                         onChange={(e) => setPasswordData({...passwordData, current_password: e.target.value})}
-                                                        className="w-full px-4 py-3 pr-14 border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                                                        className="w-full px-4 py-3 pr-14 border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition duration-150 bg-white shadow-sm hover:shadow-md"
                                                         required
                                                     />
                                                     <button
@@ -615,7 +615,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                             type={showPasswords.new ? "text" : "password"}
                                                             value={passwordData.new_password}
                                                             onChange={(e) => setPasswordData({...passwordData, new_password: e.target.value})}
-                                                            className="w-full px-4 py-3 pr-14 border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                                                            className="w-full px-4 py-3 pr-14 border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition duration-150 bg-white shadow-sm hover:shadow-md"
                                                             required
                                                         />
                                                         <button
@@ -646,7 +646,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                             type={showPasswords.confirm ? "text" : "password"}
                                                             value={passwordData.confirm_password}
                                                             onChange={(e) => setPasswordData({...passwordData, confirm_password: e.target.value})}
-                                                            className="w-full px-4 py-3 pr-14 border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                                                            className="w-full px-4 py-3 pr-14 border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition duration-150 bg-white shadow-sm hover:shadow-md"
                                                             required
                                                         />
                                                         <button
@@ -673,7 +673,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                 <button
                                                     type="submit"
                                                     disabled={loading}
-                                                    className={`w-full py-4 px-6 rounded-2xl font-semibold text-lg transition-all duration-300 ${
+                                                    className={`w-full py-4 px-6 rounded-2xl font-semibold text-lg transition duration-300 ${
                                                         loading
                                                             ? 'bg-slate-400 text-slate-200 cursor-not-allowed'
                                                             : 'bg-gradient-to-r from-emerald-600 to-green-600 text-white hover:from-emerald-700 hover:to-green-700 focus:ring-4 focus:ring-emerald-500/25 shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
@@ -713,7 +713,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                         <h4 className="text-xl font-semibold text-slate-700">Dispositivos Conectados</h4>
                                         <button
                                             onClick={handleLogoutAllDevices}
-                                            className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-6 py-3 rounded-xl hover:from-red-600 hover:to-rose-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-semibold"
+                                            className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-6 py-3 rounded-xl hover:from-red-600 hover:to-rose-700 transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-semibold"
                                         >
                                             Cerrar Todas las Sesiones
                                         </button>
@@ -727,7 +727,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                     ) : activeSessions.length > 0 ? (
                                         <div className="grid gap-4">
                                             {activeSessions.map((session, index) => (
-                                                <div key={index} className="bg-gradient-to-r from-white to-slate-50 rounded-2xl p-6 border border-slate-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
+                                                <div key={index} className="bg-gradient-to-r from-white to-slate-50 rounded-2xl p-6 border border-slate-200 shadow-lg hover:shadow-xl transition duration-300 hover:scale-[1.02]">
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center space-x-6">
                                                             <div className="w-14 h-14 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-2xl flex items-center justify-center shadow-md">
@@ -745,7 +745,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                         </div>
                                                         <button
                                                             onClick={() => handleLogoutDevice(session.id)}
-                                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-3 rounded-xl transition-all duration-200"
+                                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-3 rounded-xl transition duration-150"
                                                         >
                                                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

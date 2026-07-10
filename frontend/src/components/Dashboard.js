@@ -1,7 +1,18 @@
 // Importaciones necesarias de React y componentes personalizados
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
+import {
+  IconZap,
+  IconSolarPanel,
+  IconScale,
+  IconInverter,
+  IconPower,
+  IconThermometer,
+  IconDroplets,
+  IconWind,
+  IconSun
+} from './icons';
 
 // Utilidades para manejo de fechas en zona horaria de Colombia
 import { 
@@ -156,37 +167,35 @@ export class TaskManager {
 }
 
 // Definir los iconos fuera del componente ya que son constantes
+// (elementos JSX ya instanciados: se consumen como {item.icon} en el render)
 const Icons = {
-  consumption: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-zap" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 11-12h-9l1-8z"></path></svg>,
-  
-  generation: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-solar-panel" aria-hidden="true"><path d="M12 2v20"></path><path d="M2 12h20"></path><path d="M20 12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"></path><path d="M4 12V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8"></path><path d="M12 6v4"></path><path d="M8 8h8"></path></svg>,
-  
-  balance: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-scale" aria-hidden="true"><path d="M12 3V19"></path><path d="M6 15H18"></path><path d="M14 11V19"></path><path d="M10 11V19"></path><path d="M12 19L19 12L22 15L12 19"></path><path d="M12 19L5 12L2 15L12 19"></path></svg>,
-  
-  inverters: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-cpu" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><path d="M9 1v3"></path><path d="M15 1v3"></path><path d="M9 21v3"></path><path d="M15 21v3"></path><path d="M1 9h3"></path><path d="M1 15h3"></path><path d="M21 9h3"></path><path d="M21 15h3"></path></svg>,
-  
-  power: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-power" aria-hidden="true"><path d="M12 2v5"></path><path d="M18 13v-2"></path><path d="M6 13v-2"></path><path d="M4.9 16.5l3.5-3.5"></path><path d="M19.1 16.5l-3.5-3.5"></path><path d="M12 19v3"></path><path d="M12 12v4"></path></svg>,
-  
-  temperature: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-thermometer" aria-hidden="true"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"></path></svg>,
-  
-  humidity: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-droplets" aria-hidden="true"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"></path><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"></path></svg>,
-  
-  wind: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-wind" aria-hidden="true"><path d="M5 8h10"></path><path d="M4 12h16"></path><path d="M8 16h8"></path></svg>,
-  
-  irradiance: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="m4.93 4.93 4.24 4.24"></path><path d="m14.83 9.17 4.24-4.24"></path><path d="m14.83 14.83 4.24 4.24"></path><path d="m9.17 14.83-4.24 4.24"></path><path d="M3 12h1"></path><path d="M12 3v1"></path><path d="M12 20v1"></path><path d="M20 12h1"></path><path d="M3 12h1"></path><path d="M12 3v1"></path><path d="M12 20v1"></path><path d="M20 12h1"></path></svg>
+  consumption: <IconZap size={24} />,
+  generation: <IconSolarPanel size={24} />,
+  balance: <IconScale size={24} />,
+  inverters: <IconInverter size={24} />,
+  power: <IconPower size={24} />,
+  temperature: <IconThermometer size={24} />,
+  humidity: <IconDroplets size={24} />,
+  wind: <IconWind size={24} />,
+  irradiance: <IconSun size={24} />
 };
 
 // Componente principal del dashboard
 function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isSidebarMinimized, setIsSidebarMinimized }) {
+  // Registro de timeouts de animación para limpiarlos al desmontar (evita
+  // setState sobre un componente desmontado)
+  const timeoutsRef = useRef([]);
+  useEffect(() => () => timeoutsRef.current.forEach(clearTimeout), []);
+
   // Primero definimos la función showTransitionAnimation
   const showTransitionAnimation = useCallback((type = 'info', message = '', duration = 2000) => {
     setTransitionType(type);
     setTransitionMessage(message);
     setShowTransition(true);
-    
-      setTimeout(() => {
+
+    timeoutsRef.current.push(setTimeout(() => {
       setShowTransition(false);
-    }, duration);
+    }, duration));
   }, []);
 
   // Luego definimos handleTaskStatusChange que usa showTransitionAnimation
@@ -969,7 +978,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                 disabled={taskExecuting}
                 className={`
                   group relative inline-flex items-center justify-center px-6 py-3 
-                  text-sm font-semibold text-white transition-all duration-300 
+                  text-sm font-semibold text-white transition duration-150
                   rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 
                   disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
                   ${taskExecuting 
@@ -989,7 +998,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     </>
                   ) : (
                     <>
-                      <svg className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-white group-hover:scale-110 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                       <span>Ejecutar Tareas</span>
@@ -1091,7 +1100,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                 return (
                   <div 
                     key={key} 
-                    className={`${styleColors.bgColor} p-6 rounded-xl shadow-md border ${styleColors.borderColor} transform hover:scale-105 transition-all duration-300 hover:shadow-lg ${item.onClick ? 'cursor-pointer' : ''} relative`}
+                    className={`${styleColors.bgColor} p-6 rounded-xl shadow-md border ${styleColors.borderColor} transform hover:scale-105 transition duration-150 hover:shadow-lg ${item.onClick ? 'cursor-pointer' : ''} relative`}
                     onClick={item.onClick || undefined}
                   >
                     <div className="flex items-center justify-between mb-4">
@@ -1101,17 +1110,17 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                           if (showKpiInfo === key) {
                             // Cerrar con animación
                             setIsAnimating(true);
-                            setTimeout(() => {
+                            timeoutsRef.current.push(setTimeout(() => {
                               setShowKpiInfo(null);
                               setIsAnimating(false);
-                            }, 500);
+                            }, 300));
                           } else {
                             // Abrir con animación
                             setIsOpening(true);
                             setShowKpiInfo(key);
                           }
                         }}
-                        className={`p-2 rounded-lg ${styleColors.bgColor.replace('bg-', 'bg-').replace('-50', '-100')} hover:scale-110 transition-transform duration-200 cursor-pointer`}
+                        className={`p-2 rounded-lg ${styleColors.bgColor.replace('bg-', 'bg-').replace('-50', '-100')} hover:scale-110 transition-transform duration-150 cursor-pointer`}
                         title="Acerca de este KPI"
                       >
                         {item.icon}
@@ -1181,7 +1190,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
             {/* Overlay de información detallada del KPI - Se superpone en toda la sección */}
             {showKpiInfo && getKpiDetailedInfo(showKpiInfo) && (
               <div 
-                className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition-all duration-500 ease-out transform ${
+                className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
                   isAnimating 
                     ? 'opacity-0 scale-95 translate-y-4 backdrop-blur-none' 
                     : isOpening
@@ -1189,7 +1198,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     : 'opacity-100 scale-100 translate-y-0 backdrop-blur-sm'
                 }`}
               >
-                <div className={`flex justify-between items-start mb-6 transition-all duration-700 delay-100 ${
+                <div className={`flex justify-between items-start mb-6 transition duration-300 delay-100 ${
                   isAnimating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
                 }`}>
                   <h3 className="font-bold text-gray-800 text-2xl">
@@ -1198,12 +1207,12 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                   <button
                     onClick={() => {
                       setIsAnimating(true);
-                      setTimeout(() => {
+                      timeoutsRef.current.push(setTimeout(() => {
                         setShowKpiInfo(null);
                         setIsAnimating(false);
-                      }, 500);
+                      }, 300));
                     }}
-                    className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+                    className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-150"
                     title="Cerrar"
                   >
                     <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1213,7 +1222,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                 </div>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className={`bg-blue-50 p-4 rounded-xl border border-blue-200 transition-all duration-700 delay-200 ${
+                  <div className={`bg-blue-50 p-4 rounded-xl border border-blue-200 transition duration-300 delay-150 ${
                     isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
                   }`}>
                     <span className="text-base font-semibold text-blue-800">Descripción</span>
@@ -1222,7 +1231,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     </p>
                   </div>
                   
-                  <div className={`bg-green-50 p-4 rounded-xl border border-green-200 transition-all duration-700 delay-300 ${
+                  <div className={`bg-green-50 p-4 rounded-xl border border-green-200 transition duration-300 delay-150 ${
                     isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
                   }`}>
                     <span className="text-base font-semibold text-green-800">Cálculo</span>
@@ -1231,7 +1240,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     </p>
                   </div>
                   
-                  <div className={`bg-purple-50 p-4 rounded-xl border border-purple-200 transition-all duration-700 delay-400 ${
+                  <div className={`bg-purple-50 p-4 rounded-xl border border-purple-200 transition duration-300 delay-150 ${
                     isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
                   }`}>
                     <span className="text-base font-semibold text-purple-800">Fuente de datos</span>
@@ -1240,7 +1249,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     </p>
                   </div>
                   
-                  <div className={`bg-orange-50 p-4 rounded-xl border border-orange-200 transition-all duration-700 delay-500 ${
+                  <div className={`bg-orange-50 p-4 rounded-xl border border-orange-200 transition duration-300 delay-150 ${
                     isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
                   }`}>
                     <span className="text-base font-semibold text-orange-800">Unidades</span>
@@ -1249,7 +1258,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     </p>
                   </div>
                   
-                  <div className={`bg-teal-50 p-4 rounded-xl border border-teal-200 lg:col-span-2 transition-all duration-700 delay-600 ${
+                  <div className={`bg-teal-50 p-4 rounded-xl border border-teal-200 lg:col-span-2 transition duration-300 delay-150 ${
                     isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
                   }`}>
                     <span className="text-base font-semibold text-teal-800">Frecuencia</span>

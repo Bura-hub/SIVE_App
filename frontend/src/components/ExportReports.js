@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import TransitionOverlay from './TransitionOverlay';
 import { formatDateForAPI } from '../utils/dateUtils';
 import { ENDPOINTS, buildApiUrl, getDefaultFetchOptions, handleApiResponse, fetchWithAuth } from '../utils/apiConfig';
+import { IconFileDown, IconDownload } from './icons';
 
 // Límite de sondeos de estado por reporte (cada 2-5 s → ~5-12 min máximo)
 const MAX_STATUS_CHECKS = 150;
@@ -647,9 +648,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
         <div className="px-4 lg:px-8 py-8 lg:py-12">
           <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
             <div className="p-3 bg-white/20 rounded-xl self-start lg:self-auto">
-              <svg className="w-6 h-6 lg:w-8 lg:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+              <IconFileDown className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
             </div>
             <div>
               <h1 className="text-2xl lg:text-4xl font-bold text-white">Exportar Reportes</h1>
@@ -670,9 +669,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
             
             {/* Aviso estático para formatos disponibles */}
             <div className="flex items-center bg-white/20 backdrop-blur-sm border border-white/30 text-white px-3 lg:px-4 py-2 rounded-full text-xs lg:text-sm font-medium w-full sm:w-auto justify-center lg:justify-start">
-              <svg className="w-4 lg:w-5 h-4 lg:h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
+              <IconDownload className="w-4 lg:w-5 h-4 lg:h-5 mr-2" />
               <span className="hidden sm:inline">CSV (.csv) • PDF (.pdf) • Excel (.xlsx)</span>
               <span className="sm:hidden">Múltiples formatos</span>
             </div>
@@ -914,7 +911,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                className="bg-blue-600 h-2 rounded-full transition duration-300 ease-out"
                 style={{ width: `${exportProgress}%` }}
               ></div>
             </div>
@@ -929,7 +926,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           <button
             onClick={handleExport}
             disabled={loading || !selectedInstitution || !selectedCategory || selectedDevices.length === 0 || !reportType}
-            className="w-full sm:w-auto px-6 lg:px-8 py-3 lg:py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 font-semibold text-base lg:text-lg shadow-lg"
+            className="w-full sm:w-auto px-6 lg:px-8 py-3 lg:py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition transform hover:scale-105 font-semibold text-base lg:text-lg shadow-lg"
           >
             {loading ? (
               <div className="flex items-center justify-center">
@@ -1053,7 +1050,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                           {exportItem.status === 'Pending' && reportProgress[exportItem.id] !== undefined && (
                             <div className="w-full bg-gray-200 rounded-full h-1.5">
                               <div 
-                                className="bg-blue-600 h-1.5 rounded-full transition-all duration-300 ease-out"
+                                className="bg-blue-600 h-1.5 rounded-full transition duration-300 ease-out"
                                 style={{ width: `${reportProgress[exportItem.id]}%` }}
                               ></div>
                             </div>
@@ -1072,9 +1069,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                             onClick={() => downloadReport(exportItem.id)}
                             disabled={exportItem.status !== 'Completed'}
                           >
-                            <svg className="w-3 lg:w-4 h-3 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
+                            <IconDownload className="w-3 lg:w-4 h-3 lg:h-4" />
                           </button>
                           <button 
                             className="text-purple-600 hover:text-purple-900 transition-colors p-1 rounded hover:bg-purple-50"
