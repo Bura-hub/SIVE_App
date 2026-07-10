@@ -2477,8 +2477,10 @@ def generate_electric_meter_report(institution_id, devices, report_type, time_ra
     
     # Obtener datos según el tipo de reporte
     if report_type == 'Resumen de Consumo':
-        data = ElectricMeterEnergyConsumption.objects.filter(filters).select_related('device')
-        columns = ['device__name', 'date', 'total_imported_energy', 'total_exported_energy', 'net_energy_consumption']
+        # Repuntado a ElectricMeterIndicators (fuente única, energía saneada anti
+        # roll-over) en vez de ElectricMeterEnergyConsumption, que estaba vacía.
+        data = ElectricMeterIndicators.objects.filter(filters).select_related('device')
+        columns = ['device__name', 'date', 'imported_energy_kwh', 'exported_energy_kwh', 'net_energy_consumption_kwh']
         
     elif report_type == 'Análisis de Demanda':
         data = ElectricMeterIndicators.objects.filter(filters).select_related('device')
@@ -2489,8 +2491,9 @@ def generate_electric_meter_report(institution_id, devices, report_type, time_ra
         columns = ['device__name', 'date', 'max_voltage_thd_pct', 'max_current_thd_pct', 'avg_power_factor']
         
     elif report_type == 'Balance Energético':
-        data = ElectricMeterEnergyConsumption.objects.filter(filters).select_related('device')
-        columns = ['device__name', 'date', 'imported_energy_low', 'imported_energy_high', 'exported_energy_low', 'exported_energy_high']
+        # Repuntado a ElectricMeterIndicators (energía saneada) en vez de la tabla vacía.
+        data = ElectricMeterIndicators.objects.filter(filters).select_related('device')
+        columns = ['device__name', 'date', 'imported_energy_kwh', 'exported_energy_kwh', 'net_energy_consumption_kwh']
         
     elif report_type == 'Reporte Integral':
         data = ElectricMeterIndicators.objects.filter(filters).select_related('device')
