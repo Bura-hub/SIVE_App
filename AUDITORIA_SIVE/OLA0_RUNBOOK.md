@@ -50,17 +50,20 @@ crontab -e
 ```
 Además, configura una **copia off-host** de `backups/` (rsync/scp a otra máquina): el volumen de Postgres vive en el mismo disco del host.
 
-### 4. Rotar SECRET_KEY y blindar .env  (invalida sesiones de /admin — hazlo en ventana tranquila)
-```bash
-# generar clave nueva
-NEW_KEY=$(docker compose -f docker-compose.prod.yml exec -T backend python -c "from django.core.management.utils import get_random_secret_key as g; print(g())")
-# editar .env: reemplazar la línea SECRET_KEY=django-insecure-... por SECRET_KEY=$NEW_KEY
-# (los tokens de la app viven en BD; solo caen sesiones de admin)
-chmod 600 .env
-# purgar variables legacy no usadas por el compose:
-#   password_postgres, wsl_password, password_SIVE  (borrar esas líneas)
-docker compose -f docker-compose.prod.yml up -d backend celery_worker celery_beat
-```
+### 4. Rotar SECRET_KEY y blindar .env  ✅ HECHO (2026-07-10)
+SECRET_KEY rotada, REDIS_PASSWORD rotada, `chmod 600 .env`, y purgadas las legacy
+`password_postgres`/`wsl_password`/`password_SIVE`. Verificado: 0 warnings de compose,
+`.env`==runtime (86 chars), health 200, worker reconectado a Redis.
+
+> **GOTCHA importante:** `get_random_secret_key()` puede incluir `$`, y como este proyecto
+> **usa interpolación de compose dentro del propio `.env`** (p.ej. `REACT_APP_FRONTEND_URL=...${DOMAIN_NAME}...`),
+> compose interpreta el `$` de la clave como variable y la MUTILA (síntoma: `WARN "h" variable is not set`
+> y `len(.env) != len(settings.SECRET_KEY)`). **Generar siempre la SECRET_KEY sin `$`:**
+> ```bash
+> NEW_SECRET="$(docker compose -f docker-compose.prod.yml exec -T backend \
+>   python -c 'import secrets; print(secrets.token_urlsafe(64))')"   # solo [A-Za-z0-9_-]
+> ```
+> El REDIS_PASSWORD con `token_hex` ya es seguro (solo hex).
 
 ### 6. Disco al 86% — limpieza COORDINADA (afecta a otros proyectos del host)
 ```bash
