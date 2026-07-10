@@ -1,5 +1,5 @@
 # Django Core
-Django==5.2.4
+Django==5.2.16
 djangorestframework==3.16.0
 django-cors-headers==4.7.0
 django-filter==25.1
@@ -32,10 +32,10 @@ reportlab==4.4.3
 pydataxm==0.3.16
 
 # HTTP Requests
-requests==2.32.4
+requests==2.34.2
 
 # Image Processing
-pillow==11.3.0
+pillow==12.3.0
 
 # Environment
 python-dotenv==1.1.1
