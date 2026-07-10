@@ -11,10 +11,11 @@ export const ENDPOINTS = {
     tasks: '/api/dashboard/tasks/'
   },
   electrical: {
-    meters: '/api/electric-meters/',
-    consumption: '/api/electric-meters/',
-    details: '/api/electric-meters/',
-    energy: '/api/electrical/energy/',
+    // meters/consumption/details apuntan al endpoint de indicadores (fuente única);
+    // los antiguos /api/electric-meters/ y /api/electrical/energy/ se retiraron (tablas vacías).
+    meters: '/api/electric-meter-indicators/',
+    consumption: '/api/electric-meter-indicators/',
+    details: '/api/electric-meter-indicators/',
     indicators: '/api/electric-meter-indicators/',
     institutions: '/api/institutions/',
     devices: '/api/electric-meters/list/',

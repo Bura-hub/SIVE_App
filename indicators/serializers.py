@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import MonthlyConsumptionKPI, DailyChartData, ElectricMeterConsumption, ElectricMeterChartData, ElectricMeterEnergyConsumption, ElectricMeterIndicators, InverterIndicators, InverterChartData, WeatherStationIndicators, WeatherStationChartData
+from .models import MonthlyConsumptionKPI, DailyChartData, ElectricMeterIndicators, InverterIndicators, InverterChartData, WeatherStationIndicators, WeatherStationChartData
 
 class MonthlyConsumptionKPISerializer(serializers.ModelSerializer):
     class Meta:
@@ -9,22 +9,6 @@ class MonthlyConsumptionKPISerializer(serializers.ModelSerializer):
 class DailyChartDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyChartData
-        fields = '__all__'
-
-class ElectricMeterConsumptionSerializer(serializers.ModelSerializer):
-    device_name = serializers.CharField(source='device.name', read_only=True)
-    institution_name = serializers.CharField(source='institution.name', read_only=True)
-    
-    class Meta:
-        model = ElectricMeterConsumption
-        fields = '__all__'
-
-class ElectricMeterChartDataSerializer(serializers.ModelSerializer):
-    device_name = serializers.CharField(source='device.name', read_only=True)
-    institution_name = serializers.CharField(source='institution.name', read_only=True)
-    
-    class Meta:
-        model = ElectricMeterChartData
         fields = '__all__'
 
 # Serializer para el endpoint de cálculo de medidores eléctricos
@@ -48,21 +32,6 @@ class ElectricMeterCalculationRequestSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="ID específico del medidor (opcional)"
     )
-
-# indicators/serializers.py
-class ElectricMeterEnergySerializer(serializers.ModelSerializer):
-    device_name = serializers.CharField(source='device.name', read_only=True)
-    institution_name = serializers.CharField(source='institution.name', read_only=True)
-    
-    class Meta:
-        model = ElectricMeterEnergyConsumption
-        fields = [
-            'id', 'device', 'device_name', 'institution', 'institution_name',
-            'date', 'time_range', 'imported_energy_low', 'imported_energy_high',
-            'total_imported_energy', 'exported_energy_low', 'exported_energy_high',
-            'total_exported_energy', 'net_energy_consumption', 'measurement_count',
-            'last_measurement_date', 'created_at', 'updated_at'
-        ]
 
 # Serializer para la respuesta del cálculo de medidores eléctricos
 class ElectricMeterCalculationResponseSerializer(serializers.Serializer):
