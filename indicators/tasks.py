@@ -3377,13 +3377,18 @@ def format_file_size(size_bytes):
     return f"{size_bytes:.1f} {size_names[i]}"
 
 
-def get_report_status(task_id):
+def get_report_status(task_id, user_id=None):
     """
-    Obtiene el estado de un reporte
+    Obtiene el estado de un reporte.
+
+    Si se pasa user_id, el reporte debe pertenecer a ese usuario (evita IDOR:
+    que un usuario consulte el estado/URL de reportes de otro por task_id).
     """
     try:
-        
-        report = GeneratedReport.objects.get(task_id=task_id)
+        lookup = {'task_id': task_id}
+        if user_id is not None:
+            lookup['user_id'] = user_id
+        report = GeneratedReport.objects.get(**lookup)
         
         status_info = {
             'task_id': report.task_id,
@@ -3410,13 +3415,18 @@ def get_report_status(task_id):
         return None
 
 
-def get_report_file(task_id):
+def get_report_file(task_id, user_id=None):
     """
-    Obtiene la información del archivo de un reporte
+    Obtiene la información del archivo de un reporte.
+
+    Si se pasa user_id, el reporte debe pertenecer a ese usuario (evita IDOR:
+    que un usuario descargue reportes de otro conociendo el task_id).
     """
     try:
-        
-        report = GeneratedReport.objects.get(task_id=task_id, status='completed')
+        lookup = {'task_id': task_id, 'status': 'completed'}
+        if user_id is not None:
+            lookup['user_id'] = user_id
+        report = GeneratedReport.objects.get(**lookup)
         
         if not report.file_path or not os.path.exists(report.file_path):
             return None

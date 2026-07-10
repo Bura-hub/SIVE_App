@@ -80,7 +80,9 @@ services:
     image: mtesive_app-backend:latest
     container_name: mte_backend_prod
     ports:
-      - "${BACKEND_PORT:-3504}:8000"
+      # Solo loopback: Apache proxya desde 127.0.0.1. Evita exponer el backend en
+      # HTTP plano por 0.0.0.0 (tokens en claro puenteando el TLS de Apache).
+      - "127.0.0.1:${BACKEND_PORT:-3504}:8000"
     environment:
       - DEBUG=False
       - SECRET_KEY=${SECRET_KEY}
@@ -269,7 +271,8 @@ services:
     image: mtesive_app-frontend:latest
     container_name: mte_frontend_prod
     ports:
-      - "${FRONTEND_PORT:-3503}:3000"
+      # Solo loopback: Apache proxya desde 127.0.0.1 hacia este puerto.
+      - "127.0.0.1:${FRONTEND_PORT:-3503}:3000"
     depends_on:
       backend:
         condition: service_healthy

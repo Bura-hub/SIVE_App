@@ -10,6 +10,7 @@ import logging
 from datetime import datetime, timedelta, timezone, date
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
 import uuid 
 import requests
 import calendar
@@ -88,6 +89,7 @@ def resolve_indicators_date_range(start_date_str, end_date_str):
     return start_date, end_date, None
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ConsumptionSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -516,6 +518,7 @@ class ConsumptionSummaryView(APIView):
 
 # Modificar la vista ChartDataView para incluir unidades automáticas
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ChartDataView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -816,6 +819,7 @@ class CalculateDailyDataView(APIView):
 
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ElectricMeterIndicatorsView(APIView):
     """
     Vista para obtener indicadores de medidores eléctricos filtrados por:
@@ -1071,6 +1075,7 @@ class ElectricMeterIndicatorsView(APIView):
 
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class InstitutionsListView(APIView):
     """
     Vista para obtener la lista de instituciones disponibles
@@ -1114,6 +1119,7 @@ class InstitutionsListView(APIView):
 
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ElectricMetersListView(APIView):
     """
     Vista para obtener la lista de medidores eléctricos por institución
@@ -1474,6 +1480,7 @@ class ElectricMeterEnergyViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.order_by('date')
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Vista para obtener indicadores eléctricos de medidores.
@@ -1556,6 +1563,7 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
 # ========================= Vistas para Indicadores de Inversores =========================
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 @extend_schema(
     tags=["Inversores"],
     description="Lista todos los indicadores de inversores con opciones de filtrado.",
@@ -1935,6 +1943,7 @@ class InvertersListView(APIView):
 
 # Vistas para estaciones meteorológicas
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class WeatherStationIndicatorsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -2046,6 +2055,7 @@ class WeatherStationIndicatorsView(APIView):
 
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
+@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class WeatherStationChartDataView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -2484,9 +2494,10 @@ class ReportStatusView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Primero intentar consultar estado desde la base de datos
+            # Primero intentar consultar estado desde la base de datos.
+            # Se filtra por user_id para no filtrar estado/URL de reportes ajenos (IDOR).
             from .tasks import get_report_status
-            status_info = get_report_status(task_id)
+            status_info = get_report_status(task_id, user_id=request.user.id)
             
             if status_info:
                 return Response(status_info)
@@ -2610,9 +2621,10 @@ class DownloadReportView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Obtener información del reporte
+            # Obtener información del reporte.
+            # Se filtra por user_id para impedir descargar reportes de otro usuario (IDOR).
             from .tasks import get_report_file
-            report_file = get_report_file(task_id)
+            report_file = get_report_file(task_id, user_id=request.user.id)
             
             if not report_file:
                 return Response(

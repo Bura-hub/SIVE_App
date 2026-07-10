@@ -6,6 +6,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.db import models
 from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
 from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
@@ -49,6 +50,7 @@ def _is_valid_number(value):
 
 
 @cache_page(XM_CACHE_TTL)
+@vary_on_headers('Authorization')
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def energy_prices(request):
@@ -351,6 +353,7 @@ def sync_external_data(request):
 
 
 @cache_page(XM_CACHE_TTL)
+@vary_on_headers('Authorization')
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def market_overview(request):
@@ -460,6 +463,7 @@ def _xm_metric_response(request, fetch_method, prefix, default_range, error_labe
 
 
 @cache_page(XM_CACHE_TTL)
+@vary_on_headers('Authorization')
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def generation_data(request):
@@ -468,6 +472,7 @@ def generation_data(request):
 
 
 @cache_page(XM_CACHE_TTL)
+@vary_on_headers('Authorization')
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def demand_data(request):
@@ -476,6 +481,7 @@ def demand_data(request):
 
 
 @cache_page(XM_CACHE_TTL)
+@vary_on_headers('Authorization')
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def emissions_data(request):
@@ -483,6 +489,7 @@ def emissions_data(request):
     return _xm_metric_response(request, 'fetch_emissions_data', 'emissions', 'month', 'emisiones')
 
 @cache_page(XM_CACHE_TTL)
+@vary_on_headers('Authorization')
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def exports_data(request):
@@ -490,6 +497,7 @@ def exports_data(request):
     return _xm_metric_response(request, 'fetch_exports_data', 'exports', 'week', 'exportaciones')
 
 @cache_page(XM_CACHE_TTL)
+@vary_on_headers('Authorization')
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def imports_data(request):

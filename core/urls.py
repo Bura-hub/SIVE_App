@@ -86,6 +86,13 @@ import os
 
 class MediaFileView(View):
     def get(self, request, path):
+        # Los reportes generados son datos sensibles por usuario: NO deben servirse
+        # directamente por /media/ (cualquiera adivinando el nombre los descargaría).
+        # Su única vía es /api/reports/download/, que valida propiedad del reporte.
+        # Aquí solo quedan assets no sensibles (p.ej. avatares, que van en <img>).
+        norm = path.replace('\\', '/').lstrip('/')
+        if norm == 'reports' or norm.startswith('reports/'):
+            raise Http404("File not found")
         # safe_join impide path traversal (../, rutas absolutas, %2e%2e codificado):
         # lanza SuspiciousFileOperation si la ruta resuelta escapa de MEDIA_ROOT.
         try:
