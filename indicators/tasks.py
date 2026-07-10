@@ -31,35 +31,19 @@ from core.task_locks import single_instance
 
 logger = logging.getLogger(__name__)
 
-# Zona horaria de Colombia
-COLOMBIA_TZ = pytz.timezone('America/Bogota')
-
-# Saneamiento anti roll-over: extraído a services/sanitize.py (Ola 5). Se re-exporta
-# aquí para no romper los imports existentes (`from indicators.tasks import ...`).
+# Helpers puros extraídos a services/ (Ola 5); re-exportados para no romper los imports
+# existentes (`from indicators.tasks import ...`).
 from indicators.services.sanitize import (  # noqa: E402,F401
     ROLLOVER_CAP_FACTOR,
     ROLLOVER_CAP_MARGIN_KWH,
     _accumulate_register_energy,
 )
-
-def get_colombia_now():
-    """Obtiene la fecha y hora actual en zona horaria de Colombia"""
-    return django_timezone.now().astimezone(COLOMBIA_TZ)
-
-def get_colombia_date():
-    """Obtiene la fecha actual en zona horaria de Colombia"""
-    return get_colombia_now().date()
-
-def colombia_day_range(start_date, end_date):
-    """Rango datetime aware [start 00:00, end+1día 00:00) en hora de Bogotá.
-
-    Equivalente exacto al lookup `date__date__range=(start, end)` (inclusivo)
-    con TIME_ZONE=America/Bogota, pero expresado como comparación de
-    timestamps, que SÍ puede usar el índice (device, date).
-    """
-    start_dt = COLOMBIA_TZ.localize(datetime.combine(start_date, datetime.min.time()))
-    end_dt = COLOMBIA_TZ.localize(datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
-    return start_dt, end_dt
+from indicators.services.date_ranges import (  # noqa: E402,F401
+    COLOMBIA_TZ,
+    colombia_day_range,
+    get_colombia_date,
+    get_colombia_now,
+)
 
 def _row_get(row, key, default=0):
     """Equivalente v2 de `Measurement.data.get(key, default)` sobre filas dict

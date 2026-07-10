@@ -35,58 +35,16 @@ logger = logging.getLogger(__name__)
 
 scada_client = ScadaConnectorClient() 
 
-# Zona horaria de Colombia
-COLOMBIA_TZ = pytz.timezone('America/Bogota')
-
-def get_colombia_now():
-    """Obtiene la fecha y hora actual en zona horaria de Colombia"""
-    from django.utils import timezone as dj_timezone
-    return dj_timezone.now().astimezone(COLOMBIA_TZ)
-
-def get_colombia_date():
-    """Obtiene la fecha actual en zona horaria de Colombia"""
-    return get_colombia_now().date()
-
-
-# Ventana por defecto y tope del rango de fechas para los endpoints de indicadores.
-# Lo que realmente acota el payload de estos endpoints es el rango de fechas (no la
-# paginación): sin rango explícito se sirven los últimos 31 días y ningún rango puede
-# superar 366 días.
-INDICATORS_DEFAULT_RANGE_DAYS = 31
-INDICATORS_MAX_RANGE_DAYS = 366
-
-
-def resolve_indicators_date_range(start_date_str, end_date_str):
-    """Resuelve el rango de fechas efectivo de los endpoints de indicadores.
-
-    Devuelve una tupla (start_date, end_date, error):
-    - Sin start_date ni end_date: últimos INDICATORS_DEFAULT_RANGE_DAYS días.
-    - Solo end_date: ventana por defecto hacia atrás desde end_date.
-    - Solo start_date: end_date = hoy (hora Colombia).
-    - Rango mayor a INDICATORS_MAX_RANGE_DAYS días, fechas invertidas o formato
-      inválido: error con mensaje en español (la vista debe responder 400).
-    """
-    try:
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
-    except ValueError:
-        return None, None, "Formato de fecha inválido. Use YYYY-MM-DD en 'start_date' y 'end_date'."
-
-    if end_date is None:
-        end_date = get_colombia_date()
-    if start_date is None:
-        start_date = end_date - timedelta(days=INDICATORS_DEFAULT_RANGE_DAYS)
-
-    if start_date > end_date:
-        return None, None, "La fecha de inicio no puede ser posterior a la fecha de fin."
-
-    if (end_date - start_date).days > INDICATORS_MAX_RANGE_DAYS:
-        return None, None, (
-            f"El rango de fechas solicitado supera el máximo permitido de "
-            f"{INDICATORS_MAX_RANGE_DAYS} días. Reduzca el rango e intente de nuevo."
-        )
-
-    return start_date, end_date, None
+# Zona horaria y helpers de rango: extraídos a services/date_ranges.py (Ola 5).
+# Re-exportados para no romper los usos existentes en este módulo.
+from indicators.services.date_ranges import (  # noqa: E402
+    COLOMBIA_TZ,
+    INDICATORS_DEFAULT_RANGE_DAYS,
+    INDICATORS_MAX_RANGE_DAYS,
+    get_colombia_date,
+    get_colombia_now,
+    resolve_indicators_date_range,
+)
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
