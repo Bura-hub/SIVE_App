@@ -51,7 +51,7 @@ export const ENDPOINTS = {
     status: '/api/reports/status/',
     download: '/api/reports/download/',
     history: '/api/reports/history/',
-    delete: '/api/reports/delete/'  // usado por ExportReports; implementar en backend si no existe
+    delete: '/api/reports/delete/'  // DeleteReportView (indicators/views.py), filtra por usuario
   },
   
   // Endpoints para datos externos de energía

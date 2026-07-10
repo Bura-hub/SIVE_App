@@ -555,14 +555,16 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
         method: 'POST',
         ...getDefaultFetchOptions(authToken),
         body: JSON.stringify({
-          institution_id: parseInt(selectedInstitution),
+          // Regenerar con los parámetros ORIGINALES del reporte (los expone el
+          // historial); si faltara alguno, caer a la selección actual.
+          institution_id: exportItem.institution_id ?? parseInt(selectedInstitution),
           category: exportItem.category,
-          devices: selectedDevices, // Assuming selectedDevices is available or can be re-fetched
+          devices: (exportItem.devices && exportItem.devices.length) ? exportItem.devices : selectedDevices,
           report_type: exportItem.type,
-          time_range: timeRange,
-          start_date: startDate,
-          end_date: endDate,
-          format: exportFormat
+          time_range: exportItem.time_range ?? timeRange,
+          start_date: exportItem.start_date ?? startDate,
+          end_date: exportItem.end_date ?? endDate,
+          format: exportItem.format ?? exportFormat
         })
       });
 

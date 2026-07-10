@@ -71,7 +71,7 @@ WORKDIR /app
 COPY --chown=appuser:appuser . .
 
 # Create necessary directories
-RUN mkdir -p /app/static /app/media /app/logs && \
+RUN mkdir -p /app/static /app/media/reports /app/logs && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user
@@ -101,7 +101,7 @@ WORKDIR /app
 COPY --chown=appuser:appuser . .
 
 # Create necessary directories
-RUN mkdir -p /app/static /app/media /app/logs && \
+RUN mkdir -p /app/static /app/media/reports /app/logs && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user

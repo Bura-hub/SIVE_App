@@ -2415,11 +2415,22 @@ class GenerateReportView(APIView):
                 user_id=request.user.id
             )
             
+            # Estimación real: promedio de duración de los últimos 5 reportes
+            # completados de la misma categoría; fallback al literal si no hay.
+            estimated = '2-5 minutos'
+            from .models import GeneratedReport
+            recent = list(GeneratedReport.objects.filter(
+                category=data['category'], status='SUCCESS', completed_at__isnull=False,
+            ).order_by('-completed_at').values_list('created_at', 'completed_at')[:5])
+            if recent:
+                avg_s = sum((b - a).total_seconds() for a, b in recent) / len(recent)
+                estimated = f'~{max(int(round(avg_s / 60)), 1)} minutos' if avg_s >= 45 else '~1 minuto'
+
             return Response({
                 'success': True,
                 'message': 'Generación de reporte iniciada exitosamente',
                 'task_id': task.id,
-                'estimated_completion_time': '2-5 minutos'
+                'estimated_completion_time': estimated
             })
 
         except Exception as e:
@@ -2809,6 +2820,8 @@ class ReportHistoryView(APIView):
                     'report_type': report.report_type,
                     'category': report.category,
                     'institution_name': report.institution_name,
+                    'institution_id': report.institution_id,
+                    'devices': report.devices or [],
                     'devices_count': len(report.devices) if report.devices else 0,
                     'time_range': report.time_range,
                     'start_date': report.start_date.isoformat(),
