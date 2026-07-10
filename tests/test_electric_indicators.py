@@ -135,6 +135,42 @@ class ElectricMeterIndicatorsTestCase(TestCase):
         self.assertIsNotNone(indicator.avg_demand_kw)
         self.assertIsNotNone(indicator.load_factor_pct)
 
+    def test_glitch_de_rollover_no_corrompe_energia_importada(self):
+        """Integración end-to-end del anti roll-over: un salto imposible en el registro
+        acumulado (glitch) NO debe inflar imported_energy_kwh. El registro es
+        importedActivePowerHigh*1000 + importedActivePowerLow; el saneamiento descarta el
+        delta > cap. Antes, una sola lectura corrupta producía ~5e8 kWh/día."""
+        from scada_proxy.tasks import upsert_measurements_page
+        base = timezone.make_aware(datetime.combine(self.test_date, time(12, 0)))
+
+        def reading(high, low):
+            return {
+                'importedActivePowerHigh': high, 'importedActivePowerLow': low,
+                'exportedActivePowerHigh': 0.0, 'exportedActivePowerLow': 0.0,
+                'totalActivePower': 1.0, 'totalPowerFactor': 0.95,
+            }
+
+        # Registro: 1000.0 -> 1000.5 -> 1001.0 (deltas válidos de 0.5), luego un GLITCH a
+        # 5e8 y vuelta a 1001.5 (delta negativo). Solo deben contar ~1.0 kWh; el salto de
+        # ~5e8 (>cap) y su retorno negativo se descartan.
+        upsert_measurements_page(self.device, [
+            (base, reading(1, 0.0)),
+            (base + timedelta(minutes=2), reading(1, 0.5)),
+            (base + timedelta(minutes=4), reading(1, 1.0)),
+            (base + timedelta(minutes=6), reading(500000, 0.0)),  # registro = 5e8
+            (base + timedelta(minutes=8), reading(1, 1.5)),
+        ])
+
+        calculate_electric_meter_indicators(
+            self.device.id, self.test_date.strftime('%Y-%m-%d'), 'daily'
+        )
+        ind = ElectricMeterIndicators.objects.get(
+            device=self.device, date=self.test_date, time_range='daily'
+        )
+        # Sin saneamiento serían ~5e8 kWh; con saneamiento, ~1.0 kWh (los dos deltas válidos).
+        self.assertLess(ind.imported_energy_kwh, 100.0)
+        self.assertGreater(ind.imported_energy_kwh, 0.0)
+
     def test_electric_meter_indicators_validation(self):
         """Prueba la validación de campos del modelo"""
         # Crear indicadores con valores válidos
