@@ -13,7 +13,15 @@ export default defineConfig({
   build: { outDir: 'build' },
   server: { port: 3000, host: true },
   preview: { port: 3000 },
-  esbuild: { loader: 'jsx', include: /src\/.*\.jsx?$/, exclude: [] },
+  esbuild: {
+    loader: 'jsx',
+    include: /src\/.*\.jsx?$/,
+    exclude: [],
+    // Elimina el ruido de console.log/info/debug del bundle de PRODUCCIÓN (se
+    // tree-shakean por 'pure' al minificar; en dev siguen funcionando). Conserva
+    // console.warn/error, que son manejo de errores legítimo.
+    pure: ['console.log', 'console.info', 'console.debug'],
+  },
   optimizeDeps: {
     esbuildOptions: { loader: { '.js': 'jsx' } },
   },
