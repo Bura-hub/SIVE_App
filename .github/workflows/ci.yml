@@ -36,6 +36,9 @@ jobs:
     env:
       SECRET_KEY: ci-not-a-real-secret
       DEBUG: "False"
+      # settings.py exige estas al importar; los tests curados no tocan SCADA -> dummy.
+      SCADA_USERNAME: ci
+      SCADA_PASSWORD: ci
       # Nombres de variables tal cual los lee core/settings.py
       name_db: sive_test
       user_postgres: sive
