@@ -117,7 +117,6 @@ class ElectricMeterIndicators(models.Model):
         verbose_name_plural = "Indicadores de Medidores Eléctricos"
         unique_together = ['device', 'date', 'time_range']
         indexes = [
-            models.Index(fields=['device', 'date', 'time_range']),
             models.Index(fields=['institution', 'date', 'time_range']),
             models.Index(fields=['date', 'time_range']),
         ]
@@ -184,7 +183,6 @@ class InverterIndicators(models.Model):
         verbose_name_plural = "Indicadores de Inversores"
         unique_together = ['device', 'date', 'time_range']
         indexes = [
-            models.Index(fields=['device', 'date', 'time_range']),
             models.Index(fields=['institution', 'date', 'time_range']),
             models.Index(fields=['date', 'time_range']),
         ]
@@ -220,7 +218,6 @@ class InverterChartData(models.Model):
         verbose_name_plural = "Datos de Gráficos de Inversores"
         unique_together = ['device', 'date']
         indexes = [
-            models.Index(fields=['device', 'date']),
             models.Index(fields=['institution', 'date']),
             models.Index(fields=['date']),
         ]
@@ -277,7 +274,6 @@ class WeatherStationIndicators(models.Model):
         verbose_name_plural = "Indicadores de Estaciones Meteorológicas"
         unique_together = ['device', 'date', 'time_range']
         indexes = [
-            models.Index(fields=['device', 'date', 'time_range']),
             models.Index(fields=['institution', 'date', 'time_range']),
             models.Index(fields=['date', 'time_range']),
         ]
@@ -324,7 +320,6 @@ class WeatherStationChartData(models.Model):
         verbose_name_plural = "Datos de Gráficos de Estaciones Meteorológicas"
         unique_together = ['device', 'date']
         indexes = [
-            models.Index(fields=['device', 'date']),
             models.Index(fields=['institution', 'date']),
             models.Index(fields=['date']),
         ]

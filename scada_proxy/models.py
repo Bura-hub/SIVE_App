@@ -85,7 +85,10 @@ from .measurements_schema import METER_METRICS, INVERTER_METRICS, WEATHER_METRIC
 
 
 class MeterMeasurement(models.Model):
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='meter_measurements')
+    # db_index=False: el índice standalone de device_id es redundante con el
+    # UniqueConstraint(device, date) (columna líder device). Ahorra ~espacio y coste
+    # de escritura en la ruta caliente de ingesta.
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='meter_measurements', db_index=False)
     date = models.DateTimeField()
 
     class Meta:
@@ -98,7 +101,7 @@ class MeterMeasurement(models.Model):
 
 
 class InverterMeasurement(models.Model):
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='inverter_measurements')
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='inverter_measurements', db_index=False)
     date = models.DateTimeField()
 
     class Meta:
@@ -111,7 +114,7 @@ class InverterMeasurement(models.Model):
 
 
 class WeatherStationMeasurement(models.Model):
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='weather_measurements')
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='weather_measurements', db_index=False)
     date = models.DateTimeField()
 
     class Meta:
