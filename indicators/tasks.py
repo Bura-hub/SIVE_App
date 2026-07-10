@@ -37,6 +37,28 @@ logger = logging.getLogger(__name__)
 # Zona horaria de Colombia
 COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
+# --- Saneamiento de energía por registros acumulados (anti roll-over) ---
+# Un incremento entre lecturas consecutivas del registro acumulado no puede ser
+# negativo (reset del contador) ni superar por un margen amplio la energía
+# integrada del día (Σ|P|·Δt, fiable). Sin esta cota, un glitch/roll-over de una
+# sola lectura corrompía ElectricMeterIndicators con hasta ~5e8 kWh/día.
+ROLLOVER_CAP_FACTOR = 2.0        # tope = FACTOR * energía_integrada_del_período + MARGEN
+ROLLOVER_CAP_MARGIN_KWH = 5.0
+
+def _accumulate_register_energy(totals, cap_kwh):
+    """Suma solo los incrementos válidos de una serie ORDENADA de lecturas de un
+    registro acumulado (en kWh), descartando reinicios (delta<0) y saltos
+    imposibles (delta>cap por roll-over o glitch de lectura)."""
+    energy = 0.0
+    prev = None
+    for cur in totals:
+        if prev is not None:
+            delta = cur - prev
+            if 0.0 <= delta <= cap_kwh:
+                energy += delta
+        prev = cur
+    return energy
+
 def get_colombia_now():
     """Obtiene la fecha y hora actual en zona horaria de Colombia"""
     return django_timezone.now().astimezone(COLOMBIA_TZ)
@@ -926,6 +948,9 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
         exported_energy_high_end = None
 
         total_active_power_values = []
+        # Series ordenadas de los registros acumulados (para el saneamiento anti roll-over)
+        import_register_totals = []
+        export_register_totals = []
         power_factor_values = []
         voltage_phases = []
         current_phases = []
@@ -956,6 +981,15 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
             imported_energy_high_end = _row_get(data, 'importedActivePowerHigh')
             exported_energy_low_end = _row_get(data, 'exportedActivePowerLow')
             exported_energy_high_end = _row_get(data, 'exportedActivePowerHigh')
+
+            # Serie ordenada de registros acumulados para el saneamiento (solo
+            # lecturas con valor real; NULL se omite para no fabricar deltas falsos).
+            imp_high, imp_low = data['importedActivePowerHigh'], data['importedActivePowerLow']
+            if imp_high is not None and imp_low is not None:
+                import_register_totals.append(imp_high * 1000 + imp_low)
+            exp_high, exp_low = data['exportedActivePowerHigh'], data['exportedActivePowerLow']
+            if exp_high is not None and exp_low is not None:
+                export_register_totals.append(exp_high * 1000 + exp_low)
 
             # Potencia activa para demanda pico
             total_active_power = _row_get(data, 'totalActivePower')
@@ -1002,15 +1036,18 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
         
         # Calcular indicadores
         
-        # 3.2. Energía Consumida Acumulada
-        imported_energy_kwh = (
-            (imported_energy_high_end - imported_energy_high_start) * 1000 +
-            (imported_energy_low_end - imported_energy_low_start)
-        )
-        exported_energy_kwh = (
-            (exported_energy_high_end - exported_energy_high_start) * 1000 +
-            (exported_energy_low_end - exported_energy_low_start)
-        )
+        # 3.2. Energía Consumida Acumulada (SANEADA contra roll-over/reset del contador).
+        # La energía integrada de la potencia (Σ|P|·Δt) es fiable y acota los saltos:
+        # un incremento de registro que la supere ampliamente es un glitch, no consumo.
+        pos_power_sum = sum(p for p in total_active_power_values if p and p > 0)
+        neg_power_sum = sum(-p for p in total_active_power_values if p and p < 0)
+        integrated_import_kwh = consumption_energy_kwh(pos_power_sum)
+        integrated_export_kwh = consumption_energy_kwh(neg_power_sum)
+        import_cap = ROLLOVER_CAP_FACTOR * integrated_import_kwh + ROLLOVER_CAP_MARGIN_KWH
+        export_cap = ROLLOVER_CAP_FACTOR * integrated_export_kwh + ROLLOVER_CAP_MARGIN_KWH
+
+        imported_energy_kwh = _accumulate_register_energy(import_register_totals, import_cap)
+        exported_energy_kwh = _accumulate_register_energy(export_register_totals, export_cap)
         net_energy_consumption_kwh = imported_energy_kwh - exported_energy_kwh
         
         # 3.3. Demanda Pico
