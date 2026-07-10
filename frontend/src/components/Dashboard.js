@@ -377,7 +377,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         ...(data.totalConsumption || {}),
         value: data.totalConsumption ? parseFloat(data.totalConsumption.value) : 0, // Usar el valor tal como viene del backend
         icon: Icons.consumption,
-        color: "text-blue-600",
+        color: "text-blue-700",
         // Usar el valor del mes anterior del backend
         previousMonthValue: data.totalConsumption?.previousMonthValue || data.totalConsumption?.previousMonth || 0,
         change: data.totalConsumption?.change || "Datos disponibles"
@@ -386,7 +386,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         ...(data.totalGeneration || {}),
         value: data.totalGeneration ? parseFloat(data.totalGeneration.value) : 0, // Usar el valor tal como viene del backend
         icon: Icons.generation,
-        color: "text-green-600",
+        color: "text-green-700",
         // Usar el valor del mes anterior del backend
         previousMonthValue: data.totalGeneration?.previousMonthValue || data.totalGeneration?.previousMonth || 0,
         change: data.totalGeneration?.change || "Datos disponibles"
@@ -395,13 +395,13 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         ...(data.energyBalance || {}),
         value: data.energyBalance ? parseFloat(data.energyBalance.value) : 0, // Usar el valor tal como viene del backend
         icon: Icons.balance,
-        color: "text-purple-600"
+        color: "text-purple-700"
       },
       averageInstantaneousPower: {
         ...(data.averageInstantaneousPower || {}),
         value: data.averageInstantaneousPower ? parseFloat(data.averageInstantaneousPower.value) : 0, // Usar el valor tal como viene del backend
         icon: Icons.power,
-        color: "text-orange-600",
+        color: "text-orange-700",
         // Usar el valor del mes anterior del backend
         previousMonthValue: data.averageInstantaneousPower?.previousMonthValue || data.averageInstantaneousPower?.previousMonth || 0,
         change: data.averageInstantaneousPower?.change || "Datos disponibles"
@@ -410,7 +410,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         ...(data.avgDailyTemp || {}),
         value: data.avgDailyTemp ? parseFloat(data.avgDailyTemp.value) : 0, // Usar el valor tal como viene del backend
         icon: Icons.temperature,
-        color: "text-red-600",
+        color: "text-red-700",
         // Usar el valor del mes anterior del backend
         previousMonthValue: data.avgDailyTemp?.previousMonthValue || data.avgDailyTemp?.previousMonth || 0,
         change: data.avgDailyTemp?.change || "Datos disponibles"
@@ -419,7 +419,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         ...(data.relativeHumidity || {}),
         value: data.relativeHumidity ? parseFloat(data.relativeHumidity.value) : 0, // Usar el valor tal como viene del backend
         icon: Icons.humidity,
-        color: "text-cyan-600",
+        color: "text-cyan-700",
         // Usar el valor del mes anterior del backend
         previousMonthValue: data.relativeHumidity?.previousMonthValue || data.relativeHumidity?.previousMonth || 0,
         change: data.relativeHumidity?.change || "Datos disponibles"
@@ -428,7 +428,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         ...(data.windSpeed || {}),
         value: data.windSpeed ? parseFloat(data.windSpeed.value) : 0, // Usar el valor tal como viene del backend
         icon: Icons.wind,
-        color: "text-teal-600",
+        color: "text-teal-700",
         // Usar el valor del mes anterior del backend
         previousMonthValue: data.windSpeed?.previousMonthValue || data.windSpeed?.previousMonth || 0,
         change: data.windSpeed?.change || "Datos disponibles"
@@ -441,7 +441,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         description: "Rango normal",
         status: "normal",
         icon: Icons.irradiance,
-        color: "text-amber-600",
+        color: "text-amber-700",
         previousMonthValue: data.irradiance?.previousMonthValue || data.irradiance?.previousMonth || 0,
         change: data.irradiance?.change || "Datos no disponibles"
       },
@@ -449,7 +449,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         ...(data.activeInverters || {}),
         value: data.activeInverters ? parseInt(data.activeInverters.value) : 0, // Usar el valor tal como viene del backend
         icon: Icons.inverters,
-        color: "text-indigo-600"
+        color: "text-indigo-700"
       }
         }));
   };
@@ -935,7 +935,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-red-600 text-lg p-4 bg-red-100 rounded-lg shadow-md">
+        <div className="text-red-700 text-lg p-4 bg-red-100 rounded-lg shadow-md">
           Error: {error}
         </div>
       </div>
@@ -946,7 +946,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   if (!electricityConsumptionData) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-orange-600 text-lg p-4 bg-orange-100 rounded-lg shadow-md">
+        <div className="text-orange-700 text-lg p-4 bg-orange-100 rounded-lg shadow-md">
           No se pudieron cargar los datos de los gráficos. Intente recargar la página.
         </div>
       </div>
@@ -1084,15 +1084,15 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                 
                 // Mapear colores del KPI a colores de estilo adaptado
                 const colorMap = {
-                  'text-blue-600': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-                  'text-green-600': { bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-                  'text-purple-600': { bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
-                  'text-indigo-600': { bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
-                  'text-orange-600': { bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
-                  'text-red-600': { bgColor: 'bg-red-50', borderColor: 'border-red-200' },
-                  'text-cyan-600': { bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200' },
-                  'text-teal-600': { bgColor: 'bg-teal-50', borderColor: 'border-teal-200' },
-                  'text-amber-600': { bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
+                  'text-blue-700': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+                  'text-green-700': { bgColor: 'bg-green-50', borderColor: 'border-green-200' },
+                  'text-purple-700': { bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
+                  'text-indigo-700': { bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
+                  'text-orange-700': { bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
+                  'text-red-700': { bgColor: 'bg-red-50', borderColor: 'border-red-200' },
+                  'text-cyan-700': { bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200' },
+                  'text-teal-700': { bgColor: 'bg-teal-50', borderColor: 'border-teal-200' },
+                  'text-amber-700': { bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
                   'text-gray-600': { bgColor: 'bg-gray-50', borderColor: 'border-gray-200' }
                 };
                 const styleColors = colorMap[item.color] || { bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
@@ -1132,21 +1132,21 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">{item.title}</h3>
                     <div className="flex items-baseline">
                       <p className={`text-3xl font-bold ${item.color}`}>{item.value}</p>
-                      <span className="ml-2 text-lg text-gray-500">{item.unit}</span>
+                      <span className="ml-2 text-lg text-gray-600">{item.unit}</span>
                     </div>
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       {(key === 'totalConsumption' || key === 'totalGeneration' || key === 'averageInstantaneousPower' || key === 'avgDailyTemp' || key === 'relativeHumidity' || key === 'windSpeed' || key === 'irradiance') && item.previousMonthValue ? (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            <span className="text-xs text-gray-500">Mes anterior:</span>
+                            <span className="text-xs text-gray-600">Mes anterior:</span>
                             <span className={`text-sm font-semibold ${
-                              key === 'totalConsumption' ? 'text-blue-600' : 
-                              key === 'totalGeneration' ? 'text-green-600' : 
-                              key === 'averageInstantaneousPower' ? 'text-orange-600' :
-                              key === 'avgDailyTemp' ? 'text-red-600' :
-                              key === 'relativeHumidity' ? 'text-cyan-600' :
-                              key === 'windSpeed' ? 'text-teal-600' :
-                              'text-amber-600'
+                              key === 'totalConsumption' ? 'text-blue-700' : 
+                              key === 'totalGeneration' ? 'text-green-700' : 
+                              key === 'averageInstantaneousPower' ? 'text-orange-700' :
+                              key === 'avgDailyTemp' ? 'text-red-700' :
+                              key === 'relativeHumidity' ? 'text-cyan-700' :
+                              key === 'windSpeed' ? 'text-teal-700' :
+                              'text-amber-700'
                             }`}>
                               {key === 'averageInstantaneousPower' 
                                 ? `${(item.previousMonthValue / 1000).toFixed(2)} kW` 
@@ -1165,9 +1165,9 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                           {item.change && item.change.includes('%') && (
                             <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
                               item.change.includes('+') 
-                                ? 'text-red-600 bg-red-100' 
+                                ? 'text-red-700 bg-red-100' 
                                 : item.change.includes('-') 
-                                ? 'text-green-600 bg-green-100' 
+                                ? 'text-green-700 bg-green-100' 
                                 : 'text-gray-600 bg-gray-100'
                             }`}>
                               {item.change.match(/[+-]?\d+\.?\d*%/)?.[0] || item.change}
@@ -1175,7 +1175,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                           )}
                         </div>
                       ) : (
-                        <p className="text-xs text-gray-500">{description}</p>
+                        <p className="text-xs text-gray-600">{description}</p>
                       )}
                       
 

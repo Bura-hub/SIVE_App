@@ -405,7 +405,7 @@ export function ChartCard({
         {/* Contenedor del gráfico con padding y altura definida */}
         <div className="p-6">
           <div className="chart-container relative w-full" style={{ height: height }}>
-            <ChartComponent ref={chartRef} data={data} options={chartOptions} />
+            <ChartComponent ref={chartRef} data={data} options={chartOptions} aria-label={title} />
             
             {/* Overlay sutil para indicar interactividad */}
             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-gray-50/20 pointer-events-none group-hover:to-gray-50/10 transition duration-300 rounded-lg"></div>
@@ -491,7 +491,7 @@ export function ChartCard({
               <div className="flex-1 p-8 overflow-hidden bg-gradient-to-br from-white to-slate-50/30">
                 <div className="h-full w-full">
                   <div className="chart-container w-full h-full" style={{ height: fullscreenHeight, maxHeight: maxFullscreenHeight }}>
-                    <ChartComponent ref={fullscreenChartRef} data={data} options={chartOptions} />
+                    <ChartComponent ref={fullscreenChartRef} data={data} options={chartOptions} aria-label={title} />
                   </div>
                 </div>
               </div>
