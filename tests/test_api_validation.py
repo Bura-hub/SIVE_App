@@ -8,13 +8,14 @@ Las vistas se invocan DIRECTAMENTE con (API)RequestFactory en vez de por URL: as
 evita el prefijo FORCE_SCRIPT_NAME (=/sive en prod) que reverse() incrusta y que el
 cliente de test no resuelve. ALLOWED_HOSTS incluye 'testserver' para get_host().
 """
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, RequestFactory, override_settings
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from core.health_views import health_check
+from indicators.tasks import colombia_day_range
 from indicators.views import (
     ChartDataView,
     InverterChartDataView,
@@ -50,6 +51,27 @@ class DateRangeResolverTests(TestCase):
         self.assertIsNone(err)
         self.assertEqual(start, date(2026, 7, 1))
         self.assertEqual(end, date(2026, 7, 10))
+
+
+class ColombiaDayRangeTests(TestCase):
+    """colombia_day_range: frontera [inicio 00:00, fin+1día 00:00) en hora de Bogotá.
+    El límite superior EXCLUSIVO debe incluir el día 'end' completo (equivale al lookup
+    date__date__range inclusivo). Bogotá no tiene DST, así que los timedelta son exactos."""
+
+    def test_un_dia_abarca_24h(self):
+        s, e = colombia_day_range(date(2026, 7, 1), date(2026, 7, 1))
+        self.assertEqual(e - s, timedelta(days=1))
+        self.assertEqual(s.hour, 0)
+
+    def test_limite_superior_exclusivo_incluye_el_dia_final(self):
+        s, e = colombia_day_range(date(2026, 7, 1), date(2026, 7, 10))
+        self.assertEqual(e - s, timedelta(days=10))  # 10 días inclusivos (1..10)
+        self.assertEqual(e.date(), date(2026, 7, 11))  # tope = inicio del día siguiente
+
+    def test_es_timezone_aware(self):
+        s, e = colombia_day_range(date(2026, 7, 1), date(2026, 7, 1))
+        self.assertIsNotNone(s.tzinfo)
+        self.assertIsNotNone(e.tzinfo)
 
 
 @override_settings(ALLOWED_HOSTS=['testserver'])
