@@ -85,9 +85,7 @@ const ElectricMeterFilters = ({ onFiltersChange, authToken }) => {
       console.log('Institutions available:', institutions);
       
       const url = buildApiUrl(ENDPOINTS.electrical.devices, { institution_id: institutionId });
-      console.log('Request URL:', url);
-      console.log('Request headers:', getDefaultFetchOptions(authToken));
-      
+
       const response = await fetch(url, {
         ...getDefaultFetchOptions(authToken)
       });

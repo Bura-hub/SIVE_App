@@ -58,8 +58,6 @@ const WeatherStationFilters = ({ onFiltersChange, authToken }) => {
 
       // Usar el endpoint específico para estaciones meteorológicas
       const url = buildApiUrl(ENDPOINTS.weather.stations, { institution_id: institutionId });
-      console.log('🔍 WeatherStationFilters - fetchDevices URL:', url);
-      console.log('🔍 WeatherStationFilters - fetchDevices headers:', getDefaultFetchOptions(authToken));
 
       const response = await fetch(url, {
         ...getDefaultFetchOptions(authToken)
