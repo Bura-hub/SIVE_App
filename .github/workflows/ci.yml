@@ -65,6 +65,7 @@ jobs:
         run: >-
           python manage.py test
           tests.test_api_validation
+          tests.test_rollover_sanitization
           tests.test_auth_security
           tests.test_electric_indicators
           tests.test_consumption_net_gross
