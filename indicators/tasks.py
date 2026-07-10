@@ -45,13 +45,8 @@ from indicators.services.date_ranges import (  # noqa: E402,F401
     get_colombia_now,
 )
 from indicators.services.device_calc import run_over_days, run_over_months  # noqa: E402
-
-def _row_get(row, key, default=0):
-    """Equivalente v2 de `Measurement.data.get(key, default)` sobre filas dict
-    de `.values()`: en las tablas tipadas una columna NULL ⇔ clave ausente en
-    el antiguo jsonb, así que NULL debe producir el mismo valor por defecto."""
-    value = row[key]
-    return default if value is None else value
+from indicators.services.meter_calc import METER_FIELDS, compute_meter_indicators  # noqa: E402
+from indicators.services.rows import _row_get  # noqa: E402,F401
 
 @shared_task(bind=True, retry_backoff=60, max_retries=3)
 @single_instance('calculate-monthly-kpi', ttl=1200)
@@ -455,179 +450,11 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
         if not measurements.exists():
             return f"No hay mediciones para {device.name} en {date}"
 
-        # Inicializar variables para cálculos
-        imported_energy_low_start = None
-        imported_energy_high_start = None
-        exported_energy_low_start = None
-        exported_energy_high_start = None
-
-        imported_energy_low_end = None
-        imported_energy_high_end = None
-        exported_energy_low_end = None
-        exported_energy_high_end = None
-
-        total_active_power_values = []
-        # Series ordenadas de los registros acumulados (para el saneamiento anti roll-over)
-        import_register_totals = []
-        export_register_totals = []
-        power_factor_values = []
-        voltage_phases = []
-        current_phases = []
-        voltage_thd_values = []
-        current_thd_values = []
-        current_tdd_values = []
-        
-        # Procesar cada medición (v2: filas dict con solo las columnas usadas)
-        meter_fields = (
-            'importedActivePowerLow', 'importedActivePowerHigh',
-            'exportedActivePowerLow', 'exportedActivePowerHigh',
-            'totalActivePower', 'totalPowerFactor',
-            'voltagePhaseA', 'voltagePhaseB', 'voltagePhaseC',
-            'currentPhaseA', 'currentPhaseB', 'currentPhaseC',
-            'voltageTHDPhaseA', 'voltageTHDPhaseB', 'voltageTHDPhaseC',
-            'currentTHDPhaseA', 'currentTHDPhaseB', 'currentTHDPhaseC',
-            'currentTDDPhaseA', 'currentTDDPhaseB', 'currentTDDPhaseC',
+        # Cálculo puro extraído a services/meter_calc.py (Ola 5).
+        computed = compute_meter_indicators(
+            measurements.values(*METER_FIELDS).iterator(chunk_size=2000)
         )
-        for data in measurements.values(*meter_fields).iterator(chunk_size=2000):
-            # Energía acumulada (primer y último valor)
-            if imported_energy_low_start is None:
-                imported_energy_low_start = _row_get(data, 'importedActivePowerLow')
-                imported_energy_high_start = _row_get(data, 'importedActivePowerHigh')
-                exported_energy_low_start = _row_get(data, 'exportedActivePowerLow')
-                exported_energy_high_start = _row_get(data, 'exportedActivePowerHigh')
 
-            imported_energy_low_end = _row_get(data, 'importedActivePowerLow')
-            imported_energy_high_end = _row_get(data, 'importedActivePowerHigh')
-            exported_energy_low_end = _row_get(data, 'exportedActivePowerLow')
-            exported_energy_high_end = _row_get(data, 'exportedActivePowerHigh')
-
-            # Serie ordenada de registros acumulados para el saneamiento (solo
-            # lecturas con valor real; NULL se omite para no fabricar deltas falsos).
-            imp_high, imp_low = data['importedActivePowerHigh'], data['importedActivePowerLow']
-            if imp_high is not None and imp_low is not None:
-                import_register_totals.append(imp_high * 1000 + imp_low)
-            exp_high, exp_low = data['exportedActivePowerHigh'], data['exportedActivePowerLow']
-            if exp_high is not None and exp_low is not None:
-                export_register_totals.append(exp_high * 1000 + exp_low)
-
-            # Potencia activa para demanda pico
-            total_active_power = _row_get(data, 'totalActivePower')
-            if total_active_power is not None:
-                total_active_power_values.append(total_active_power)
-
-            # Factor de potencia
-            power_factor = _row_get(data, 'totalPowerFactor')
-            if power_factor is not None:
-                power_factor_values.append(power_factor)
-
-            # Voltajes por fase
-            voltage_a = _row_get(data, 'voltagePhaseA')
-            voltage_b = _row_get(data, 'voltagePhaseB')
-            voltage_c = _row_get(data, 'voltagePhaseC')
-            if all(v is not None for v in [voltage_a, voltage_b, voltage_c]):
-                voltage_phases.append([voltage_a, voltage_b, voltage_c])
-
-            # Corrientes por fase
-            current_a = _row_get(data, 'currentPhaseA')
-            current_b = _row_get(data, 'currentPhaseB')
-            current_c = _row_get(data, 'currentPhaseC')
-            if all(c is not None for c in [current_a, current_b, current_c]):
-                current_phases.append([current_a, current_b, current_c])
-
-            # THD y TDD
-            voltage_thd_a = _row_get(data, 'voltageTHDPhaseA')
-            voltage_thd_b = _row_get(data, 'voltageTHDPhaseB')
-            voltage_thd_c = _row_get(data, 'voltageTHDPhaseC')
-            if all(thd is not None for thd in [voltage_thd_a, voltage_thd_b, voltage_thd_c]):
-                voltage_thd_values.extend([voltage_thd_a, voltage_thd_b, voltage_thd_c])
-
-            current_thd_a = _row_get(data, 'currentTHDPhaseA')
-            current_thd_b = _row_get(data, 'currentTHDPhaseB')
-            current_thd_c = _row_get(data, 'currentTHDPhaseC')
-            if all(thd is not None for thd in [current_thd_a, current_thd_b, current_thd_c]):
-                current_thd_values.extend([current_thd_a, current_thd_b, current_thd_c])
-
-            current_tdd_a = _row_get(data, 'currentTDDPhaseA')
-            current_tdd_b = _row_get(data, 'currentTDDPhaseB')
-            current_tdd_c = _row_get(data, 'currentTDDPhaseC')
-            if all(tdd is not None for tdd in [current_tdd_a, current_tdd_b, current_tdd_c]):
-                current_tdd_values.extend([current_tdd_a, current_tdd_b, current_tdd_c])
-        
-        # Calcular indicadores
-        
-        # 3.2. Energía Consumida Acumulada (SANEADA contra roll-over/reset del contador).
-        # La energía integrada de la potencia (Σ|P|·Δt) es fiable y acota los saltos:
-        # un incremento de registro que la supere ampliamente es un glitch, no consumo.
-        pos_power_sum = sum(p for p in total_active_power_values if p and p > 0)
-        neg_power_sum = sum(-p for p in total_active_power_values if p and p < 0)
-        integrated_import_kwh = consumption_energy_kwh(pos_power_sum)
-        integrated_export_kwh = consumption_energy_kwh(neg_power_sum)
-        import_cap = ROLLOVER_CAP_FACTOR * integrated_import_kwh + ROLLOVER_CAP_MARGIN_KWH
-        export_cap = ROLLOVER_CAP_FACTOR * integrated_export_kwh + ROLLOVER_CAP_MARGIN_KWH
-
-        imported_energy_kwh = _accumulate_register_energy(import_register_totals, import_cap)
-        exported_energy_kwh = _accumulate_register_energy(export_register_totals, export_cap)
-        net_energy_consumption_kwh = imported_energy_kwh - exported_energy_kwh
-        
-        # 3.3. Demanda Pico
-        if total_active_power_values:
-            # Calcular demanda pico usando promedio móvil de 15 minutos
-            # Como tenemos datos cada 2 minutos, 15 minutos = 7-8 mediciones
-            window_size = 7
-            moving_averages = []
-            for i in range(len(total_active_power_values) - window_size + 1):
-                window_avg = sum(total_active_power_values[i:i+window_size]) / window_size
-                moving_averages.append(window_avg)
-            
-            peak_demand_kw = max(moving_averages) if moving_averages else max(total_active_power_values)
-            avg_demand_kw = sum(total_active_power_values) / len(total_active_power_values)
-        else:
-            peak_demand_kw = 0
-            avg_demand_kw = 0
-        
-        # 3.4. Factor de Carga = demanda media / demanda pico (misma serie de potencia).
-        # Antes se calculaba net_energy(registros) / (pico(potencia)·horas), que mezclaba
-        # dos fuentes distintas: un pico diminuto con energía registrada daba factores
-        # imposibles (hasta 220.659%). Con media/pico queda acotado a [0,100] por
-        # construcción (la media nunca supera el pico) y es la definición canónica.
-        if peak_demand_kw > 0:
-            load_factor_pct = min(100.0, max(0.0, (avg_demand_kw / peak_demand_kw) * 100))
-        else:
-            load_factor_pct = 0
-        
-        # 3.5. Factor de Potencia Promedio
-        if power_factor_values:
-            avg_power_factor = sum(power_factor_values) / len(power_factor_values)
-        else:
-            avg_power_factor = 0
-        
-        # 3.6. Desbalance de Fases
-        max_voltage_unbalance_pct = 0
-        max_current_unbalance_pct = 0
-        
-        if voltage_phases:
-            voltage_unbalances = []
-            for v_phases in voltage_phases:
-                v_avg = sum(v_phases) / 3
-                max_deviation = max(abs(v - v_avg) for v in v_phases)
-                unbalance_pct = (max_deviation / v_avg) * 100 if v_avg > 0 else 0
-                voltage_unbalances.append(unbalance_pct)
-            max_voltage_unbalance_pct = max(voltage_unbalances) if voltage_unbalances else 0
-        
-        if current_phases:
-            current_unbalances = []
-            for c_phases in current_phases:
-                c_avg = sum(c_phases) / 3
-                max_deviation = max(abs(c - c_avg) for c in c_phases)
-                unbalance_pct = (max_deviation / c_avg) * 100 if c_avg > 0 else 0
-                current_unbalances.append(unbalance_pct)
-            max_current_unbalance_pct = max(current_unbalances) if current_unbalances else 0
-        
-        # 3.7. THD y TDD
-        max_voltage_thd_pct = max(voltage_thd_values) if voltage_thd_values else 0
-        max_current_thd_pct = max(current_thd_values) if current_thd_values else 0
-        max_current_tdd_pct = max(current_tdd_values) if current_tdd_values else 0
-        
         # Guardar o actualizar los indicadores
         indicators, created = ElectricMeterIndicators.objects.update_or_create(
             device=device,
@@ -635,23 +462,12 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
             date=date,
             time_range=time_range,
             defaults={
-                'imported_energy_kwh': imported_energy_kwh,
-                'exported_energy_kwh': exported_energy_kwh,
-                'net_energy_consumption_kwh': net_energy_consumption_kwh,
-                'peak_demand_kw': peak_demand_kw,
-                'avg_demand_kw': avg_demand_kw,
-                'load_factor_pct': load_factor_pct,
-                'avg_power_factor': avg_power_factor,
-                'max_voltage_unbalance_pct': max_voltage_unbalance_pct,
-                'max_current_unbalance_pct': max_current_unbalance_pct,
-                'max_voltage_thd_pct': max_voltage_thd_pct,
-                'max_current_thd_pct': max_current_thd_pct,
-                'max_current_tdd_pct': max_current_tdd_pct,
+                **computed,
                 'measurement_count': measurements.count(),
                 'last_measurement_date': measurements.last().date if measurements.exists() else None,
             }
         )
-        
+
         action = "creado" if created else "actualizado"
         return f"Indicadores eléctricos {action} para {device.name} en {date} ({time_range})"
         
