@@ -353,6 +353,10 @@ SPECTACULAR_SETTINGS = {
     ),
     'VERSION': '2.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    # El esquema OpenAPI expone toda la superficie de la API; se restringe a
+    # administradores (antes era público sin autenticación). El UI de Swagger/Redoc
+    # carga el esquema, así que sin sesión de admin no muestra la API.
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAdminUser'],
     'SECURITY': [
         {"TokenAuth": []},
         {"SessionAuth": []}
@@ -489,6 +493,9 @@ if not DEBUG:
 
     # Evita que el navegador "adivine" content-types (X-Content-Type-Options: nosniff)
     SECURE_CONTENT_TYPE_NOSNIFF = True
+
+    # Referrer-Policy: no filtrar la URL completa a orígenes cruzados.
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
     # HSTS: opt-in por entorno. Por defecto DESACTIVADO (0) porque el dominio
     # mte.udenar.edu.co es COMPARTIDO con otras apps; un HSTS con includeSubDomains/
