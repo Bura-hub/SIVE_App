@@ -121,8 +121,11 @@ export const handleApiResponse = async (response, onAuthError = null) => {
       localStorage.removeItem('authToken');
       localStorage.removeItem('username');
       localStorage.removeItem('isSuperuser');
-      // Redirigir al login
-      window.location.href = '/';
+      // Recargar la MISMA ruta de la app (no la raíz del dominio). La app es un SPA
+      // por estado: al recargar con el token ya borrado, App.js no encuentra authToken
+      // y renderiza el login. Antes, href='/' expulsaba al usuario a la raíz del
+      // dominio (el portal WordPress), fuera de la app.
+      window.location.reload();
       // Rechazar con un error controlado para que los callers no procesen datos undefined
       const authError = new Error('Token expirado. Por favor, inicie sesión nuevamente.');
       authError.isAuthError = true;
