@@ -366,6 +366,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                     </div>
                     <button
                         onClick={onClose}
+                        aria-label="Cerrar"
                         className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition duration-150 p-3 rounded-full"
                     >
                         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -596,6 +597,8 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                     />
                                                     <button
                                                         type="button"
+                                                        aria-label={showPasswords.current ? "Ocultar contraseña actual" : "Mostrar contraseña actual"}
+                                                        aria-pressed={showPasswords.current}
                                                         onClick={() => setShowPasswords({...showPasswords, current: !showPasswords.current})}
                                                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-emerald-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors"
                                                     >
@@ -628,6 +631,8 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                         />
                                                         <button
                                                             type="button"
+                                                            aria-label={showPasswords.new ? "Ocultar contraseña nueva" : "Mostrar contraseña nueva"}
+                                                            aria-pressed={showPasswords.new}
                                                             onClick={() => setShowPasswords({...showPasswords, new: !showPasswords.new})}
                                                             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-emerald-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors"
                                                         >
@@ -659,6 +664,8 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                         />
                                                         <button
                                                             type="button"
+                                                            aria-label={showPasswords.confirm ? "Ocultar confirmación de contraseña" : "Mostrar confirmación de contraseña"}
+                                                            aria-pressed={showPasswords.confirm}
                                                             onClick={() => setShowPasswords({...showPasswords, confirm: !showPasswords.confirm})}
                                                             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-emerald-400 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors"
                                                         >

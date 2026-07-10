@@ -486,6 +486,8 @@ function LoginPage({ onLoginSuccess }) {
                             <button
                                 type="button"
                                 className="password-toggle"
+                                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                aria-pressed={showPassword}
                                 onClick={() => setShowPassword(!showPassword)}
                             >
                                 {showPassword ? (

@@ -356,6 +356,7 @@ function HelpSupport({ onClose }) {
                     </div>
                     <button
                         onClick={onClose}
+                        aria-label="Cerrar"
                         className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition duration-150 p-3 rounded-full"
                     >
                         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
