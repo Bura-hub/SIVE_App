@@ -1266,6 +1266,12 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
                 dc_ac_efficiency_pct = (energy_ac_daily_kwh / energy_dc_daily_kwh) * 100
             else:
                 dc_ac_efficiency_pct = 0
+            # El dato crudo del connector trae dcPower < acPower en ~92% de las filas
+            # (físicamente imposible: la entrada DC debe superar la salida AC), lo que
+            # producía eficiencias >100% (hasta 185%). Se acota al rango físico [0,100]
+            # hasta confirmar la semántica de dcPower con el equipo del scada-connector.
+            # Ver auditoría (calidad-datos, Ola 1).
+            dc_ac_efficiency_pct = min(100.0, max(0.0, dc_ac_efficiency_pct))
         else:
             energy_ac_daily_kwh = 0
             energy_dc_daily_kwh = 0
@@ -1874,30 +1880,38 @@ def calculate_single_day_weather_indicators(measurements):
     wind_direction_values = []
     precipitation_values = []
 
+    # Se descartan lecturas fuera de rango físico (sensores saturados/averiados que
+    # corrompían los promedios: irradiancia negativa o >1968 W/m², viento >400 km/h).
     for data in measurements:
-        # Irradiancia (W/m²)
-        if data['irradiance'] is not None:
-            irradiance_values.append(float(data['irradiance']))
+        # Irradiancia (W/m²): rango físico 0–1500
+        irr = data['irradiance']
+        if irr is not None and 0.0 <= float(irr) <= 1500.0:
+            irradiance_values.append(float(irr))
 
-        # Temperatura (°C)
-        if data['temperature'] is not None:
-            temperature_values.append(float(data['temperature']))
+        # Temperatura (°C): rango plausible -20–60
+        temp = data['temperature']
+        if temp is not None and -20.0 <= float(temp) <= 60.0:
+            temperature_values.append(float(temp))
 
-        # Humedad (%)
-        if data['humidity'] is not None:
-            humidity_values.append(float(data['humidity']))
+        # Humedad (%): 0–100
+        hum = data['humidity']
+        if hum is not None and 0.0 <= float(hum) <= 100.0:
+            humidity_values.append(float(hum))
 
-        # Velocidad del viento (km/h)
-        if data['windSpeed'] is not None:
-            wind_speed_values.append(float(data['windSpeed']))
+        # Velocidad del viento (km/h): 0–150
+        ws = data['windSpeed']
+        if ws is not None and 0.0 <= float(ws) <= 150.0:
+            wind_speed_values.append(float(ws))
 
-        # Dirección del viento (°)
-        if data['windDirection'] is not None:
-            wind_direction_values.append(float(data['windDirection']))
+        # Dirección del viento (°): 0–360
+        wd = data['windDirection']
+        if wd is not None and 0.0 <= float(wd) <= 360.0:
+            wind_direction_values.append(float(wd))
 
-        # Precipitación (cm/día)
-        if data['precipitation'] is not None:
-            precipitation_values.append(float(data['precipitation']))
+        # Precipitación (cm/día): no negativa
+        prec = data['precipitation']
+        if prec is not None and float(prec) >= 0.0:
+            precipitation_values.append(float(prec))
     
     # Calcular indicadores
     indicators = {}
