@@ -389,16 +389,37 @@ def fetch_and_save_measurements_for_device(self, device_scada_id: str, django_de
 def run_post_ingest_pipeline(self):
     """Callback del chord de ingesta: encadena los cálculos SOLO cuando todas
     las subtareas de fetch terminaron (elimina la carrera fetch→KPI del
-    schedule por minutos). KPI mensual → datos diarios de HOY.
+    schedule por minutos).
+
+    Cadena: KPI mensual → chart diario de HOY → indicadores por componente
+    (medidores, inversores, estaciones) en daily (hoy) y monthly (mes en
+    curso), para TODAS las instituciones. Los cálculos son idempotentes
+    (update_or_create), así que conviven sin conflicto con los botones
+    "Recalcular" manuales del frontend.
     """
     from celery import chain
-    from indicators.tasks import calculate_monthly_consumption_kpi, calculate_and_save_daily_data
+    from indicators.tasks import (
+        calculate_monthly_consumption_kpi, calculate_and_save_daily_data,
+        calculate_electrical_data, calculate_inverter_data,
+        calculate_weather_station_indicators,
+    )
 
-    today_str = get_colombia_now().date().isoformat()
-    logger.info("Fetch completo: encadenando cálculos (KPI mensual → chart diario de hoy).")
+    today = get_colombia_now().date()
+    today_str = today.isoformat()
+    month_start_str = today.replace(day=1).isoformat()
+
+    logger.info("Fetch completo: encadenando cálculos (KPI → chart diario → indicadores por componente).")
     chain(
         calculate_monthly_consumption_kpi.si(),
         calculate_and_save_daily_data.si(today_str, today_str),
+        # Indicadores por componente del día en curso (pantallas Medidores/Inversores/Estaciones)
+        calculate_electrical_data.si(time_range='daily', start_date_str=today_str, end_date_str=today_str),
+        calculate_inverter_data.si(time_range='daily', start_date_str=today_str, end_date_str=today_str),
+        calculate_weather_station_indicators.si(time_range='daily', start_date_str=today_str, end_date_str=today_str),
+        # Agregados mensuales del mes en curso (selector "mensual" de las pantallas)
+        calculate_electrical_data.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
+        calculate_inverter_data.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
+        calculate_weather_station_indicators.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
     ).apply_async()
     return 'pipeline de cálculos encolado'
 

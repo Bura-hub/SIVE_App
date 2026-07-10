@@ -30,6 +30,8 @@ from .models import (
     GeneratedReport
 )
 
+from core.task_locks import single_instance
+
 logger = logging.getLogger(__name__)
 
 # Zona horaria de Colombia
@@ -62,6 +64,7 @@ def _row_get(row, key, default=0):
     return default if value is None else value
 
 @shared_task(bind=True, retry_backoff=60, max_retries=3)
+@single_instance('calculate-monthly-kpi', ttl=1200)
 def calculate_monthly_consumption_kpi(self):
     """
     Calcula el consumo total, la generación total, la potencia instantánea promedio,
@@ -247,6 +250,7 @@ def calculate_monthly_consumption_kpi(self):
         raise
 
 @shared_task(bind=True, retry_backoff=30, max_retries=3)
+@single_instance('calculate-daily-chart', ttl=1200)
 def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str: str = None):
     """
     Calcula el consumo, la generación, el balance de energía y la temperatura promedio diaria 
@@ -1095,72 +1099,6 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
     except Exception as e:
         return f"Error calculando indicadores eléctricos: {str(e)}"
 
-
-@shared_task
-def calculate_all_electric_meter_indicators(time_range='daily', start_date=None, end_date=None):
-    """
-    Calcula indicadores eléctricos para todos los medidores en un rango de fechas.
-    """
-    try:
-        from datetime import datetime, timedelta
-        from scada_proxy.models import Device, DeviceCategory
-        
-        # Obtener todos los medidores eléctricos
-        electric_meter_category = DeviceCategory.objects.filter(name__iexact='electricMeter').first()
-        if not electric_meter_category:
-            return "No se encontró la categoría de medidores eléctricos"
-        
-        electric_meters = Device.objects.filter(
-            category=electric_meter_category,
-            is_active=True
-        )
-        
-        if not electric_meters.exists():
-            return "No se encontraron medidores eléctricos activos"
-        
-        # Determinar fechas si no se proporcionan
-        if not start_date:
-            if time_range == 'daily':
-                start_date = datetime.now().date() - timedelta(days=7)  # Últimos 7 días
-            else:
-                start_date = datetime.now().date().replace(day=1) - timedelta(days=30)  # Último mes
-        
-        if not end_date:
-            end_date = datetime.now().date()
-        
-        # Calcular indicadores para cada medidor y fecha
-        total_calculations = 0
-        successful_calculations = 0
-        
-        current_date = start_date
-        while current_date <= end_date:
-            for meter in electric_meters:
-                try:
-                    result = calculate_electric_meter_indicators.delay(
-                        meter.id, 
-                        current_date.strftime('%Y-%m-%d'), 
-                        time_range
-                    )
-                    total_calculations += 1
-                    successful_calculations += 1
-                except Exception as e:
-                    total_calculations += 1
-                    print(f"Error calculando indicadores para {meter.name} en {current_date}: {e}")
-            
-            # Avanzar al siguiente período
-            if time_range == 'daily':
-                current_date += timedelta(days=1)
-            else:
-                # Avanzar al siguiente mes
-                if current_date.month == 12:
-                    current_date = current_date.replace(year=current_date.year + 1, month=1)
-                else:
-                    current_date = current_date.replace(month=current_date.month + 1)
-        
-        return f"Proceso completado. {successful_calculations}/{total_calculations} cálculos exitosos."
-        
-    except Exception as e:
-        return f"Error en el proceso masivo: {str(e)}"
 
 @shared_task
 def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
@@ -2312,7 +2250,8 @@ def _calculate_monthly_weather_station_data(station, start_date, end_date):
 # TAREAS PARA GENERACIÓN DE REPORTE
 # =========================
 
-@shared_task(bind=True, retry_backoff=60, max_retries=3)
+@shared_task(bind=True, retry_backoff=60, max_retries=3,
+             soft_time_limit=1800, time_limit=2000)
 def generate_report(self, institution_id, category, devices, report_type, time_range, start_date, end_date, format, user_id):
     """
     Genera un reporte en el formato especificado
