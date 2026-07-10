@@ -55,6 +55,13 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
         loadProfileImage();
     }, []);
 
+    // Accesibilidad: cerrar el modal con la tecla Escape.
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
     const loadProfileData = async () => {
         try {
             const response = await fetch(buildApiUrl(getEndpoint('USER_PROFILE')), {
@@ -346,7 +353,8 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
     ];
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            role="dialog" aria-modal="true" aria-label="Configuración de perfil">
             <div className="bg-white rounded-3xl shadow-2xl max-w-7xl w-full max-h-[95vh] overflow-hidden border border-gray-100">
                 {/* Header */}
                 <div className="flex items-center justify-between p-8 border-b border-gray-100 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
