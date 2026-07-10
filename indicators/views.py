@@ -1548,6 +1548,12 @@ class WeatherStationIndicatorsView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
+            # Ventana por defecto de 31 días si no se acotó el inicio: evita devolver
+            # TODO el histórico (payloads de cientos de KB), como el resto de endpoints.
+            if not start_date:
+                ref_end = end_date if end_date else get_colombia_date()
+                filters &= Q(date__gte=ref_end - timedelta(days=INDICATORS_DEFAULT_RANGE_DAYS))
+
             # Obtener indicadores con select_related para optimizar consultas
             indicators = WeatherStationIndicators.objects.filter(filters).select_related(
                 'device', 'institution'
@@ -1659,6 +1665,12 @@ class WeatherStationChartDataView(APIView):
                         {"detail": "end_date debe estar en formato YYYY-MM-DD"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+
+            # Ventana por defecto de 31 días si no se acotó el inicio: chart-data trae
+            # series horarias (payloads de >1MB con todo el histórico).
+            if not start_date:
+                ref_end = end_date if end_date else get_colombia_date()
+                filters &= Q(date__gte=ref_end - timedelta(days=INDICATORS_DEFAULT_RANGE_DAYS))
 
             # Obtener datos de gráficos con select_related para optimizar consultas
             chart_data = WeatherStationChartData.objects.filter(filters).select_related(
