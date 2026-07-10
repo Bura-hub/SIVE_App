@@ -118,8 +118,10 @@ function Sidebar({
       name: 'Medidores', 
       page: 'electricalDetails', 
       icon: (
-        <svg className={`w-5 h-5 transition-all duration-300 ${isSidebarMinimized ? '' : 'mr-3'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        <svg className={`w-5 h-5 transition-all duration-300 ${isSidebarMinimized ? '' : 'mr-3'}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          {/* Velocímetro: instrumento de medición */}
+          <path d="m12 14 4-4"></path>
+          <path d="M3.34 19a10 10 0 1 1 17.32 0"></path>
         </svg>
       ),
       activeClasses: 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg shadow-green-500/25',
@@ -139,10 +141,9 @@ function Sidebar({
           strokeLinejoin="round"
           xmlns="http://www.w3.org/2000/svg"
         >
+          {/* Inversor: caja con onda senoidal (salida AC) */}
           <rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect>
-          <path d="M7 12h2l1 2 2-4 1 2h2"></path>
-          <path d="M17 16h.01"></path>
-          <path d="M17 8h.01"></path>
+          <path d="M6.5 13.5c1.2-3.2 2.6-3.2 3.7 0s2.6 3.2 3.7 0 2.5-3.2 3.6 0"></path>
         </svg>
       ),
       activeClasses: 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25',
@@ -162,12 +163,13 @@ function Sidebar({
           strokeLinejoin="round"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <circle cx="12" cy="6" r="2"></circle>
-          <path d="M12 8v4"></path>
-          <path d="M6 20h12"></path>
-          <path d="M12 12l4 8"></path>
-          <path d="M12 12l-4 8"></path>
-          <path d="M4 10a8 8 0 0116 0"></path>
+          {/* Meteorología: sol y nube */}
+          <path d="M12 2v2"></path>
+          <path d="m4.93 4.93 1.41 1.41"></path>
+          <path d="M20 12h2"></path>
+          <path d="m19.07 4.93-1.41 1.41"></path>
+          <path d="M15.947 12.65a4 4 0 0 0-5.925-4.128"></path>
+          <path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"></path>
         </svg>
       ),
       activeClasses: 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/25',
@@ -187,14 +189,10 @@ function Sidebar({
           strokeLinejoin="round"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <path d="M12 2v20"></path>
+          {/* Datos externos: globo (fuente externa, mercado XM) */}
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
           <path d="M2 12h20"></path>
-          <path d="M20 12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"></path>
-          <path d="M4 12V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8"></path>
-          <path d="M12 6v4"></path>
-          <path d="M8 8h8"></path>
-          <path d="M6 16h12"></path>
-          <path d="M8 20h8"></path>
         </svg>
       ),
       activeClasses: 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg shadow-teal-500/25',
@@ -204,8 +202,12 @@ function Sidebar({
       name: 'Exportar Reportes', 
       page: 'exportReports', 
       icon: (
-        <svg className={`w-5 h-5 transition-all duration-300 ${isSidebarMinimized ? '' : 'mr-3'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        <svg className={`w-5 h-5 transition-all duration-300 ${isSidebarMinimized ? '' : 'mr-3'}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          {/* Exportar: documento con flecha de descarga */}
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+          <path d="M14 2v6h6"></path>
+          <path d="M12 18v-6"></path>
+          <path d="m9 15 3 3 3-3"></path>
         </svg>
       ),
       activeClasses: 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg shadow-purple-500/25',
