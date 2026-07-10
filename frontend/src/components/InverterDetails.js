@@ -120,7 +120,7 @@ const SectionHeader = ({ title, icon, infoText }) => (
     </h2>
     <div className="text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
       <span className="flex items-center">
-        <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         {infoText}
@@ -183,7 +183,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           change: "Sin datos", 
           status: "normal", 
           icon: generationIcon,
-          color: "text-blue-600"
+          color: "text-blue-700"
         },
         averageEfficiency: { 
           title: "Eficiencia Promedio", 
@@ -192,7 +192,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           change: "Sin datos", 
           status: "normal", 
           icon: efficiencyIcon,
-          color: "text-green-600"
+          color: "text-green-700"
         },
         activeInverters: { 
           title: "Inversores Activos", 
@@ -201,7 +201,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           change: "Sin datos", 
           status: "normal", 
           icon: activeIcon,
-          color: "text-purple-600"
+          color: "text-purple-700"
         },
         performanceRatio: { 
           title: "Performance Ratio", 
@@ -215,7 +215,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
             <path d="M13 17V5"></path>
             <path d="M8 17v-3"></path>
           </svg>,
-          color: "text-red-600"
+          color: "text-red-700"
         },
         powerFactor: { 
           title: "Factor de Potencia", 
@@ -224,7 +224,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           change: "Sin datos", 
           status: "normal", 
           icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>,
-          color: "text-indigo-600"
+          color: "text-indigo-700"
         },
         phaseUnbalance: { 
           title: "Desbalance de Fases", 
@@ -233,7 +233,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           change: "Sin datos", 
           status: "normal", 
           icon: <IconScale size={24} />,
-          color: "text-orange-600"
+          color: "text-orange-700"
         },
         frequencyStability: { 
           title: "Estabilidad Frecuencia", 
@@ -242,7 +242,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           change: "Sin datos", 
           status: "normal", 
           icon: <IconActivity size={24} />,
-          color: "text-teal-600"
+          color: "text-teal-700"
         },
         thdVoltage: { 
           title: "THD Voltaje", 
@@ -321,7 +321,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         change: getChangeText(totalGenerationMWh, " MWh"), 
         status: getStatus(totalGenerationMWh, { excellent: 10, good: 5, warning: 1 }), 
         icon: generationIcon,
-        color: "text-blue-600"
+        color: "text-blue-700"
       },
       averageEfficiency: { 
         title: "Eficiencia Promedio", 
@@ -330,7 +330,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         change: getChangeText(averageEfficiency, "%", true), 
         status: getStatus(averageEfficiency, { excellent: 95, good: 90, warning: 80 }), 
         icon: efficiencyIcon,
-        color: "text-green-600"
+        color: "text-green-700"
       },
       activeInverters: { 
         title: "Inversores Activos", 
@@ -339,7 +339,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         change: `de ${activeInvertersCount} total`, 
         status: activeInvertersCount > 0 ? "positivo" : "normal", 
         icon: activeIcon,
-        color: "text-purple-600"
+        color: "text-purple-700"
       },
       performanceRatio: { 
         title: "Performance Ratio", 
@@ -353,7 +353,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           <path d="M13 17V5"></path>
           <path d="M8 17v-3"></path>
         </svg>,
-        color: "text-red-600"
+        color: "text-red-700"
       },
       powerFactor: { 
         title: "Factor de Potencia", 
@@ -362,7 +362,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         change: getChangeText(averagePowerFactor, "", true), 
         status: getStatus(averagePowerFactor, { excellent: 0.95, good: 0.9, warning: 0.85 }), 
         icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>,
-        color: "text-indigo-600"
+        color: "text-indigo-700"
       },
       phaseUnbalance: { 
         title: "Desbalance de Fases", 
@@ -371,7 +371,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         change: getChangeText(averagePhaseUnbalance, "%"), 
         status: getStatus(averagePhaseUnbalance, { excellent: 1, good: 2, warning: 5 }, true), // Invertir lógica para desbalance
         icon: <IconScale size={24} />,
-        color: "text-orange-600"
+        color: "text-orange-700"
       },
       frequencyStability: { 
         title: "Estabilidad Frecuencia", 
@@ -380,7 +380,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         change: getChangeText(averageFrequency, " Hz"), 
         status: getStatus(Math.abs(averageFrequency - 60), { excellent: 0.1, good: 0.5, warning: 1 }, true), // Invertir lógica para frecuencia
         icon: <IconActivity size={24} />,
-        color: "text-teal-600"
+        color: "text-teal-700"
       },
       thdVoltage: { 
         title: "THD Voltaje", 
@@ -868,7 +868,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-red-600 text-lg p-4 bg-red-100 rounded-lg shadow-md">Error: {error}</div>
+        <div className="text-red-700 text-lg p-4 bg-red-100 rounded-lg shadow-md">Error: {error}</div>
       </div>
     );
   }
@@ -961,13 +961,13 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
               const item = kpiData[key];
               // Mapear colores del KPI a colores de estilo adaptado
               const colorMap = {
-                'text-blue-600': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-                'text-red-600': { bgColor: 'bg-red-50', borderColor: 'border-red-200' },
-                'text-green-600': { bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-                'text-purple-600': { bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
-                'text-orange-600': { bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
-                'text-indigo-600': { bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
-                'text-teal-600': { bgColor: 'bg-teal-50', borderColor: 'border-teal-200' },
+                'text-blue-700': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+                'text-red-700': { bgColor: 'bg-red-50', borderColor: 'border-red-200' },
+                'text-green-700': { bgColor: 'bg-green-50', borderColor: 'border-green-200' },
+                'text-purple-700': { bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
+                'text-orange-700': { bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
+                'text-indigo-700': { bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
+                'text-teal-700': { bgColor: 'bg-teal-50', borderColor: 'border-teal-200' },
                 'text-pink-600': { bgColor: 'bg-pink-50', borderColor: 'border-pink-200' }
               };
               const styleColors = colorMap[item.color] || { bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
@@ -1003,10 +1003,10 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                   <h3 className="text-lg font-semibold text-gray-800 mb-2">{item.title}</h3>
                   <div className="flex items-baseline">
                     <p className={`text-3xl font-bold ${item.color}`}>{item.value}</p>
-                    <span className="ml-2 text-lg text-gray-500">{item.unit}</span>
+                    <span className="ml-2 text-lg text-gray-600">{item.unit}</span>
                   </div>
                   <div className="mt-3 pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-500">{item.change}</p>
+                    <p className="text-xs text-gray-600">{item.change}</p>
                   </div>
                 </div>
               );
@@ -1204,7 +1204,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                     <div className="animate-spin rounded-full h-12 w-12 lg:h-16 lg:w-16 border-4 border-transparent border-t-indigo-600 absolute top-0 left-0"></div>
                   </div>
                   <p className="mt-3 lg:mt-4 text-base lg:text-lg font-medium text-gray-700">Cargando datos de inversores...</p>
-                  <p className="mt-1 lg:mt-2 text-sm text-gray-500">Procesando indicadores fotovoltaicos</p>
+                  <p className="mt-1 lg:mt-2 text-sm text-gray-600">Procesando indicadores fotovoltaicos</p>
                 </div>
               </div>
             )}
@@ -1214,7 +1214,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
                     <div className="p-2 bg-red-100 rounded-lg">
-                      <svg className="w-5 h-5 lg:w-6 lg:h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 lg:w-6 lg:h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
@@ -1624,7 +1624,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                     <div className="flex items-center space-x-3">
                       <div className="p-2 bg-red-100 rounded-lg">
-                        <svg className="w-5 h-5 lg:w-6 lg:h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 lg:w-6 lg:h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </div>
@@ -1688,7 +1688,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                                   return localDate.toLocaleDateString('es-ES');
                                 })()}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-600">
                                 {(() => {
                                   // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
                                   const rawDate = item.date;
@@ -1701,7 +1701,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               <div className="text-xs lg:text-sm font-medium text-gray-900">{item.device_name || 'N/A'}</div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                              <div className="text-xs lg:text-sm font-semibold text-green-600">
+                              <div className="text-xs lg:text-sm font-semibold text-green-700">
                                 {(item.total_generated_energy_kwh || 0).toFixed(2)}
                               </div>
                             </td>
@@ -1717,7 +1717,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                              <div className="text-xs lg:text-sm font-semibold text-blue-600">
+                              <div className="text-xs lg:text-sm font-semibold text-blue-700">
                                 {(item.performance_ratio || 0).toFixed(2)}
                               </div>
                             </td>
@@ -1733,7 +1733,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                              <div className="text-xs lg:text-sm font-semibold text-orange-600">
+                              <div className="text-xs lg:text-sm font-semibold text-orange-700">
                                 {(item.avg_temperature_c || 0).toFixed(1)}
                               </div>
                             </td>
@@ -1747,7 +1747,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                               <p className="text-base lg:text-lg font-medium text-gray-900 mb-1 lg:mb-2">No hay datos disponibles</p>
-                              <p className="text-gray-500 text-sm lg:text-base mb-4">Selecciona una institución para ver los indicadores de inversores</p>
+                              <p className="text-gray-600 text-sm lg:text-base mb-4">Selecciona una institución para ver los indicadores de inversores</p>
                             </div>
                           </td>
                         </tr>
@@ -1771,7 +1771,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                       <div className="flex items-center space-x-2">
                         {/* Botón Anterior */}
                         <button
-                          onClick={goToPreviousPage}
+                          onClick={goToPreviousPage} aria-label="Página anterior"
                           disabled={currentPage === 1}
                           className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-150 ${
                             currentPage === 1
@@ -1816,7 +1816,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         
                         {/* Botón Siguiente */}
                         <button
-                          onClick={goToNextPage}
+                          onClick={goToNextPage} aria-label="Página siguiente"
                           disabled={currentPage === totalPages}
                           className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-150 ${
                             currentPage === totalPages

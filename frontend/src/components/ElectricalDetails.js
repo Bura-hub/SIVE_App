@@ -107,7 +107,7 @@ const SectionHeader = ({ title, icon, infoText }) => (
     </h2>
     <div className="text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
       <span className="flex items-center">
-        <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         {infoText}
@@ -164,7 +164,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
       change: "Este período", 
       status: "normal", 
       icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 11-12h-9l1-8z"></path></svg>,
-      color: "text-blue-600"
+      color: "text-blue-700"
     },
     peakDemand: { 
       title: "Demanda Pico", 
@@ -173,7 +173,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
       change: "Máximo registrado", 
       status: "normal", 
       icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22,7 13.5,15.5 8.5,10.5 2,17"></polyline><polyline points="16,7 22,7 22,13"></polyline></svg>,
-      color: "text-red-600"
+      color: "text-red-700"
     },
     loadFactor: { 
       title: "Factor de Carga", 
@@ -182,7 +182,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
       change: "Eficiencia del sistema", 
       status: "normal", 
       icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>,
-      color: "text-green-600"
+      color: "text-green-700"
     },
     powerFactor: { 
       title: "Factor de Potencia", 
@@ -191,7 +191,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
       change: "Calidad de energía", 
       status: "normal", 
       icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>,
-      color: "text-purple-600"
+      color: "text-purple-700"
     }
   });
 
@@ -514,7 +514,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-red-600 text-lg p-4 bg-red-100 rounded-lg shadow-md">Error: {error}</div>
+        <div className="text-red-700 text-lg p-4 bg-red-100 rounded-lg shadow-md">Error: {error}</div>
       </div>
     );
   }
@@ -607,10 +607,10 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
               const item = kpiData[key];
               // Mapear colores del KPI a colores de estilo adaptado
               const colorMap = {
-                'text-blue-600': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-                'text-red-600': { bgColor: 'bg-red-50', borderColor: 'border-red-200' },
-                'text-green-600': { bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-                'text-purple-600': { bgColor: 'bg-purple-50', borderColor: 'border-purple-200' }
+                'text-blue-700': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+                'text-red-700': { bgColor: 'bg-red-50', borderColor: 'border-red-200' },
+                'text-green-700': { bgColor: 'bg-green-50', borderColor: 'border-green-200' },
+                'text-purple-700': { bgColor: 'bg-purple-50', borderColor: 'border-purple-200' }
               };
               const styleColors = colorMap[item.color] || { bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
               
@@ -645,10 +645,10 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                   <h3 className="text-lg font-semibold text-gray-800 mb-2">{item.title}</h3>
                   <div className="flex items-baseline">
                     <p className={`text-3xl font-bold ${item.color}`}>{item.value}</p>
-                    <span className="ml-2 text-lg text-gray-500">{item.unit}</span>
+                    <span className="ml-2 text-lg text-gray-600">{item.unit}</span>
                   </div>
                   <div className="mt-3 pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-500">{item.change}</p>
+                    <p className="text-xs text-gray-600">{item.change}</p>
                   </div>
                 </div>
               );
@@ -848,7 +848,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                   <div className="animate-spin rounded-full h-12 w-12 lg:h-16 lg:w-16 border-4 border-transparent border-t-indigo-600 absolute top-0 left-0"></div>
                 </div>
                 <p className="mt-3 lg:mt-4 text-base lg:text-lg font-medium text-gray-700">Cargando datos de medidores...</p>
-                <p className="mt-1 lg:mt-2 text-sm text-gray-500">Procesando indicadores eléctricos</p>
+                <p className="mt-1 lg:mt-2 text-sm text-gray-600">Procesando indicadores eléctricos</p>
               </div>
             </div>
           )}
@@ -858,7 +858,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
               <div className="flex items-start">
                 <div className="flex-shrink-0">
                   <div className="p-2 bg-red-100 rounded-lg">
-                    <svg className="w-5 h-5 lg:w-6 lg:h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 lg:w-6 lg:h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                   </div>
@@ -1203,7 +1203,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                                     return localDate.toLocaleDateString('es-ES');
                                   })()}
                                 </div>
-                                <div className="text-xs text-gray-500">
+                                <div className="text-xs text-gray-600">
                                   {(() => {
                                     // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
                                     const rawDate = item.date;
@@ -1216,22 +1216,22 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                                 <div className="text-xs lg:text-sm font-medium text-gray-900">{item.device_name || 'N/A'}</div>
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                                <div className="text-xs lg:text-sm font-semibold text-blue-600">
+                                <div className="text-xs lg:text-sm font-semibold text-blue-700">
                                   {(item.imported_energy_kwh || 0).toFixed(2)}
                                 </div>
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                                <div className="text-xs lg:text-sm font-semibold text-red-600">
+                                <div className="text-xs lg:text-sm font-semibold text-red-700">
                                   {(item.exported_energy_kwh || 0).toFixed(2)}
                                 </div>
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                                <div className={`text-xs lg:text-sm font-semibold ${(item.net_energy_consumption_kwh || 0) >= 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                                <div className={`text-xs lg:text-sm font-semibold ${(item.net_energy_consumption_kwh || 0) >= 0 ? 'text-green-700' : 'text-orange-700'}`}>
                                   {(item.net_energy_consumption_kwh || 0).toFixed(2)}
                                 </div>
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                                <div className="text-xs lg:text-sm font-semibold text-orange-600">
+                                <div className="text-xs lg:text-sm font-semibold text-orange-700">
                                   {(item.peak_demand_kw || 0).toFixed(2)}
                                 </div>
                               </td>
@@ -1267,7 +1267,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                                 <p className="text-base lg:text-lg font-medium text-gray-900 mb-1 lg:mb-2">No hay datos disponibles</p>
-                                <p className="text-gray-500 text-sm lg:text-base mb-4">Selecciona una institución y medidor para ver los indicadores eléctricos</p>
+                                <p className="text-gray-600 text-sm lg:text-base mb-4">Selecciona una institución y medidor para ver los indicadores eléctricos</p>
                                 <button
                                   onClick={calculateElectricalData}
                                   disabled={meterLoading}
@@ -1310,7 +1310,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                         <div className="flex items-center space-x-2">
                           {/* Botón Anterior */}
                           <button
-                            onClick={goToPreviousPage}
+                            onClick={goToPreviousPage} aria-label="Página anterior"
                             disabled={currentPage === 1}
                             className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-150 ${
                               currentPage === 1
@@ -1355,7 +1355,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                           
                           {/* Botón Siguiente */}
                           <button
-                            onClick={goToNextPage}
+                            onClick={goToNextPage} aria-label="Página siguiente"
                             disabled={currentPage === totalPages}
                             className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-150 ${
                               currentPage === totalPages

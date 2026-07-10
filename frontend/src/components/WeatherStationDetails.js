@@ -120,7 +120,7 @@ const SectionHeader = ({ title, icon, infoText }) => (
     </h2>
     <div className="text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
       <span className="flex items-center">
-        <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         {infoText}
@@ -202,7 +202,7 @@ const WEATHER_KPI_BASE = {
     change: "Este período",
     status: "normal",
     icon: <IconSun size={24} />,
-    color: "text-orange-600"
+    color: "text-orange-700"
   },
   hsp: {
     title: "Horas Solares Pico",
@@ -220,7 +220,7 @@ const WEATHER_KPI_BASE = {
     change: "Promedio del período",
     status: "normal",
     icon: <IconWind size={24} />,
-    color: "text-blue-600"
+    color: "text-blue-700"
   },
   windDirection: {
     title: "Dirección del Viento",
@@ -229,7 +229,7 @@ const WEATHER_KPI_BASE = {
     change: "Predominante",
     status: "normal",
     icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>,
-    color: "text-indigo-600"
+    color: "text-indigo-700"
   },
   precipitation: {
     title: "Precipitación Acumulada",
@@ -238,7 +238,7 @@ const WEATHER_KPI_BASE = {
     change: "Acumulado del período",
     status: "normal",
     icon: <IconDroplets size={24} />,
-    color: "text-cyan-600"
+    color: "text-cyan-700"
   },
   pvPower: {
     title: "Potencia Fotovoltaica",
@@ -247,7 +247,7 @@ const WEATHER_KPI_BASE = {
     change: "Basada en irradiancia",
     status: "normal",
     icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect><path d="M7 12h2l1 2 2-4 1 2h2"></path><path d="M17 16h.01"></path><path d="M17 8h.01"></path></svg>,
-    color: "text-purple-600"
+    color: "text-purple-700"
   }
 };
 
@@ -738,7 +738,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-red-600 text-lg p-4 bg-red-100 rounded-lg shadow-md">
+        <div className="text-red-700 text-lg p-4 bg-red-100 rounded-lg shadow-md">
           Error: {error}
         </div>
       </div>
@@ -838,12 +838,12 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 const item = kpiData[key];
                 // Mapear colores del KPI a colores de estilo adaptado
                 const colorMap = {
-                  'text-orange-600': { bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
+                  'text-orange-700': { bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
                   'text-yellow-600': { bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' },
-                  'text-blue-600': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-                  'text-indigo-600': { bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
-                  'text-cyan-600': { bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200' },
-                  'text-purple-600': { bgColor: 'bg-purple-50', borderColor: 'border-purple-200' }
+                  'text-blue-700': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+                  'text-indigo-700': { bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
+                  'text-cyan-700': { bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200' },
+                  'text-purple-700': { bgColor: 'bg-purple-50', borderColor: 'border-purple-200' }
                 };
                 const styleColors = colorMap[item.color] || { bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
                 
@@ -878,10 +878,10 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">{item.title}</h3>
                     <div className="flex items-baseline">
                       <p className={`text-3xl font-bold ${item.color}`}>{item.value}</p>
-                      <span className="ml-2 text-lg text-gray-500">{item.unit}</span>
+                      <span className="ml-2 text-lg text-gray-600">{item.unit}</span>
                     </div>
                     <div className="mt-3 pt-3 border-t border-gray-100">
-                      <p className="text-xs text-gray-500">{item.change}</p>
+                      <p className="text-xs text-gray-600">{item.change}</p>
                     </div>
                   </div>
                 );
@@ -1087,7 +1087,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                     <div className="animate-spin rounded-full h-12 w-12 lg:h-16 lg:w-16 border-4 border-transparent border-t-orange-600 absolute top-0 left-0"></div>
                 </div>
                   <p className="mt-3 lg:mt-4 text-base lg:text-lg font-medium text-gray-700">Cargando datos meteorológicos...</p>
-                  <p className="mt-1 lg:mt-2 text-sm text-gray-500">Procesando indicadores meteorológicos</p>
+                  <p className="mt-1 lg:mt-2 text-sm text-gray-600">Procesando indicadores meteorológicos</p>
                 </div>
                 </div>
             )}
@@ -1097,7 +1097,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
                     <div className="p-2 bg-red-100 rounded-lg">
-                      <svg className="w-5 h-5 lg:w-6 lg:h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 lg:w-6 lg:h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -1534,7 +1534,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                     <div className="flex items-center space-x-3">
                       <div className="p-2 bg-orange-100 rounded-lg">
-                        <svg className="w-5 h-5 lg:w-6 lg:h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 lg:w-6 lg:h-6 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <circle cx="12" cy="6" r="2"></circle>
                           <path d="M12 8v4"></path>
                           <path d="M6 20h12"></path>
@@ -1604,7 +1604,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                                   return localDate.toLocaleDateString('es-ES');
                                 })()}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-600">
                                 {(() => {
                                   // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
                                   const rawDate = item.date;
@@ -1650,7 +1650,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                          <td colSpan="8" className="px-4 py-8 text-center text-gray-600">
                             No hay datos disponibles para mostrar
                           </td>
                         </tr>

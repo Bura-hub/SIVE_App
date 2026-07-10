@@ -114,42 +114,42 @@ function Sidebar({
       name: 'Inicio', 
       page: 'dashboard', 
       icon: <IconHome className="w-5 h-5 shrink-0" />,
-      activeClasses: 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25',
+      activeClasses: 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/25',
       inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-blue-600'
     },
     { 
       name: 'Medidores', 
       page: 'electricalDetails', 
       icon: <IconGauge className="w-5 h-5 shrink-0" />,
-      activeClasses: 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg shadow-green-500/25',
+      activeClasses: 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg shadow-green-500/25',
       inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-green-600'
     },
     { 
       name: 'Inversores', 
       page: 'inverterDetails', 
       icon: <IconInverter className="w-5 h-5 shrink-0" />,
-      activeClasses: 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25',
+      activeClasses: 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/25',
       inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-red-600'
     },
     { 
       name: 'Estaciones', 
       page: 'weatherDetails', 
       icon: <IconCloudSun className="w-5 h-5 shrink-0" />,
-      activeClasses: 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/25',
+      activeClasses: 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg shadow-orange-500/25',
       inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-orange-600'
     },
     { 
       name: 'Datos Externos', 
       page: 'externalEnergy', 
       icon: <IconGlobe className="w-5 h-5 shrink-0" />,
-      activeClasses: 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg shadow-teal-500/25',
+      activeClasses: 'bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-lg shadow-teal-500/25',
       inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-teal-600'
     },
     { 
       name: 'Exportar Reportes', 
       page: 'exportReports', 
       icon: <IconFileDown className="w-5 h-5 shrink-0" />,
-      activeClasses: 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg shadow-purple-500/25',
+      activeClasses: 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/25',
       inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-purple-600'
     },
   ];

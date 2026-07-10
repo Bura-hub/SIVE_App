@@ -141,7 +141,7 @@ const WeatherStationFilters = ({ onFiltersChange, authToken }) => {
       {/* Filtro de rango de tiempo */}
       <div className="flex flex-col">
         <label className="text-sm font-medium text-gray-700 mb-1">Rango de Tiempo</label>
-        <select
+        <select aria-label="Rango de Tiempo"
           value={timeRange}
           onChange={(e) => setTimeRange(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
@@ -154,7 +154,7 @@ const WeatherStationFilters = ({ onFiltersChange, authToken }) => {
       {/* Filtro de institución */}
       <div className="flex flex-col">
         <label className="text-sm font-medium text-gray-700 mb-1">Institución</label>
-        <select
+        <select aria-label="Institución"
           value={selectedInstitution}
           onChange={(e) => {
             setSelectedInstitution(e.target.value);
@@ -174,7 +174,7 @@ const WeatherStationFilters = ({ onFiltersChange, authToken }) => {
       {/* Filtro de dispositivo */}
       <div className="flex flex-col">
         <label className="text-sm font-medium text-gray-700 mb-1">Estación Meteorológica</label>
-        <select
+        <select aria-label="Estación Meteorológica"
           value={selectedDevice}
           onChange={(e) => setSelectedDevice(e.target.value)}
           disabled={!selectedInstitution || loading}
@@ -192,7 +192,7 @@ const WeatherStationFilters = ({ onFiltersChange, authToken }) => {
       {/* Filtro de fecha de inicio */}
       <div className="flex flex-col">
         <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-        <input
+        <input aria-label="Fecha de Inicio"
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
@@ -203,7 +203,7 @@ const WeatherStationFilters = ({ onFiltersChange, authToken }) => {
       {/* Filtro de fecha de fin */}
       <div className="flex flex-col">
         <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Fin</label>
-        <input
+        <input aria-label="Fecha de Fin"
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
