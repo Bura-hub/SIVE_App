@@ -1066,10 +1066,13 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
             peak_demand_kw = 0
             avg_demand_kw = 0
         
-        # 3.4. Factor de Carga
+        # 3.4. Factor de Carga = demanda media / demanda pico (misma serie de potencia).
+        # Antes se calculaba net_energy(registros) / (pico(potencia)·horas), que mezclaba
+        # dos fuentes distintas: un pico diminuto con energía registrada daba factores
+        # imposibles (hasta 220.659%). Con media/pico queda acotado a [0,100] por
+        # construcción (la media nunca supera el pico) y es la definición canónica.
         if peak_demand_kw > 0:
-            hours_in_period = 24 if time_range == 'daily' else 24 * 30
-            load_factor_pct = (net_energy_consumption_kwh / (peak_demand_kw * hours_in_period)) * 100
+            load_factor_pct = min(100.0, max(0.0, (avg_demand_kw / peak_demand_kw) * 100))
         else:
             load_factor_pct = 0
         
