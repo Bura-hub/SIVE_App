@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from drf_spectacular.utils import OpenApiExample
-from .models import DeviceCategory, Device, Measurement, Institution, TaskProgress
+from .models import DeviceCategory, Device, Institution, TaskProgress
 
 # ========================= Institution =========================
 
@@ -57,7 +57,7 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 # ========================= Measurement =========================
 
-class MeasurementSerializer(serializers.ModelSerializer):
+class MeasurementSerializer(serializers.Serializer):
     """
     Serializador para Mediciones de Dispositivos.
     """
@@ -72,14 +72,11 @@ class MeasurementSerializer(serializers.ModelSerializer):
         help_text="Identificador SCADA del dispositivo al que pertenece la medición."
     )
 
-    class Meta:
-        model = Measurement
-        fields = '__all__'  # Esto incluirá todos los campos del modelo Measurement
-        extra_kwargs = {
-            'variable_key': {'help_text': 'Clave de la variable medida'},
-            'value': {'help_text': 'Valor medido'},
-            'timestamp': {'help_text': 'Marca de tiempo de la medición en formato ISO 8601'},
-        }
+    # v2: ya no hay modelo Measurement; los datos vienen reconstruidos de las
+    # tablas tipadas con el mismo contrato (id, device, date, data).
+    id = serializers.IntegerField(read_only=True)
+    date = serializers.DateTimeField(read_only=True)
+    data = serializers.JSONField(read_only=True)
 
 # ========================= TaskProgress =========================
 

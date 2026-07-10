@@ -26,7 +26,7 @@ django.setup()
 
 from django.utils import timezone  # noqa: E402
 
-from scada_proxy.models import Device, Measurement, measurement_model_for_category  # noqa: E402
+from scada_proxy.models import Device, measurement_model_for_category  # noqa: E402
 from scada_proxy.measurements_schema import metrics_for_category  # noqa: E402
 from scada_proxy.scada_client import ScadaConnectorClient  # noqa: E402
 
@@ -84,41 +84,6 @@ def check_counts_vs_connector(client, devices, quick=False):
                 fail(f"conteo distinto: {device.name} {label}")
 
 
-def check_v1_vs_v2(devices, sample_size):
-    print(f"== (b) Igualdad v1 (jsonb) vs v2 (columnas) en ~{sample_size} filas ==")
-    per_device = max(sample_size // max(len(devices), 1), 50)
-    for device in devices:
-        model = v2_model_for(device)
-        metrics = metrics_for_category(device.category.name if device.category_id else None)
-        if model is None:
-            continue
-        ids = list(model.objects.filter(device=device).values_list('id', flat=True))
-        if not ids:
-            print(f"  - {device.name}: sin filas v2")
-            continue
-        chosen = random.sample(ids, min(per_device, len(ids)))
-        mismatches = 0
-        checked = 0
-        for row in model.objects.filter(id__in=chosen).iterator(chunk_size=500):
-            v1 = Measurement.objects.filter(device=device, date=row.date).values_list('data', flat=True).first()
-            if v1 is None:
-                # v2 puede tener filas que v1 no (resync más completo): no es error de valores
-                continue
-            checked += 1
-            for k in metrics:
-                a, b = v1.get(k), getattr(row, k)
-                if a is None and b is None:
-                    continue
-                if a is None or b is None or float(a) != float(b):
-                    mismatches += 1
-                    if mismatches <= 3:
-                        print(f"    ✗ {device.name} {row.date} {k}: v1={a} v2={b}")
-        status = '✓' if mismatches == 0 else '✗'
-        print(f"  {status} {device.name[:28]:30s} filas_comparadas={checked} discrepancias={mismatches}")
-        if mismatches:
-            fail(f"valores distintos en {device.name}")
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--quick', action='store_true')
@@ -133,8 +98,6 @@ def main():
 
     client = ScadaConnectorClient()
     check_counts_vs_connector(client, devices, quick=args.quick)
-    if not args.quick:
-        check_v1_vs_v2(devices, args.sample)
 
     print(f"\n{'✓ VALIDACIÓN OK' if FAILS == 0 else f'✗ {FAILS} DISCREPANCIAS'}")
     sys.exit(0 if FAILS == 0 else 1)

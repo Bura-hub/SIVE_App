@@ -336,11 +336,6 @@ XM_API_TIMEOUT = int(os.getenv('XM_API_TIMEOUT', '30'))
 # external_energy/services.py: NO se desactiva la verificación SSL global del proceso.
 PYDATAXM_VERIFY_SSL = os.getenv('PYDATAXM_VERIFY_SSL', 'true').lower() not in ('0', 'false', 'no')
 
-# Transición Measurement v1 (jsonb) → v2 (tablas tipadas): mientras sea True,
-# la ingesta escribe en AMBOS esquemas (dual-write). Se pone en False en el
-# switchover (F5), cuando las lecturas ya usan v2 y v1 queda congelada.
-MEASUREMENTS_WRITE_V1 = os.getenv('MEASUREMENTS_WRITE_V1', 'true').lower() not in ('0', 'false', 'no')
-
 # Parámetros del cálculo de factor de capacidad y ROI en los ahorros de energía.
 # Antes estaban hardcodeados en la vista (100 kW y 50.000.000 COP).
 SOLAR_INSTALLED_CAPACITY_KW = float(os.getenv('SOLAR_INSTALLED_CAPACITY_KW', '100'))

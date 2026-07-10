@@ -75,7 +75,7 @@ class Command(BaseCommand):
                     token = client.get_token()
                     rows = 0
                     for page in _iter_measurement_pages(token, device.scada_id, c_start, c_end):
-                        rows += upsert_measurements_page(device, page, write_v1=False, write_v2=True)
+                        rows += upsert_measurements_page(device, page)
                     record.status = 'done'
                     record.rows = rows
                     record.save(update_fields=['status', 'rows', 'updated_at'])

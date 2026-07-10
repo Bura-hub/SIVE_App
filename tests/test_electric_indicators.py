@@ -3,7 +3,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta, time
 from indicators.models import ElectricMeterIndicators
 from indicators.tasks import calculate_electric_meter_indicators
-from scada_proxy.models import Device, Institution, DeviceCategory, Measurement
+from scada_proxy.models import Device, Institution, DeviceCategory
 
 class ElectricMeterIndicatorsTestCase(TestCase):
     def setUp(self):

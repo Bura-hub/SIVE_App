@@ -11,7 +11,7 @@ from datetime import datetime, time
 
 from django.test import TestCase
 
-from scada_proxy.models import Device, Institution, DeviceCategory, Measurement, MeterMeasurement
+from scada_proxy.models import Device, Institution, DeviceCategory, MeterMeasurement
 from scada_proxy.tasks import upsert_measurements_page
 from indicators.models import DailyChartData
 from indicators.energy import SAMPLE_INTERVAL_HOURS
@@ -53,7 +53,6 @@ class ConsumptionNetGrossTests(TestCase):
 
     def test_gross_equals_net_without_export(self):
         # Sin valores negativos, neto y bruto coinciden.
-        Measurement.objects.all().delete()
         MeterMeasurement.objects.all().delete()
         base = COLOMBIA_TZ.localize(datetime.combine(self.date, time(9, 0)))
         upsert_measurements_page(self.device, [

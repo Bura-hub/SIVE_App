@@ -20,7 +20,7 @@ from .models import ElectricMeterEnergyConsumption, MonthlyConsumptionKPI, Daily
 # Importa el cliente SCADA y los modelos DeviceCategory, Measurement, Device de scada_proxy
 from scada_proxy.scada_client import ScadaConnectorClient
 from scada_proxy.views import check_scada_connection
-from scada_proxy.models import DeviceCategory, Measurement, Device, Institution
+from scada_proxy.models import DeviceCategory, Device, Institution
 # Importa las tareas de Celery
 from .tasks import calculate_monthly_consumption_kpi, calculate_and_save_daily_data
 

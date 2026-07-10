@@ -58,21 +58,6 @@ class Device(models.Model):
         return f"{self.name} ({self.scada_id})"
 
 
-# =========================
-# Mediciones históricas
-# =========================
-class Measurement(models.Model):
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='measurements')
-    date = models.DateTimeField(db_index=True)  # Fecha/hora exacta de la medición (compatible con la API)
-    data = models.JSONField()  # Datos completos en formato JSON
-
-    class Meta:
-        unique_together = ('device', 'date')
-        ordering = ['-date']
-
-    def __str__(self):
-        return f"{self.device.name} - {self.date}"
-    
 class TaskProgress(models.Model):
     task_id = models.CharField(max_length=255, unique=True)
     status = models.CharField(max_length=50, default='PENDING')  # PENDING, IN_PROGRESS, SUCCESS, FAILURE, CANCELLED

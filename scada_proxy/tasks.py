@@ -13,7 +13,7 @@ from django.db import models
 from django.conf import settings
 from .scada_client import ScadaConnectorClient
 from .models import (
-    Institution, DeviceCategory, Device, Measurement, TaskProgress,
+    Institution, DeviceCategory, Device, TaskProgress,
     CATEGORY_TO_MODEL, measurement_model_for_category,
 )
 from .measurements_schema import metrics_for_category
@@ -298,19 +298,13 @@ def _iter_measurement_pages(token, device_scada_id, from_dt, to_dt, page_size=10
         offset += page_size
 
 
-def upsert_measurements_page(device, rows, write_v1=None, write_v2=True):
-    """Upsert masivo de una página de mediciones (v1 jsonb y/o v2 tipadas).
+def upsert_measurements_page(device, rows, write_v2=True):
+    """Upsert masivo de una página de mediciones en las tablas tipadas v2.
 
     `rows` es una lista de (datetime_aware, data_dict). Deduplica por fecha
     (última gana: el UNIQUE (device,date) no admite el mismo par dos veces en
     un solo ON CONFLICT). Devuelve el número de filas procesadas.
-
-    Dual-write: v1 se controla con settings.MEASUREMENTS_WRITE_V1 (default
-    True hasta el switchover); v2 siempre, salvo categoría desconocida.
     """
-    if write_v1 is None:
-        write_v1 = getattr(settings, 'MEASUREMENTS_WRITE_V1', True)
-
     deduped = {}
     for dt, data in rows:
         deduped[dt] = data
@@ -327,13 +321,6 @@ def upsert_measurements_page(device, rows, write_v1=None, write_v2=True):
         )
 
     with transaction.atomic():
-        if write_v1:
-            Measurement.objects.bulk_create(
-                [Measurement(device=device, date=dt, data=data) for dt, data in deduped.items()],
-                update_conflicts=True,
-                unique_fields=['device', 'date'],
-                update_fields=['data'],
-            )
         if v2_model is not None:
             metric_set = set(v2_metrics)
             unknown = set()

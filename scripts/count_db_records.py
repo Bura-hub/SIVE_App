@@ -11,7 +11,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 django.setup()
 
 from django.db import connection
-from scada_proxy.models import Measurement, Device, DeviceCategory, Institution
+from scada_proxy.models import Device, DeviceCategory, Institution, MeterMeasurement, InverterMeasurement, WeatherStationMeasurement
 from indicators.models import (
     MonthlyConsumptionKPI,
     DailyChartData,
@@ -33,7 +33,9 @@ def main():
     print(f"  Institution:           {Institution.objects.count()}")
     print(f"  DeviceCategory:       {DeviceCategory.objects.count()}")
     print(f"  Device:               {Device.objects.count()}")
-    print(f"  Measurement:          {Measurement.objects.count()}")
+    print(f"  MeterMeasurement:     {MeterMeasurement.objects.count()}")
+    print(f"  InverterMeasurement:  {InverterMeasurement.objects.count()}")
+    print(f"  WeatherStationMeas.:  {WeatherStationMeasurement.objects.count()}")
 
     # Indicadores dashboard
     print("\n--- Dashboard (indicators) ---")

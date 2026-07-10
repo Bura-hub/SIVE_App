@@ -1,6 +1,6 @@
 # Comando de gestión para encolar la carga inicial de datos SCADA cuando la BD está vacía.
 from django.core.management.base import BaseCommand
-from scada_proxy.models import Measurement, Device
+from scada_proxy.models import Device, MeterMeasurement, InverterMeasurement, WeatherStationMeasurement
 from indicators.models import MonthlyConsumptionKPI
 from scada_proxy.tasks import bootstrap_scada_data
 
@@ -20,7 +20,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         force = options['force']
-        has_measurements = Measurement.objects.exists()
+        has_measurements = (MeterMeasurement.objects.exists() or InverterMeasurement.objects.exists()
+                            or WeatherStationMeasurement.objects.exists())
         has_devices = Device.objects.filter(is_active=True).exists()
         has_kpis = MonthlyConsumptionKPI.objects.exists()
 
