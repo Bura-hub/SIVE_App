@@ -56,6 +56,10 @@ FORCE_SCRIPT_NAME = os.getenv('FORCE_SCRIPT_NAME') or None
 # Confiar en el Host reenviado por el proxy (Apache) cuando termina TLS por nosotros.
 USE_X_FORWARDED_HOST = os.getenv('USE_X_FORWARDED_HOST', 'False').lower() == 'true'
 
+# --- Alerting (core/alerting.py) --- Canales opcionales; si ambos vacíos, solo se loguea.
+ALERT_WEBHOOK_URL = os.getenv('ALERT_WEBHOOK_URL', '')   # Slack/Discord/Teams/genérico
+ALERT_EMAIL_TO = os.getenv('ALERT_EMAIL_TO', '')          # requiere EMAIL_HOST/EMAIL_* configurados
+
 # ========================= Aplicaciones Registradas =========================
 
 INSTALLED_APPS = [

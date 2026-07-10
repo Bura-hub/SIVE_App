@@ -25,3 +25,19 @@ app.conf.update(
     task_track_started=True,
     result_expires=3600,
 )
+
+
+# Alerting (Ola 2): cualquier tarea que FALLE (lance excepción) dispara una alerta.
+# No cubre tareas que "tragan" la excepción y devuelven un string de error — esas
+# requieren corrección individual — pero da una red mínima donde antes no había NADA.
+from celery.signals import task_failure  # noqa: E402
+
+
+@task_failure.connect
+def _on_task_failure(sender=None, task_id=None, exception=None, **kwargs):
+    try:
+        from core.alerting import notify_failure
+        name = getattr(sender, 'name', str(sender))
+        notify_failure(f"tarea Celery {name}", f"task_id={task_id}: {exception}")
+    except Exception:  # noqa: BLE001 — el alerting nunca debe romper el worker
+        pass

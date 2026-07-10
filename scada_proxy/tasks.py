@@ -385,6 +385,24 @@ def fetch_and_save_measurements_for_device(self, device_scada_id: str, django_de
         logger.error(f"Error al obtener/guardar mediciones: {e}", exc_info=True)
         raise
 
+@shared_task
+def log_pipeline_error(request, exc, traceback):
+    """Errback del pipeline post-ingesta. Antes, si un cálculo de la cadena fallaba,
+    la cadena se cortaba EN SILENCIO (los cálculos siguientes no corrían y nadie se
+    enteraba). Ahora al menos queda registrado; es también el punto de enganche del
+    alerting (Ola 2)."""
+    task_id = getattr(request, 'id', '?')
+    logger.error(
+        "PIPELINE POST-INGESTA FALLÓ (task_id=%s): %s. Los cálculos posteriores de la "
+        "cadena NO se ejecutaron esta hora.", task_id, exc,
+    )
+    try:
+        from core.alerting import notify_failure
+        notify_failure("pipeline post-ingesta", f"task_id={task_id}: {exc}")
+    except Exception:  # noqa: BLE001 — el alerting nunca debe romper el errback
+        pass
+
+
 @shared_task(bind=True)
 def run_post_ingest_pipeline(self):
     """Callback del chord de ingesta: encadena los cálculos SOLO cuando todas
@@ -420,7 +438,7 @@ def run_post_ingest_pipeline(self):
         calculate_electrical_data.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
         calculate_inverter_data.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
         calculate_weather_station_indicators.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
-    ).apply_async()
+    ).apply_async(link_error=log_pipeline_error.s())
     return 'pipeline de cálculos encolado'
 
 
