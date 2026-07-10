@@ -1,7 +1,7 @@
 // Configuración base de la API. Cadena vacía por defecto: permite despliegues
 // same-origin (p. ej. detrás de un reverse proxy con rutas relativas) sin que
 // `API_BASE_URL + endpoint` quede como "undefined/...".
-export const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Endpoints organizados por categoría
 export const ENDPOINTS = {
