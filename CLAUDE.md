@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**MTE SIVE** — energy visualization system (Universidad de Nariño). Decoupled architecture: **Django 5.2 + DRF** backend and **React 19 (Create React App)** frontend. Displays historical data and KPIs for energy consumption/generation and climate variables, sourced from a remote SCADA connector API and Colombia's XM energy market.
+**MTE SIVE** — energy visualization system (Universidad de Nariño). Decoupled architecture: **Django 5.2 + DRF** backend and **React 19 (Vite)** frontend. Displays historical data and KPIs for energy consumption/generation and climate variables, sourced from a remote SCADA connector API and Colombia's XM energy market.
 
 ## Critical rule: everything runs in Docker
 
@@ -35,7 +35,7 @@ Tests live in the top-level `tests/` directory (Django TestCase / DRF APITestCas
 ### Frontend (in `frontend/`)
 ```bash
 npm install
-npm start        # CRA dev server
+npm start        # Vite dev server (alias de `npm run dev`)
 npm run build    # production build
 npm test         # Jest + Testing Library
 ```
@@ -58,8 +58,8 @@ npm test         # Jest + Testing Library
 - Requirements are split in `requirements/` (`base.txt`, `development.txt`, `production.txt`); top-level `requirements.txt` is the combined pin list.
 
 ### Frontend (React, `frontend/`)
-- CRA + Tailwind; charts with Chart.js (`react-chartjs-2`, `chartjs-plugin-zoom`).
-- API base URL is `process.env.REACT_APP_API_URL`, injected at **build time** — a Docker build without this variable produces broken API URLs (most common deployment failure; see `BACKEND_FRONTEND_ANALYSIS.md`).
+- Vite + Tailwind; charts with Chart.js (`react-chartjs-2`, `chartjs-plugin-zoom`). Tests: Vitest (`npm test`). JSX lives in `.js` files (Vite's esbuild loader is configured for this in `vite.config.js`).
+- API base URL is `import.meta.env.VITE_API_URL`, injected at **build time** — a Docker build without this variable produces broken API URLs (most common deployment failure; see `BACKEND_FRONTEND_ANALYSIS.md`). The `frontend` build arg is `VITE_API_URL` (the old `REACT_APP_API_URL` is still accepted as a fallback in `docker-compose.prod.yml`).
 - Two config files: `src/config.js` (auth/profile endpoints) and `src/utils/apiConfig.js` (everything else — `ENDPOINTS`, `buildApiUrl`, `getDefaultFetchOptions`, `fetchWithAuth`, `handleApiResponse`). New API calls must go through these utilities; don't hand-roll fetch/token logic. Token is stored in `localStorage` as `authToken`; `fetchWithAuth` handles 401 (clears token, redirects to login).
 - Screens receiving `authToken` as a prop: Dashboard, ElectricalDetails, InverterDetails, WeatherStationDetails, ExternalEnergyData, ExportReports. Follow the same pattern for new API-consuming components.
 - Don't break the login contract: response includes `access_token`, `username`, `is_superuser`.
