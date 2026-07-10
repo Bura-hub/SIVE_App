@@ -644,7 +644,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-gradient-to-r from-blue-600 to-purple-700 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
+      <header className="bg-gradient-to-r from-blue-700 to-purple-800 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
         <div className="px-4 lg:px-8 py-8 lg:py-12">
           <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
             <div className="p-3 bg-white/20 rounded-xl self-start lg:self-auto">
@@ -652,7 +652,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
             </div>
             <div>
               <h1 className="text-2xl lg:text-4xl font-bold text-white">Exportar Reportes</h1>
-              <p className="text-blue-100 mt-1 text-sm lg:text-base">Genera reportes profesionales de todos tus dispositivos</p>
+              <p className="text-blue-50 mt-1 text-sm lg:text-base">Genera reportes profesionales de todos tus dispositivos</p>
             </div>
           </div>
           

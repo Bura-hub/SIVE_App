@@ -212,7 +212,7 @@ const ExternalEnergyData = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header con banner profesional */}
-      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg -mx-4 -mt-4">
+      <header className="bg-gradient-to-r from-blue-700 to-indigo-800 shadow-lg -mx-4 -mt-4">
         <div className="px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -221,7 +221,7 @@ const ExternalEnergyData = () => {
                 </div>
                 <div>
                 <h1 className="text-4xl font-bold text-white">Datos Energéticos Externos</h1>
-                <p className="text-blue-100 mt-1">Integración con Sistema Interconectado Nacional (XM)</p>
+                <p className="text-blue-50 mt-1">Integración con Sistema Interconectado Nacional (XM)</p>
                   </div>
                 </div>
             

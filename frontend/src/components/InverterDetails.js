@@ -876,7 +876,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <header className="bg-gradient-to-r from-red-600 to-red-700 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
+      <header className="bg-gradient-to-r from-red-700 to-red-800 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
         <div className="px-4 lg:px-8 py-8 lg:py-12">
           <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
             <div className="p-3 bg-white/20 rounded-xl self-start lg:self-auto">
@@ -884,7 +884,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         </div>
             <div>
               <h1 className="text-2xl lg:text-4xl font-bold text-white">Detalles de Inversores</h1>
-              <p className="text-blue-100 mt-1 text-sm lg:text-base">Análisis y monitoreo de indicadores de inversores fotovoltaicos</p>
+              <p className="text-blue-50 mt-1 text-sm lg:text-base">Análisis y monitoreo de indicadores de inversores fotovoltaicos</p>
       </div>
           </div>
         </div>
@@ -1157,7 +1157,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       <section className="mb-6 lg:mb-8">
         <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 overflow-hidden">
           {/* Header de la sección */}
-          <div className="bg-gradient-to-r from-red-600 to-red-700 px-4 lg:px-8 py-4 lg:py-6">
+          <div className="bg-gradient-to-r from-red-700 to-red-800 px-4 lg:px-8 py-4 lg:py-6">
             <div className="flex flex-col lg:flex-row lg:items-center space-y-3 lg:space-y-0 lg:space-x-4">
               <div className="p-2 lg:p-3 bg-white/20 rounded-xl self-start lg:self-auto">
                 <svg className="w-6 h-6 lg:w-7 lg:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1166,7 +1166,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
               </div>
               <div className="flex-1">
                 <h2 className="text-lg lg:text-2xl font-bold text-white">Indicadores de Inversores Fotovoltaicos</h2>
-                <p className="text-indigo-100 mt-1 text-sm lg:text-base">Análisis detallado por institución e inversor</p>
+                <p className="text-indigo-50 mt-1 text-sm lg:text-base">Análisis detallado por institución e inversor</p>
                 {/* Indicador de rango de fechas */}
                 {filters.startDate && filters.endDate && (
                   <div className="mt-2 inline-flex items-center px-3 py-1 bg-white/20 rounded-full text-xs text-white">
@@ -1602,7 +1602,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         <section className="mb-6 lg:mb-8">
           <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 overflow-hidden">
             {/* Header de la sección de tabla */}
-            <div className="bg-gradient-to-r from-red-600 to-red-700 px-4 lg:px-6 xl:px-8 py-4 lg:py-6">
+            <div className="bg-gradient-to-r from-red-700 to-red-800 px-4 lg:px-6 xl:px-8 py-4 lg:py-6">
               <div className="flex flex-col lg:flex-row lg:items-center space-y-3 lg:space-y-0 lg:space-x-4">
                 <div className="p-2 lg:p-3 bg-white/20 rounded-xl self-start lg:self-auto">
                   <svg className="w-6 h-6 lg:w-7 lg:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1611,7 +1611,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                 </div>
                 <div>
                   <h2 className="text-lg lg:text-xl xl:text-2xl font-bold text-white">Datos Históricos Detallados</h2>
-                  <p className="text-red-100 mt-1 text-sm lg:text-base">Registros completos de indicadores de inversores por fecha</p>
+                  <p className="text-red-50 mt-1 text-sm lg:text-base">Registros completos de indicadores de inversores por fecha</p>
                 </div>
               </div>
             </div>

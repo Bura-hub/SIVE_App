@@ -199,7 +199,7 @@ const ElectricMeterFilters = ({ onFiltersChange, authToken }) => {
       </div>
 
       {devices.length === 0 && selectedInstitution && !loading && (
-          <p className="text-xs text-orange-600 mt-1">
+          <p className="text-xs text-orange-700 mt-1">
             No se encontraron medidores para esta institución
           </p>
         )}
@@ -207,7 +207,7 @@ const ElectricMeterFilters = ({ onFiltersChange, authToken }) => {
         {/* Información de depuración */}
         <div className="text-xs text-gray-500 mt-1">
         {devices.length > 0 && (
-          <p className="text-xs text-green-600 mt-1">
+          <p className="text-xs text-green-700 mt-1">
             {devices.length} medidor{devices.length !== 1 ? 'es' : ''} encontrado{devices.length !== 1 ? 's' : ''}
           </p>
         )}

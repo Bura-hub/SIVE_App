@@ -522,7 +522,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <header className="bg-gradient-to-r from-green-600 to-emerald-700 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
+      <header className="bg-gradient-to-r from-green-700 to-emerald-800 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
         <div className="px-4 lg:px-8 py-8 lg:py-12">
         <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
             <div className="p-3 bg-white/20 rounded-xl self-start lg:self-auto">
@@ -530,7 +530,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
             </div>
             <div>
               <h1 className="text-2xl lg:text-4xl font-bold text-white">Detalles Eléctricos</h1>
-              <p className="text-green-100 mt-1 text-sm lg:text-base">Análisis y monitoreo de indicadores eléctricos</p>
+              <p className="text-green-50 mt-1 text-sm lg:text-base">Análisis y monitoreo de indicadores eléctricos</p>
             </div>
           </div>
         </div>
@@ -801,7 +801,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
       <section className="mb-6 lg:mb-8">
         <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 overflow-hidden">
           {/* Header de la sección */}
-          <div className="bg-gradient-to-r from-green-600 to-emerald-700 px-4 lg:px-8 py-4 lg:py-6">
+          <div className="bg-gradient-to-r from-green-700 to-emerald-800 px-4 lg:px-8 py-4 lg:py-6">
             <div className="flex flex-col lg:flex-row lg:items-center space-y-3 lg:space-y-0 lg:space-x-4">
               <div className="p-2 lg:p-3 bg-white/20 rounded-xl self-start lg:self-auto">
                 <svg className="w-6 h-6 lg:w-7 lg:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -810,7 +810,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
               </div>
               <div className="flex-1">
                 <h2 className="text-lg lg:text-2xl font-bold text-white">Indicadores de Medidores Eléctricos</h2>
-                <p className="text-indigo-100 mt-1 text-sm lg:text-base">Análisis detallado por institución y medidor</p>
+                <p className="text-indigo-50 mt-1 text-sm lg:text-base">Análisis detallado por institución y medidor</p>
                 {/* Indicador de rango de fechas */}
                 {filters.startDate && filters.endDate && (
                   <div className="mt-2 inline-flex items-center px-3 py-1 bg-white/20 rounded-full text-xs text-white">
@@ -1116,7 +1116,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
           <section className="mb-6 lg:mb-8">
             <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 overflow-hidden">
               {/* Header de la sección de tabla */}
-              <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 lg:px-6 xl:px-8 py-4 lg:py-6">
+              <div className="bg-gradient-to-r from-emerald-700 to-teal-800 px-4 lg:px-6 xl:px-8 py-4 lg:py-6">
                 <div className="flex flex-col lg:flex-row lg:items-center space-y-3 lg:space-y-0 lg:space-x-4">
                   <div className="p-2 lg:p-3 bg-white/20 rounded-xl self-start lg:self-auto">
                     <svg className="w-6 h-6 lg:w-7 lg:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1125,7 +1125,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                   </div>
                   <div>
                     <h2 className="text-lg lg:text-xl xl:text-2xl font-bold text-white">Datos Históricos Detallados</h2>
-                    <p className="text-emerald-100 mt-1 text-sm lg:text-base">Registros completos de indicadores eléctricos por fecha y medidor</p>
+                    <p className="text-emerald-50 mt-1 text-sm lg:text-base">Registros completos de indicadores eléctricos por fecha y medidor</p>
                   </div>
                 </div>
               </div>

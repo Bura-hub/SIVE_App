@@ -211,7 +211,7 @@ const WEATHER_KPI_BASE = {
     change: "Equivalente solar",
     status: "normal",
     icon: <IconSun size={24} />,
-    color: "text-yellow-600"
+    color: "text-yellow-700"
   },
   windSpeed: {
     title: "Velocidad del Viento",
@@ -748,7 +748,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <header className="bg-gradient-to-r from-orange-600 to-amber-700 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
+      <header className="bg-gradient-to-r from-orange-700 to-amber-800 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
         <div className="px-4 lg:px-8 py-8 lg:py-12">
           <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
             <div className="p-3 bg-white/20 rounded-xl self-start lg:self-auto">
@@ -756,7 +756,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
             </div>
             <div>
               <h1 className="text-2xl lg:text-4xl font-bold text-white">Estaciones Meteorológicas</h1>
-              <p className="text-orange-100 mt-1 text-sm lg:text-base">Análisis y monitoreo de indicadores meteorológicos</p>
+              <p className="text-orange-50 mt-1 text-sm lg:text-base">Análisis y monitoreo de indicadores meteorológicos</p>
             </div>
           </div>
         </div>
@@ -839,7 +839,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 // Mapear colores del KPI a colores de estilo adaptado
                 const colorMap = {
                   'text-orange-700': { bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
-                  'text-yellow-600': { bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' },
+                  'text-yellow-700': { bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' },
                   'text-blue-700': { bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
                   'text-indigo-700': { bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
                   'text-cyan-700': { bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200' },
@@ -1022,7 +1022,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       <section className="mb-6 lg:mb-8">
         <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 overflow-hidden">
           {/* Header de la sección */}
-          <div className="bg-gradient-to-r from-orange-600 to-amber-700 px-4 lg:px-8 py-4 lg:py-6">
+          <div className="bg-gradient-to-r from-orange-700 to-amber-800 px-4 lg:px-8 py-4 lg:py-6">
             <div className="flex flex-col lg:flex-row lg:items-center space-y-3 lg:space-y-0 lg:space-x-4">
               <div className="p-2 lg:p-3 bg-white/20 rounded-xl self-start lg:self-auto">
                 <svg className="w-6 h-6 lg:w-7 lg:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1036,7 +1036,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
               </div>
               <div className="flex-1">
                 <h2 className="text-lg lg:text-2xl font-bold text-white">Indicadores de Estaciones Meteorológicas</h2>
-                <p className="text-orange-100 mt-1 text-sm lg:text-base">Análisis detallado por institución y estación</p>
+                <p className="text-orange-50 mt-1 text-sm lg:text-base">Análisis detallado por institución y estación</p>
                 {/* Indicador de rango de fechas */}
                 {filters.startDate && filters.endDate && (
                   <div className="mt-2 inline-flex items-center px-3 py-1 bg-white/20 rounded-full text-xs text-white">
@@ -1507,7 +1507,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         <section className="mb-6 lg:mb-8">
           <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/30 overflow-hidden">
             {/* Header de la sección de tabla */}
-            <div className="bg-gradient-to-r from-orange-600 to-amber-700 px-4 lg:px-6 xl:px-8 py-4 lg:py-6">
+            <div className="bg-gradient-to-r from-orange-700 to-amber-800 px-4 lg:px-6 xl:px-8 py-4 lg:py-6">
               <div className="flex flex-col lg:flex-row lg:items-center space-y-3 lg:space-y-0 lg:space-x-4">
                 <div className="p-2 lg:p-3 bg-white/20 rounded-xl self-start lg:self-auto">
                   <svg className="w-6 h-6 lg:w-7 lg:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1521,7 +1521,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 </div>
                 <div>
                   <h2 className="text-lg lg:text-xl xl:text-2xl font-bold text-white">Datos Históricos Detallados</h2>
-                  <p className="text-orange-100 mt-1 text-sm lg:text-base">Registros completos de indicadores meteorológicos por fecha y estación</p>
+                  <p className="text-orange-50 mt-1 text-sm lg:text-base">Registros completos de indicadores meteorológicos por fecha y estación</p>
                 </div>
               </div>
             </div>

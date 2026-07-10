@@ -212,7 +212,7 @@ const WeatherStationFilters = ({ onFiltersChange, authToken }) => {
       </div>
 
       {devices.length === 0 && selectedInstitution && !loading && (
-        <p className="text-xs text-orange-600 mt-1">
+        <p className="text-xs text-orange-700 mt-1">
           No se encontraron estaciones meteorológicas para esta institución
         </p>
       )}
@@ -220,7 +220,7 @@ const WeatherStationFilters = ({ onFiltersChange, authToken }) => {
       {/* Información de depuración */}
       <div className="text-xs text-gray-500 mt-1">
         {devices.length > 0 && (
-          <p className="text-xs text-green-600 mt-1">
+          <p className="text-xs text-green-700 mt-1">
             {devices.length} estación{devices.length !== 1 ? 'es' : ''} encontrada{devices.length !== 1 ? 's' : ''}
           </p>
         )}
