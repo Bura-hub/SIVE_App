@@ -1,0 +1,84 @@
+name: CI
+
+# Red de seguridad de la Ola 4: corre la suite de tests auto-contenida del backend y
+# compila + smoke-testea el frontend en cada push/PR. NO ejecuta los scripts de
+# diagnóstico de tests/ (ver tests/conftest.py) ni tests que dependan de SCADA/XM.
+
+on:
+  push:
+    branches: [master, main, "feature/**"]
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: sive_test
+          POSTGRES_USER: sive
+          POSTGRES_PASSWORD: sive
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SECRET_KEY: ci-not-a-real-secret
+      DEBUG: "False"
+      # Nombres de variables tal cual los lee core/settings.py
+      name_db: sive_test
+      user_postgres: sive
+      password_user_postgres: sive
+      POSTGRES_HOST: localhost
+      port_postgres: "5432"
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias de sistema para psycopg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libpq-dev
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install --upgrade pip && pip install -r requirements.txt
+      - name: Migraciones sin deriva (models == migraciones)
+        run: python manage.py makemigrations --check --dry-run
+      - name: Tests (módulos auto-contenidos; ampliar a medida que se verifiquen)
+        run: >-
+          python manage.py test
+          tests.test_api_validation
+          tests.test_auth_security
+          tests.test_electric_indicators
+          tests.test_consumption_net_gross
+          --verbosity=2
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Smoke test
+        run: CI=true npm test -- --watchAll=false
+      - name: Build de producción
+        run: CI=false npm run build
