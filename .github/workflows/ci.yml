@@ -36,7 +36,9 @@ jobs:
     env:
       SECRET_KEY: ci-not-a-real-secret
       DEBUG: "False"
-      # settings.py exige estas al importar; los tests curados no tocan SCADA -> dummy.
+      # settings.py y scada_proxy/tasks.py (instancia ScadaConnectorClient al importar)
+      # exigen estas al importar; los tests curados no tocan SCADA -> valores dummy.
+      SCADA_BASE_URL: http://scada.invalid
       SCADA_USERNAME: ci
       SCADA_PASSWORD: ci
       # Nombres de variables tal cual los lee core/settings.py
