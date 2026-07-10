@@ -601,13 +601,21 @@ class ChartDataView(APIView):
                 end_date = get_colombia_now().date()
                 start_date = end_date - timedelta(days=60)
             else:
-                # Parsear fechas y asegurar que estén en zona horaria de Colombia
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-                
-                # Localizar las fechas en zona horaria de Colombia
-                end_date = COLOMBIA_TZ.localize(end_date).date()
-                start_date = COLOMBIA_TZ.localize(start_date).date()
+                # Parsear fechas; formato inválido -> 400 (antes: ValueError caía al
+                # except general y devolvía 500).
+                try:
+                    end_date = COLOMBIA_TZ.localize(datetime.strptime(end_date_str, '%Y-%m-%d')).date()
+                    start_date = COLOMBIA_TZ.localize(datetime.strptime(start_date_str, '%Y-%m-%d')).date()
+                except ValueError:
+                    return Response(
+                        {"detail": "Formato de fecha inválido. Use YYYY-MM-DD en 'start_date' y 'end_date'."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if start_date > end_date:
+                    return Response(
+                        {"detail": "La fecha de inicio no puede ser posterior a la fecha de fin."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
             # Consultar el modelo DailyChartData para obtener los datos precalculados
             chart_data = DailyChartData.objects.filter(
@@ -1209,27 +1217,28 @@ class InverterChartDataView(APIView):
                     "detail": "El parámetro 'institution_id' es requerido"
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Construir queryset base
+            # Rango de fechas acotado: default (31 días) y máximo (366); fecha con
+            # formato inválido o rango invertido -> 400 (antes: filtro con string
+            # inválido -> error de BD -> 500; y sin tope, payload sin límite).
+            start_dt, end_dt, date_err = resolve_indicators_date_range(start_date, end_date)
+            if date_err:
+                return Response({"detail": date_err}, status=status.HTTP_400_BAD_REQUEST)
+
+            # select_related evita el N+1 al serializar device_name/institution_name.
             from .models import InverterChartData
-            queryset = InverterChartData.objects.all()
-            
-            # Aplicar filtros
-            if institution_id:
-                queryset = queryset.filter(institution_id=institution_id)
-            
+            queryset = InverterChartData.objects.select_related('device', 'institution').filter(
+                institution_id=institution_id,
+                date__gte=start_dt,
+                date__lte=end_dt,
+            )
+
             if device_id:
                 # Aceptar tanto el id entero local como el scada_id (UUID/string)
                 if str(device_id).isdigit():
                     queryset = queryset.filter(device_id=int(device_id))
                 else:
                     queryset = queryset.filter(device__scada_id=device_id)
-            
-            if start_date:
-                queryset = queryset.filter(date__gte=start_date)
-            
-            if end_date:
-                queryset = queryset.filter(date__lte=end_date)
-            
+
             # Ordenar por fecha descendente y nombre del dispositivo
             queryset = queryset.order_by('-date', 'device__name')
             
