@@ -263,11 +263,12 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        # Inyecta la URL del backend en build-time (CRA la incrusta en el bundle).
+        # Inyecta la URL del backend en build-time (Vite la incrusta en el bundle).
         # Por defecto usa http://DOMAIN_NAME:BACKEND_PORT (acceso directo por puerto).
-        # Para el despliegue bajo subpath detrás de Apache, definir REACT_APP_API_URL
-        # en el .env con la URL pública, p. ej. https://mte.udenar.edu.co/sive
-        REACT_APP_API_URL: "${REACT_APP_API_URL:-http://${DOMAIN_NAME}:${BACKEND_PORT}}"
+        # Para el despliegue bajo subpath detrás de Apache, definir VITE_API_URL (o el
+        # antiguo REACT_APP_API_URL, que se sigue aceptando) en el .env con la URL
+        # pública, p. ej. https://mte.udenar.edu.co/sive
+        VITE_API_URL: "${VITE_API_URL:-${REACT_APP_API_URL:-http://${DOMAIN_NAME}:${BACKEND_PORT}}}"
     image: mtesive_app-frontend:latest
     container_name: mte_frontend_prod
     ports:

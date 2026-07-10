@@ -3,7 +3,7 @@
 # ================================
 
 # Stage 1: Build stage
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 
 # Set working directory
 WORKDIR /app
@@ -18,10 +18,10 @@ RUN npm ci --silent
 # Copy source code
 COPY . .
 
-# URL del backend inyectada en build-time. CRA incrusta las variables REACT_APP_*
-# en el bundle durante `npm run build`; sin esto, API_BASE_URL queda undefined.
-ARG REACT_APP_API_URL
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
+# URL del backend inyectada en build-time. Vite incrusta las variables VITE_* en el
+# bundle durante `npm run build`; sin esto, API_BASE_URL queda vacío (same-origin).
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 
 # Build the application
 RUN npm run build
