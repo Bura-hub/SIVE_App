@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Line, Bar, PolarArea } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -483,8 +484,11 @@ export function ChartCard({
         </div>
       </div>
 
-      {/* Vista de gráfico en pantalla completa mejorada */}
-      {isFullscreen && (
+      {/* Vista de gráfico en pantalla completa mejorada.
+          Se renderiza vía Portal a document.body para escapar de ancestros con
+          backdrop-filter/transform/overflow-hidden que, si no, atrapan el `position: fixed`
+          y hacen que el "pantalla completa" quede recortado dentro de la tarjeta. */}
+      {isFullscreen && createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2">
           <div className="bg-white rounded-3xl shadow-2xl w-11/12 h-5/6 max-w-7xl max-h-[95vh] relative overflow-hidden border border-gray-100">
             {/* Header del modal con diseño elegante similar a ProfileSettings */}
@@ -649,7 +653,8 @@ export function ChartCard({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
