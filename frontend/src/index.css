@@ -1029,7 +1029,9 @@ code {
 
 /* Colapso responsive: al pasar a solo-avatar, el chip ocupa menos y el badge
    de estado del header nunca queda tapado. */
-@media (max-width:560px){
+/* Colapso a solo-avatar por debajo de `lg` (1024px), alineado con la reserva
+   `lg:pr-64` de los headers para que el widget nunca tape el estado XM/SCADA. */
+@media (max-width:1023.98px){
   .u-float{ top:.75rem; right:1rem; }
   .u-chip .u-idn, .u-chip .u-chev{ display:none; }
   .u-chip{ padding:6px; max-width:none; }
