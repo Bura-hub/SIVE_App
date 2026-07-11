@@ -409,6 +409,11 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     initialData: { results: [] },
   });
 
+  // Popover de información detallada de KPIs.
+  const [showKpiInfo, setShowKpiInfo] = useState(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [isOpening, setIsOpening] = useState(false);
+
   // Funciones de paginación
   const goToPage = (page) => {
     if (page >= 1 && page <= totalPages) {
