@@ -209,11 +209,16 @@ function LoginPage({ onLoginSuccess }) {
                 const newFieldErrors = {};
                 let globalMsg = '';
 
+                // Aplana cualquier valor (array, objeto anidado o escalar) a texto,
+                // evitando renderizar "[object Object]" o un objeto como hijo de React.
+                const flatten = (v) => Array.isArray(v)
+                    ? v.flatMap(flatten)
+                    : (v && typeof v === 'object')
+                        ? Object.values(v).flatMap(flatten)
+                        : [String(v)];
                 if (errorData && typeof errorData === 'object' && !Array.isArray(errorData)) {
                     Object.entries(errorData).forEach(([field, value]) => {
-                        const msg = Array.isArray(value)
-                            ? value.filter(Boolean).join(' ')
-                            : String(value);
+                        const msg = flatten(value).filter(Boolean).join(' ');
                         if (['non_field_errors', 'detail', 'error', 'message'].includes(field)) {
                             if (!globalMsg) globalMsg = msg;
                         } else {
