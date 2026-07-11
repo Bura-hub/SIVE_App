@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import siveLogo from './sive-logo.svg';
 import LoginBackground from './LoginBackground';
 import TransitionOverlay from './TransitionOverlay';
@@ -37,11 +37,47 @@ function LoginPage({ onLoginSuccess }) {
     const [showRegisterPassword, setShowRegisterPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [registerSuccess, setRegisterSuccess] = useState(false);
+    // Mensaje propio del modal de registro (independiente del `message` del login)
+    const [registerMessage, setRegisterMessage] = useState({ text: '', type: '' });
+    // Errores por campo devueltos por el backend (DRF 400)
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    // Refs para gestión de foco y limpieza de timers del modal de registro
+    const registerTimersRef = useRef([]);
+    const openRegisterBtnRef = useRef(null);
+    const firstRegisterInputRef = useRef(null);
 
     // Animación de entrada
     useEffect(() => {
         setIsVisible(true);
     }, []);
+
+    // Limpieza de timers del registro al desmontar
+    useEffect(() => {
+        return () => {
+            registerTimersRef.current.forEach(clearTimeout);
+            registerTimersRef.current = [];
+        };
+    }, []);
+
+    // Accesibilidad del modal: cerrar con Escape y enfocar el primer campo al abrir
+    useEffect(() => {
+        if (!showRegisterModal) return;
+
+        // Enfocar el primer input al abrir
+        if (firstRegisterInputRef.current) {
+            firstRegisterInputRef.current.focus();
+        }
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                closeRegisterModal();
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showRegisterModal]);
     
     // Efecto para rate limiting y bloqueo
     useEffect(() => {
@@ -80,7 +116,7 @@ function LoginPage({ onLoginSuccess }) {
 
     // Función para validar contraseña
     const validatePassword = (password) => {
-        const minLength = 8;
+        const minLength = 12;
         const hasUpperCase = /[A-Z]/.test(password);
         const hasLowerCase = /[a-z]/.test(password);
         const hasNumbers = /\d/.test(password);
@@ -135,16 +171,20 @@ function LoginPage({ onLoginSuccess }) {
     // Función para manejar el registro
     const handleRegister = async (event) => {
         event.preventDefault();
-        
+
+        // Anti doble-envío: ignorar si ya hay una petición en curso
+        if (registerLoading) return;
+
         const validation = validateRegisterData();
         if (!validation.isValid) {
-            setMessage({ text: validation.message, type: 'error' });
+            setRegisterMessage({ text: validation.message, type: 'error' });
             return;
         }
-        
+
         setRegisterLoading(true);
-        setMessage({ text: '', type: '' });
-        
+        setRegisterMessage({ text: '', type: '' });
+        setFieldErrors({});
+
         try {
             const response = await fetch(buildApiUrl(getEndpoint('REGISTER')), {
                 method: 'POST',
@@ -160,23 +200,44 @@ function LoginPage({ onLoginSuccess }) {
                     confirm_password: registerData.confirm_password
                 }),
             });
-            
+
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
+                // Parseo genérico del error de DRF (400): errores por-campo
+                // {campo: [msgs]} y/o non_field_errors: [...]. El backend
+                // responde en español, así que mostramos sus mensajes tal cual.
+                const errorData = await response.json().catch(() => ({}));
+                const newFieldErrors = {};
+                let globalMsg = '';
+
+                if (errorData && typeof errorData === 'object' && !Array.isArray(errorData)) {
+                    Object.entries(errorData).forEach(([field, value]) => {
+                        const msg = Array.isArray(value)
+                            ? value.filter(Boolean).join(' ')
+                            : String(value);
+                        if (['non_field_errors', 'detail', 'error', 'message'].includes(field)) {
+                            if (!globalMsg) globalMsg = msg;
+                        } else {
+                            newFieldErrors[field] = msg;
+                        }
+                    });
+                }
+
+                if (!globalMsg) {
+                    globalMsg = errorData.non_field_errors?.[0]
+                        || Object.values(errorData).flat()[0]
+                        || `Error ${response.status}: ${response.statusText}`;
+                }
+
+                setFieldErrors(newFieldErrors);
+                setRegisterMessage({ text: globalMsg, type: 'error' });
+                return;
             }
-            
-            const data = await response.json();
-            
+
+            await response.json().catch(() => ({}));
+
             // Mostrar estado de éxito
             setRegisterSuccess(true);
-            setMessage({ text: 'Cuenta creada exitosamente. Ya puedes iniciar sesión.', type: 'success' });
-            
-            // Esperar 2 segundos para que el usuario vea el mensaje de éxito, luego cerrar
-            setTimeout(() => {
-                setShowRegisterModal(false);
-                setRegisterSuccess(false);
-            }, 2000);
+            setRegisterMessage({ text: 'Cuenta creada exitosamente. Ya puedes iniciar sesión.', type: 'success' });
             setRegisterData({
                 username: '',
                 email: '',
@@ -185,27 +246,24 @@ function LoginPage({ onLoginSuccess }) {
                 password: '',
                 confirm_password: ''
             });
-            
-            // Limpiar mensaje después de 3 segundos
-            setTimeout(() => {
-                setMessage({ text: '', type: '' });
-            }, 3000);
-            
+
+            // Esperar 2 segundos para que el usuario vea el mensaje de éxito,
+            // luego cerrar SIEMPRE por closeRegisterModal (no filtrar al login).
+            registerTimersRef.current.push(setTimeout(() => {
+                closeRegisterModal();
+            }, 2000));
+
+            // Respaldo: limpiar el mensaje del modal a los 3s por si sigue abierto
+            registerTimersRef.current.push(setTimeout(() => {
+                setRegisterMessage({ text: '', type: '' });
+            }, 3000));
+
         } catch (error) {
-            // Mostrar error específico del backend o mensaje genérico
-            let errorMessage = 'Error al crear la cuenta';
-            
-            if (error.message.includes('username already exists')) {
-                errorMessage = 'El nombre de usuario ya existe. Intenta con otro.';
-            } else if (error.message.includes('email already exists')) {
-                errorMessage = 'El email ya está registrado. Intenta con otro.';
-            } else if (error.message.includes('password')) {
-                errorMessage = 'La contraseña no cumple con los requisitos de seguridad.';
-            } else if (error.message) {
-                errorMessage = error.message;
-            }
-            
-            setMessage({ text: errorMessage, type: 'error' });
+            // Sin respuesta HTTP => fallo de red real (sin conexión / servidor caído / CORS)
+            setRegisterMessage({
+                text: 'No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.',
+                type: 'error'
+            });
         } finally {
             setRegisterLoading(false);
         }
@@ -214,11 +272,16 @@ function LoginPage({ onLoginSuccess }) {
     // Función para abrir modal de registro
     const openRegisterModal = () => {
         setShowRegisterModal(true);
-        setMessage({ text: '', type: '' });
+        setRegisterMessage({ text: '', type: '' });
+        setFieldErrors({});
     };
-    
+
     // Función para cerrar modal de registro
     const closeRegisterModal = () => {
+        // Limpiar timers pendientes (cierre 2s / limpieza 3s)
+        registerTimersRef.current.forEach(clearTimeout);
+        registerTimersRef.current = [];
+
         setShowRegisterModal(false);
         setRegisterData({
             username: '',
@@ -228,8 +291,14 @@ function LoginPage({ onLoginSuccess }) {
             password: '',
             confirm_password: ''
         });
-        setMessage({ text: '', type: '' });
+        setRegisterMessage({ text: '', type: '' });
+        setFieldErrors({});
         setRegisterSuccess(false);
+
+        // Devolver el foco al botón que abrió el modal
+        if (openRegisterBtnRef.current) {
+            openRegisterBtnRef.current.focus();
+        }
     };
     
     // Función para contactar soporte (olvidó contraseña)
@@ -547,7 +616,8 @@ function LoginPage({ onLoginSuccess }) {
                         </svg>
                         ¿Olvidó su contraseña?
                     </button>
-                    <button 
+                    <button
+                        ref={openRegisterBtnRef}
                         onClick={openRegisterModal}
                         className="enhanced-secondary-link"
                     >
@@ -581,11 +651,20 @@ function LoginPage({ onLoginSuccess }) {
 
             {/* Modal de Registro */}
             {showRegisterModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                    onClick={closeRegisterModal}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="register-modal-title"
+                        className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         {/* Header del modal */}
                         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                            <h2 className="text-xl font-bold text-gray-800">Crear Nueva Cuenta</h2>
+                            <h2 id="register-modal-title" className="text-xl font-bold text-gray-800">Crear Nueva Cuenta</h2>
                             <button
                                 onClick={closeRegisterModal}
                                 className="text-gray-600 hover:text-gray-600 transition-colors"
@@ -596,15 +675,15 @@ function LoginPage({ onLoginSuccess }) {
                             </button>
                         </div>
 
-                        {/* Mensaje de estado */}
-                        {message.text && (
+                        {/* Mensaje de estado (independiente del login) */}
+                        {registerMessage.text && (
                             <div className={`mx-6 mb-4 p-4 rounded-lg ${
-                                message.type === 'success' 
-                                    ? 'bg-green-50 border border-green-200 text-green-800' 
+                                registerMessage.type === 'success'
+                                    ? 'bg-green-50 border border-green-200 text-green-800'
                                     : 'bg-red-50 border border-red-200 text-red-800'
                             }`}>
                                 <div className="flex items-center">
-                                    {message.type === 'success' ? (
+                                    {registerMessage.type === 'success' ? (
                                         <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                         </svg>
@@ -613,7 +692,7 @@ function LoginPage({ onLoginSuccess }) {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                         </svg>
                                     )}
-                                    <span className="font-medium">{message.text}</span>
+                                    <span className="font-medium">{registerMessage.text}</span>
                                 </div>
                             </div>
                         )}
@@ -638,81 +717,111 @@ function LoginPage({ onLoginSuccess }) {
                             <form onSubmit={handleRegister} className="p-6 space-y-4">
                             {/* Username */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="register-username" className="block text-sm font-medium text-gray-700 mb-2">
                                     Nombre de Usuario *
                                 </label>
                                 <input
+                                    ref={firstRegisterInputRef}
+                                    id="register-username"
+                                    name="username"
                                     type="text"
                                     value={registerData.username}
                                     onChange={(e) => setRegisterData({...registerData, username: e.target.value})}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     placeholder="Ingresa tu nombre de usuario"
+                                    aria-invalid={!!fieldErrors.username}
                                     required
                                 />
+                                {fieldErrors.username && (
+                                    <p className="text-xs text-red-600 mt-1">{fieldErrors.username}</p>
+                                )}
                             </div>
 
                             {/* Email */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-2">
                                     Email *
                                 </label>
                                 <input
+                                    id="register-email"
+                                    name="email"
                                     type="email"
                                     value={registerData.email}
                                     onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     placeholder="tu@email.com"
+                                    aria-invalid={!!fieldErrors.email}
                                     required
                                 />
+                                {fieldErrors.email && (
+                                    <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>
+                                )}
                             </div>
 
                             {/* Nombre y Apellido */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label htmlFor="register-first-name" className="block text-sm font-medium text-gray-700 mb-2">
                                         Nombre *
                                     </label>
                                     <input
+                                        id="register-first-name"
+                                        name="first_name"
                                         type="text"
                                         value={registerData.first_name}
                                         onChange={(e) => setRegisterData({...registerData, first_name: e.target.value})}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         placeholder="Tu nombre"
+                                        aria-invalid={!!fieldErrors.first_name}
                                         required
                                     />
+                                    {fieldErrors.first_name && (
+                                        <p className="text-xs text-red-600 mt-1">{fieldErrors.first_name}</p>
+                                    )}
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label htmlFor="register-last-name" className="block text-sm font-medium text-gray-700 mb-2">
                                         Apellido *
                                     </label>
                                     <input
+                                        id="register-last-name"
+                                        name="last_name"
                                         type="text"
                                         value={registerData.last_name}
                                         onChange={(e) => setRegisterData({...registerData, last_name: e.target.value})}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         placeholder="Tu apellido"
+                                        aria-invalid={!!fieldErrors.last_name}
                                         required
                                     />
+                                    {fieldErrors.last_name && (
+                                        <p className="text-xs text-red-600 mt-1">{fieldErrors.last_name}</p>
+                                    )}
                                 </div>
                             </div>
 
                             {/* Contraseña */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-2">
                                     Contraseña *
                                 </label>
                                 <div className="relative">
                                     <input
+                                        id="register-password"
+                                        name="password"
                                         type={showRegisterPassword ? "text" : "password"}
                                         value={registerData.password}
                                         onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
                                         className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder="Mínimo 8 caracteres"
+                                        placeholder="Mínimo 12 caracteres"
+                                        aria-invalid={!!fieldErrors.password}
                                         required
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                                        aria-label={showRegisterPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                        aria-pressed={showRegisterPassword}
                                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 hover:text-gray-600"
                                     >
                                         {showRegisterPassword ? (
@@ -728,27 +837,35 @@ function LoginPage({ onLoginSuccess }) {
                                     </button>
                                 </div>
                                 <p className="text-xs text-gray-600 mt-1">
-                                    Debe contener mayúsculas, minúsculas, números y caracteres especiales
+                                    Mínimo 12 caracteres, con mayúsculas, minúsculas, números y caracteres especiales
                                 </p>
+                                {fieldErrors.password && (
+                                    <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
+                                )}
                             </div>
 
                             {/* Confirmar Contraseña */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="register-confirm-password" className="block text-sm font-medium text-gray-700 mb-2">
                                     Confirmar Contraseña *
                                 </label>
                                 <div className="relative">
                                     <input
+                                        id="register-confirm-password"
+                                        name="confirm_password"
                                         type={showConfirmPassword ? "text" : "password"}
                                         value={registerData.confirm_password}
                                         onChange={(e) => setRegisterData({...registerData, confirm_password: e.target.value})}
                                         className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         placeholder="Repite tu contraseña"
+                                        aria-invalid={!!fieldErrors.confirm_password}
                                         required
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                        aria-pressed={showConfirmPassword}
                                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 hover:text-gray-600"
                                     >
                                         {showConfirmPassword ? (
@@ -762,8 +879,11 @@ function LoginPage({ onLoginSuccess }) {
                                             </svg>
                                         )}
                                     </button>
-                </div>
-            </div>
+                                </div>
+                                {fieldErrors.confirm_password && (
+                                    <p className="text-xs text-red-600 mt-1">{fieldErrors.confirm_password}</p>
+                                )}
+                            </div>
 
                             {/* Botón de registro */}
                             <button
