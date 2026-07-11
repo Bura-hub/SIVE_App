@@ -266,7 +266,6 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   });
 
   const processKPIData = useCallback((latestData) => {
-    console.log('🔍 processKPIData iniciado con:', latestData);
     // Verificar que latestData existe y es válido
     if (!latestData || typeof latestData !== 'object') {
       console.warn('processKPIData: latestData no es válido:', latestData);
@@ -337,7 +336,6 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     };
 
     // Actualizar el estado de kpiData con los nuevos valores
-    console.log('🔍 Actualizando kpiData con:', kpis);
     setKpiData(kpis);
   }, [weatherData]);
 
@@ -439,13 +437,9 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
 
   // Efecto para actualizar KPIs cuando cambien los datos meteorológicos
   useEffect(() => {
-    console.log('🔍 useEffect weatherData cambió:', weatherData);
     if (weatherData && weatherData.results && weatherData.results.length > 0) {
       const latestData = weatherData.results[0];
-      console.log('🔍 Procesando KPIs con datos:', latestData);
       processKPIData(latestData);
-    } else {
-      console.log('🔍 No hay datos meteorológicos para procesar KPIs');
     }
   }, [weatherData, processKPIData]);
 
@@ -773,8 +767,6 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
           ) : (
             // KPIs reales cuando hay datos
             (() => {
-              console.log('🔍 Renderizando KPIs, kpiData:', kpiData);
-              console.log('🔍 Claves de kpiData:', Object.keys(kpiData));
               return Object.keys(kpiData).map((key) => {
                 const item = kpiData[key];
                 // Mapear colores del KPI a colores de estilo adaptado

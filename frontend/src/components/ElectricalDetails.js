@@ -240,11 +240,6 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
       const localDate = new Date(rawDate + 'T00:00:00');
       const formattedDate = localDate.toLocaleDateString('es-ES');
 
-      console.log('🔍 PROCESAMIENTO DE FECHA EN CHART PRINCIPAL:');
-      console.log('  Fecha raw:', rawDate);
-      console.log('  Fecha local:', localDate);
-      console.log('  Fecha formateada:', formattedDate);
-
       return formattedDate;
     }),
     datasets: [
