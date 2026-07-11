@@ -510,15 +510,29 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   const getKpiDetailedInfo = (kpiKey) => DASHBOARD_KPI_INFO[kpiKey] || null;
 
   // Modificar las funciones de actualización de gráficos para usar unidades dinámicas
+  // Reconcilia las series "Actual" y "Anterior" a UNA sola unidad de energía. El backend
+  // escala CADA serie por separado (auto_energy_unit según su propio máximo), así que un mes
+  // podía venir en MWh y el otro en kWh y se graficaban en el mismo eje → comparación falsa
+  // (p.ej. junio 1.404 kWh se mostraba como 1,40 MWh junto a julio 621,8 kWh). Aquí se
+  // reconstruye el valor crudo en kWh de ambas series y se re-escala con una unidad común.
+  const ENERGY_DIVISOR = { kWh: 1, MWh: 1000, GWh: 1000000 };
+  const toRawKwh = (item, valueKey, unitKey) =>
+    parseFloat(item?.[valueKey] || 0) * (ENERGY_DIVISOR[item?.units?.[unitKey]] ?? 1);
+  const pickEnergyUnit = (maxKwh) =>
+    maxKwh >= 1000000 ? ['GWh', 1000000] : maxKwh >= 1000 ? ['MWh', 1000] : ['kWh', 1];
+
   const updateConsumptionChart = (currentData, prevData) => {
-    const units = currentData[0]?.units?.consumption || 'kWh';
-    
+    const curRaw = currentData.map(i => toRawKwh(i, 'daily_consumption', 'consumption'));
+    const prevRaw = prevData.map(i => toRawKwh(i, 'daily_consumption', 'consumption'));
+    const maxKwh = Math.max(0, ...curRaw.map(Math.abs), ...prevRaw.map(Math.abs));
+    const [units, div] = pickEnergyUnit(maxKwh);
+
     setElectricityConsumptionData({
       labels: currentData.map(item => formatAPIDateForDisplay(item.date)),
       datasets: [
         {
           label: `Actual (${units})`,
-          data: currentData.map(item => parseFloat(item.daily_consumption)),
+          data: curRaw.map(v => v / div),
           borderColor: '#3B82F6',
           backgroundColor: 'rgba(59, 130, 246, 0.2)',
           fill: true,
@@ -526,7 +540,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         },
         {
           label: `Anterior (${units})`,
-          data: prevData.map(item => parseFloat(item.daily_consumption)),
+          data: prevRaw.map(v => v / div),
           borderColor: '#6B7280',
           backgroundColor: 'rgba(107, 114, 128, 0.2)',
           fill: true,
@@ -537,14 +551,17 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   };
 
   const updateGenerationChart = (currentData, prevData) => {
-    const units = currentData[0]?.units?.generation || 'kWh';
-    
+    const curRaw = currentData.map(i => toRawKwh(i, 'daily_generation', 'generation'));
+    const prevRaw = prevData.map(i => toRawKwh(i, 'daily_generation', 'generation'));
+    const maxKwh = Math.max(0, ...curRaw.map(Math.abs), ...prevRaw.map(Math.abs));
+    const [units, div] = pickEnergyUnit(maxKwh);
+
     setInverterGenerationData({
       labels: currentData.map(item => formatAPIDateForDisplay(item.date)),
       datasets: [
         {
           label: `Actual (${units})`,
-          data: currentData.map(item => parseFloat(item.daily_generation)),
+          data: curRaw.map(v => v / div),
           backgroundColor: '#10B981',
           borderColor: '#059669',
           borderWidth: 1,
@@ -552,7 +569,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         },
         {
           label: `Anterior (${units})`,
-          data: prevData.map(item => parseFloat(item.daily_generation)),
+          data: prevRaw.map(v => v / div),
           backgroundColor: 'rgba(107, 114, 128, 0.6)',
           borderColor: '#6B7280',
           borderWidth: 1,
@@ -563,14 +580,17 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   };
 
   const updateBalanceChart = (currentData, prevData) => {
-    const units = currentData[0]?.units?.balance || 'kWh';
-    
+    const curRaw = currentData.map(i => toRawKwh(i, 'daily_balance', 'balance'));
+    const prevRaw = prevData.map(i => toRawKwh(i, 'daily_balance', 'balance'));
+    const maxKwh = Math.max(0, ...curRaw.map(Math.abs), ...prevRaw.map(Math.abs));
+    const [units, div] = pickEnergyUnit(maxKwh);
+
     setEnergyBalanceData({
       labels: currentData.map(item => formatAPIDateForDisplay(item.date)),
       datasets: [
         {
           label: `Actual (${units})`,
-          data: currentData.map(item => parseFloat(item.daily_balance)),
+          data: curRaw.map(v => v / div),
           borderColor: '#8B5CF6',
           backgroundColor: (context) => {
             const chart = context.chart;
@@ -587,7 +607,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         },
         {
           label: `Anterior (${units})`,
-          data: prevData.map(item => parseFloat(item.daily_balance)),
+          data: prevRaw.map(v => v / div),
           borderColor: '#6B7280',
           backgroundColor: 'rgba(107, 114, 128, 0.2)',
           fill: true,
