@@ -1,5 +1,36 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
+
+// Registro CENTRAL de Chart.js (Ola 5). ChartCard es el único componente que dibuja
+// gráficos, así que registrar aquí garantiza que escalas/elementos existan entres por la
+// pantalla que entres. Antes cada pantalla lo registraba por su cuenta; con el
+// code-splitting de Vite, entrar directo a una ruta sin ese registro (p. ej. Datos
+// Externos) daba "'category' is not a registered scale".
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  zoomPlugin,
+);
 
 // Componente reutilizable que renderiza una tarjeta con un gráfico (línea o barras),
 // permite resetear el zoom del gráfico y expandirlo a pantalla completa.
