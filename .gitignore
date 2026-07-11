@@ -54,3 +54,6 @@ deploy/mte-sive-ssl-vhost.conf
 
 # Backups de editor
 *.save
+
+# Documentos fuente locales (no versionar)
+G306*.pdf
