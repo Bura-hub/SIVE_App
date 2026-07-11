@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from core.permissions import IsSuperUser
 from drf_spectacular.utils import extend_schema
 from django.conf import settings
 from django.utils import timezone
@@ -54,7 +55,7 @@ def _is_valid_number(value):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Precios de energía del mercado (XM)")
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def energy_prices(request):
     """
     Obtiene datos de precios de energía para el rango especificado
@@ -210,7 +211,7 @@ def energy_prices(request):
 
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Ahorros estimados por energía")
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def energy_savings(request):
     """
     Obtiene datos de ahorro de energía para el rango especificado
@@ -325,7 +326,7 @@ def energy_savings(request):
 
 @extend_schema(tags=["Operación"], summary="Sincronizar datos externos del mercado (XM)")
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def sync_external_data(request):
     """
     Sincroniza datos externos de energía desde fuentes como XM.
@@ -360,7 +361,7 @@ def sync_external_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Resumen del mercado energético")
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def market_overview(request):
     """
     Obtiene una vista general del mercado de energía
@@ -471,7 +472,7 @@ def _xm_metric_response(request, fetch_method, prefix, default_range, error_labe
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de generación del sistema (XM)")
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def generation_data(request):
     """Obtiene datos de generación de energía desde XM"""
     return _xm_metric_response(request, 'fetch_generation_data', 'generation', 'month', 'generación')
@@ -481,7 +482,7 @@ def generation_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de demanda del sistema (XM)")
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def demand_data(request):
     """Obtiene datos de demanda de energía desde XM"""
     return _xm_metric_response(request, 'fetch_demand_data', 'demand', 'month', 'demanda')
@@ -491,7 +492,7 @@ def demand_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de emisiones (XM)")
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def emissions_data(request):
     """Obtiene datos de emisiones de CO2 desde XM"""
     return _xm_metric_response(request, 'fetch_emissions_data', 'emissions', 'month', 'emisiones')
@@ -500,7 +501,7 @@ def emissions_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de exportaciones de energía (XM)")
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def exports_data(request):
     """Obtiene datos de exportaciones de energía desde XM"""
     return _xm_metric_response(request, 'fetch_exports_data', 'exports', 'week', 'exportaciones')
@@ -509,7 +510,7 @@ def exports_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de importaciones de energía (XM)")
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsSuperUser])
 def imports_data(request):
     """Obtiene datos de importaciones de energía desde XM"""
     return _xm_metric_response(request, 'fetch_imports_data', 'imports', 'week', 'importaciones')

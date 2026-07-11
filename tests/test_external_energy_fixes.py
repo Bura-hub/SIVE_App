@@ -116,7 +116,11 @@ class ZeroValuesInStatsTests(TestCase):
 
     def setUp(self):
         self.factory = APIRequestFactory()
-        self.user = User.objects.create_user(username='tester_ee', password='secret123')
+        # Los endpoints de external_energy son admin-only (IsSuperUser); el usuario
+        # de prueba debe ser superusuario para no recibir 403.
+        self.user = User.objects.create_user(
+            username='tester_ee', password='secret123', is_superuser=True, is_staff=True
+        )
 
     def test_ceros_se_conservan_y_none_se_descarta(self):
         request = self.factory.get('/api/external-energy/generation/', {'range': 'week'})

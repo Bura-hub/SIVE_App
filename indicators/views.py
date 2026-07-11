@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
+from core.permissions import IsSuperUser
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiRequest, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 import logging
@@ -1593,7 +1594,7 @@ class GenerateReportView(APIView):
     """
     Vista para generar reportes en diferentes formatos
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSuperUser]
 
     @extend_schema(
         summary="Generar reporte",
@@ -1709,7 +1710,7 @@ class ReportStatusView(APIView):
     """
     Vista para consultar el estado de generación de reportes
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSuperUser]
 
     @extend_schema(
         summary="Consultar estado de reporte",
@@ -1845,7 +1846,7 @@ class DownloadReportView(APIView):
     """
     Vista para descargar reportes generados
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSuperUser]
 
     @extend_schema(
         summary="Descargar reporte",
@@ -1929,7 +1930,7 @@ class DeleteReportView(APIView):
     (ExportReports.js) ya consumía (DELETE /api/reports/delete/) pero que no existía
     en el backend, provocando 404.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSuperUser]
 
     @extend_schema(
         summary="Eliminar reporte",
@@ -1973,7 +1974,7 @@ class ReportHistoryView(APIView):
     """
     Vista para obtener el historial de reportes generados
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSuperUser]
 
     @extend_schema(
         summary="Historial de reportes",

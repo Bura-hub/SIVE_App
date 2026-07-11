@@ -7,6 +7,40 @@ import requests
 from typing import List, Dict, Any
 
 
+# ========================= Validación de imágenes (avatar / perfil) =========================
+
+# Límites compartidos por el registro (UserProfileSerializer) y la subida de imagen de
+# perfil (ProfileImageSerializer/ProfileImageView), para que ambos flujos exijan lo mismo.
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
+ALLOWED_IMAGE_CONTENT_TYPES = ('image/jpeg', 'image/png', 'image/webp')
+
+
+def validate_image_file(value):
+    """
+    Valida un archivo de imagen subido: tamaño (<=5MB) y formato (JPG/PNG/WebP).
+
+    Reutilizable como validador de campo en serializers (registro e imagen de perfil)
+    y, si se quisiera, como validador de un ImageField del modelo. Lanza
+    django.core.exceptions.ValidationError, que DRF captura y traduce a un error 400
+    del campo correspondiente.
+
+    El content_type solo está disponible en archivos recién subidos (UploadedFile);
+    si no lo está (p. ej. un FieldFile ya persistido), se omite esa comprobación.
+    """
+    if value is None:
+        return value
+
+    size = getattr(value, 'size', None)
+    if size is not None and size > MAX_IMAGE_SIZE_BYTES:
+        raise ValidationError("La imagen no puede ser mayor a 5MB")
+
+    content_type = getattr(value, 'content_type', None)
+    if content_type is not None and content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+        raise ValidationError("Solo se permiten imágenes en formato JPG, PNG o WebP")
+
+    return value
+
+
 class CustomPasswordValidator:
     """
     Validador personalizado de contraseñas con requisitos de seguridad mejorados
