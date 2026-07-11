@@ -46,7 +46,7 @@ from indicators.services.date_ranges import (  # noqa: E402
     resolve_indicators_date_range,
 )
 from indicators.services.formatting import auto_energy_unit, format_energy_value  # noqa: E402
-from indicators.services.kpi import calculate_kpi_metrics  # noqa: E402
+from indicators.services.kpi import calculate_kpi_metrics, summarize_inverter_status  # noqa: E402
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
@@ -161,26 +161,11 @@ class ConsumptionSummaryView(APIView):
                 scada_inverters_response = scada_client.get_devices(token, category_scada_id=inverter_scada_id) 
                 scada_inverters = scada_inverters_response.get('data', [])
 
-                total_inverters_count = len(scada_inverters)
-                online_inverters_count = 0
-
-                for inverter in scada_inverters:
-                    if inverter.get('status') == 'online':
-                        online_inverters_count += 1
-                
-                active_inverters_count = online_inverters_count
-                inactive_inverters_count = total_inverters_count - active_inverters_count
-
-                if total_inverters_count > 0:
-                    if inactive_inverters_count > 0:
-                        inverter_status_text = "critico"
-                        inverter_description_text = f"{inactive_inverters_count} inactivos"
-                    else:
-                        inverter_status_text = "estable"
-                        inverter_description_text = "Todos activos"
-                else:
-                    inverter_status_text = "normal"
-                    inverter_description_text = "Sin inversores registrados"
+                inv_summary = summarize_inverter_status(scada_inverters)
+                active_inverters_count = inv_summary['active']
+                total_inverters_count = inv_summary['total']
+                inverter_status_text = inv_summary['status']
+                inverter_description_text = inv_summary['description']
 
                 logger.info(f"Inverters: Active: {active_inverters_count}, Total: {total_inverters_count}")
 

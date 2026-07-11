@@ -8,6 +8,22 @@ verbatim de ConsumptionSummaryView. Presentación pura: sin BD ni DRF.
 from indicators.services.formatting import format_energy_value
 
 
+def summarize_inverter_status(scada_inverters):
+    """Resume el estado de los inversores (listado de la API SCADA) para la tarjeta del
+    dashboard: conteo activo/total + estado y descripción. Puro."""
+    total = len(scada_inverters)
+    active = sum(1 for inv in scada_inverters if inv.get('status') == 'online')
+    inactive = total - active
+    if total == 0:
+        return {'active': 0, 'total': 0, 'status': 'normal',
+                'description': 'Sin inversores registrados'}
+    if inactive > 0:
+        return {'active': active, 'total': total, 'status': 'critico',
+                'description': f'{inactive} inactivos'}
+    return {'active': active, 'total': total, 'status': 'estable',
+            'description': 'Todos activos'}
+
+
 def calculate_kpi_metrics(current_value, previous_value, title, base_unit_name, is_balance=False, is_average_power=False, is_temperature=False, is_humidity=False, is_wind_speed=False, is_irradiance=False):
     formatted_value, unit = format_energy_value(current_value, base_unit_name)
     change_percentage = 0.0

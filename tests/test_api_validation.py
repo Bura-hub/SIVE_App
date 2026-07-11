@@ -16,7 +16,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from core.health_views import health_check
 from indicators.services.formatting import auto_energy_unit, format_energy_value
-from indicators.services.kpi import calculate_kpi_metrics
+from indicators.services.kpi import calculate_kpi_metrics, summarize_inverter_status
 from indicators.tasks import colombia_day_range
 from indicators.views import (
     ChartDataView,
@@ -94,6 +94,15 @@ class KpiMetricsTests(TestCase):
     def test_humedad_optima(self):
         r = calculate_kpi_metrics(50, 50, "Humedad", "%RH", is_humidity=True)
         self.assertEqual(r['status'], "optimo")
+
+    def test_summarize_inverter_status(self):
+        self.assertEqual(
+            summarize_inverter_status([{'status': 'online'}, {'status': 'online'}])['status'], 'estable')
+        r = summarize_inverter_status([{'status': 'online'}, {'status': 'offline'}])
+        self.assertEqual(r['status'], 'critico')
+        self.assertEqual(r['description'], '1 inactivos')
+        self.assertEqual(r['active'], 1)
+        self.assertEqual(summarize_inverter_status([])['status'], 'normal')
 
 
 class ColombiaDayRangeTests(TestCase):

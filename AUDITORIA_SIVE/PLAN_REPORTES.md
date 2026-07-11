@@ -15,8 +15,9 @@
   fecha usa `datetime.now()` del servidor (no hora Colombia), sin portada, tablas mejorables.
 
 ## Mejoras propuestas (incremental, verificable regenerando un reporte)
-1. **Marca institucional**: logo (SIVE / Universidad de Nariño) + banda de encabezado en la
-   1ª página; usar `frontend/src/sive-logo.svg` convertido a PNG o un asset en el backend.
+1. **Marca institucional**: usar los logos **PNG de MTE y de SIVE** (los dos) en la banda de
+   encabezado de la 1ª página. Colocar los PNG como asset del backend (p. ej.
+   `indicators/report_assets/`) para que reportlab los embeba con `Image(...)`.
 2. **Header/footer con paginación** en todas las páginas: `SimpleDocTemplate.build(
    onFirstPage=, onLaterPages=)` dibujando "SIVE — Universidad de Nariño", nº de página,
    y fecha/rango del reporte en el pie.
