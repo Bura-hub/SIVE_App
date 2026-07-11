@@ -377,54 +377,35 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       return [0, 0, 0, 0, 0, 0, 0, 0]; // Retornar array vacío si no hay datos
     }
     
-    // Direcciones cardinales en grados (N=0°, NE=45°, E=90°, etc.)
-    const directions = [0, 45, 90, 135, 180, 225, 270, 315];
     const directionNames = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    
-    // Inicializar contadores para cada dirección
-    const directionCounts = directions.map(() => 0);
-    
-    // Contar ocurrencias en cada dirección para el rango de velocidad
+
+    // Contadores por dirección (una entrada por sector cardinal)
+    const directionCounts = directionNames.map(() => 0);
+
+    // El backend entrega, por día, wind_direction_distribution: { N, NE, E, ... } con los
+    // conteos reales de las lecturas sub-horarias. No hay dirección×velocidad por lectura,
+    // así que asignamos la distribución del día a la banda de su velocidad MEDIA (avg_wind_speed_kmh).
     data.forEach(item => {
-      if (!item) return; // Saltar items nulos
-      
-      // Usar windSpeed si está disponible, sino usar avg_wind_speed_kmh
-      const windSpeed = item.wind_speed_kmh || item.avg_wind_speed_kmh || 0;
-      
-      // Verificar si la velocidad está en el rango especificado
-      if (windSpeed >= minSpeed && windSpeed < maxSpeed) {
-        // Si no hay windDirection, distribuir uniformemente
-        if (!item.wind_direction_deg) {
-          // Distribuir uniformemente entre todas las direcciones
-          directionCounts.forEach((_, index) => {
-            directionCounts[index]++;
-          });
-        } else {
-          // Encontrar la dirección más cercana
-          let minDiff = 360;
-          let closestDirection = 0;
-          
-          directions.forEach((dir, index) => {
-            const diff = Math.abs(item.wind_direction_deg - dir);
-            const normalizedDiff = Math.min(diff, 360 - diff);
-            
-            if (normalizedDiff < minDiff) {
-              minDiff = normalizedDiff;
-              closestDirection = index;
-            }
-          });
-          
-          directionCounts[closestDirection]++;
-        }
+      if (!item) return;
+
+      const windSpeed = item.avg_wind_speed_kmh || 0;
+      if (windSpeed < minSpeed || windSpeed >= maxSpeed) return;
+
+      const dist = item.wind_direction_distribution;
+      if (dist && typeof dist === 'object') {
+        directionNames.forEach((name, index) => {
+          directionCounts[index] += Number(dist[name]) || 0;
+        });
       }
     });
-    
-    // Normalizar los datos para que el máximo sea 10 (para mejor visualización)
+
+    // Normalizar para que el máximo sea 10 (mejor visualización). Sin datos -> ceros (no
+    // se dibuja el antiguo círculo uniforme falso).
     const maxCount = Math.max(...directionCounts);
     if (maxCount > 0) {
       return directionCounts.map(count => (count / maxCount) * 10);
     }
-    
+
     return directionCounts;
   };
 
