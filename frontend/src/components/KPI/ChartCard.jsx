@@ -189,17 +189,17 @@ export function ChartCard({
       
       let hasZoom = false;
       
-      if (normalChart && normalChart.scales) {
+      if (normalChart && normalChart.scales && normalChart.scales.x && normalChart.scales.y) {
         const xScale = normalChart.scales.x;
         const yScale = normalChart.scales.y;
-        hasZoom = (xScale.min !== null || xScale.max !== null || 
+        hasZoom = (xScale.min !== null || xScale.max !== null ||
                    yScale.min !== null || yScale.max !== null);
       }
-      
-      if (!hasZoom && fullscreenChart && fullscreenChart.scales) {
+
+      if (!hasZoom && fullscreenChart && fullscreenChart.scales && fullscreenChart.scales.x && fullscreenChart.scales.y) {
         const xScale = fullscreenChart.scales.x;
         const yScale = fullscreenChart.scales.y;
-        hasZoom = (xScale.min !== null || xScale.max !== null || 
+        hasZoom = (xScale.min !== null || xScale.max !== null ||
                    yScale.min !== null || yScale.max !== null);
       }
       
@@ -383,6 +383,15 @@ export function ChartCard({
     }
   };
 
+  // Los `chartOptions` de arriba son para gráficos cartesianos (línea/barra): escalas x/y,
+  // tooltip por context.parsed.y y zoom en x. Para tipos radiales (p. ej. polarArea) esas
+  // opciones rompen el render (escalas cartesianas -> tamaños raros; parsed.y -> NaN en el
+  // tooltip), así que ahí se respetan las `options` que pasa el llamador.
+  const isCartesian = type === 'line' || type === 'bar';
+  const effectiveOptions = isCartesian
+    ? chartOptions
+    : { responsive: true, maintainAspectRatio: false, ...(options || {}) };
+
   return (
     <>
       {/* Contenedor principal de la tarjeta del gráfico */}
@@ -440,7 +449,7 @@ export function ChartCard({
         {/* Contenedor del gráfico con padding y altura definida */}
         <div className="p-6">
           <div className="chart-container relative w-full" style={{ height: height }}>
-            <ChartComponent ref={chartRef} data={data} options={chartOptions} aria-label={title || "Gráfico de datos"} />
+            <ChartComponent ref={chartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
             
             {/* Overlay sutil para indicar interactividad */}
             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-gray-50/20 pointer-events-none group-hover:to-gray-50/10 transition duration-300 rounded-lg"></div>
@@ -526,7 +535,7 @@ export function ChartCard({
               <div className="flex-1 p-8 overflow-hidden bg-gradient-to-br from-white to-slate-50/30">
                 <div className="h-full w-full">
                   <div className="chart-container w-full h-full" style={{ height: fullscreenHeight, maxHeight: maxFullscreenHeight }}>
-                    <ChartComponent ref={fullscreenChartRef} data={data} options={chartOptions} aria-label={title || "Gráfico de datos"} />
+                    <ChartComponent ref={fullscreenChartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
                   </div>
                 </div>
               </div>

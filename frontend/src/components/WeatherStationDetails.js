@@ -1097,49 +1097,33 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       {weatherData && weatherData.results && weatherData.results.length > 0 && (
         <section className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-4 lg:p-8 mb-6 lg:mb-8">
           <div className="space-y-6 lg:space-y-8">
-            <div className="w-full">
+            <div className="mx-auto w-full max-w-[440px]">
               {(() => {
-                // Rosa de los vientos APILADA por banda de velocidad. Cada banda trae los
-                // conteos crudos por dirección; para el apilado polar (cada sector nace del
-                // centro) se dibujan valores ACUMULADOS de mayor a menor, de modo que la banda
-                // más lenta queda encima (más cerca del centro) y la más rápida detrás (más
-                // lejos). El tooltip muestra el valor propio de cada banda, no el acumulado.
+                // Rosa de los vientos: UN pétalo por dirección cardinal (frecuencia total de
+                // lecturas del rango). El desglose por banda de velocidad (0-5/5-10/10+ km/h,
+                // asignada por la velocidad media de cada día) se muestra en el tooltip.
                 const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-                const slow = calculateWindRoseData(weatherData.results, 0, 5);      // 0-5 km/h
-                const mid = calculateWindRoseData(weatherData.results, 5, 10);      // 5-10 km/h
-                const fast = calculateWindRoseData(weatherData.results, 10, Infinity); // 10+ km/h
-                const sum = (a, b) => a.map((v, i) => v + (b[i] || 0));
-                const cumAll = sum(sum(slow, mid), fast); // total (banda rápida, dibujada al fondo)
-                const cumMid = sum(slow, mid);            // lenta+media
-                const rawByDs = [fast, mid, slow];        // valor propio de cada dataset (para tooltip)
+                const slow = calculateWindRoseData(weatherData.results, 0, 5);
+                const mid = calculateWindRoseData(weatherData.results, 5, 10);
+                const fast = calculateWindRoseData(weatherData.results, 10, Infinity);
+                const total = labels.map((_, i) => (slow[i] || 0) + (mid[i] || 0) + (fast[i] || 0));
+                // Rueda de color tipo brújula (un color por sector), con relleno translúcido.
+                const DIR_COLORS = ['#2563eb', '#0891b2', '#059669', '#65a30d', '#d97706', '#ea580c', '#dc2626', '#7c3aed'];
+                const fills = DIR_COLORS.map(c => c + 'cc'); // ~80% opacidad
                 return (
                   <ChartCard
                     title="Rosa de los Vientos"
-                    description="Frecuencia del viento por dirección, apilada por banda de velocidad (banda asignada por la velocidad media de cada día)"
+                    description="Frecuencia del viento por dirección en el rango. El detalle por banda de velocidad aparece al pasar el cursor."
                     type="polarArea"
                     data={{
                       labels,
                       datasets: [
                         {
-                          label: '10+ km/h',
-                          data: cumAll,
-                          backgroundColor: 'rgba(239, 68, 68, 0.75)',   // rojo (fondo, banda rápida)
+                          label: 'Lecturas de viento',
+                          data: total,
+                          backgroundColor: fills,
                           borderColor: '#ffffff',
-                          borderWidth: 1,
-                        },
-                        {
-                          label: '5-10 km/h',
-                          data: cumMid,
-                          backgroundColor: 'rgba(245, 158, 11, 0.8)',   // ámbar (media)
-                          borderColor: '#ffffff',
-                          borderWidth: 1,
-                        },
-                        {
-                          label: '0-5 km/h',
-                          data: slow,
-                          backgroundColor: 'rgba(16, 185, 129, 0.85)',  // verde (encima, banda lenta)
-                          borderColor: '#ffffff',
-                          borderWidth: 1,
+                          borderWidth: 1.5,
                         },
                       ],
                     }}
@@ -1147,34 +1131,34 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                       responsive: true,
                       maintainAspectRatio: false,
                       plugins: {
-                        title: { display: false },
-                        legend: {
-                          position: 'top',
-                          align: 'start',
-                          labels: { usePointStyle: true, padding: 20, font: { size: 13, weight: '600' } },
-                        },
+                        legend: { display: false },
                         tooltip: {
                           callbacks: {
+                            title: (items) => (items.length ? `Viento del ${labels[items[0].dataIndex]}` : ''),
                             label: (ctx) => {
-                              const own = (rawByDs[ctx.datasetIndex] || [])[ctx.dataIndex] || 0;
-                              return `${ctx.dataset.label}: ${own} lecturas`;
+                              const i = ctx.dataIndex;
+                              return [
+                                `Total: ${total[i]} lecturas`,
+                                `0–5 km/h: ${slow[i] || 0}`,
+                                `5–10 km/h: ${mid[i] || 0}`,
+                                `10+ km/h: ${fast[i] || 0}`,
+                              ];
                             },
                           },
                         },
-                        zoom: { zoom: { wheel: { enabled: false }, pinch: { enabled: false } }, pan: { enabled: false } },
                       },
                       scales: {
                         r: {
                           beginAtZero: true,
-                          grid: { color: 'rgba(0, 0, 0, 0.1)' },
-                          angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
-                          pointLabels: { display: true, font: { size: 14, weight: '600' } },
-                          ticks: { backdropColor: 'transparent', font: { size: 11 } },
+                          grid: { color: 'rgba(0, 0, 0, 0.08)' },
+                          angleLines: { color: 'rgba(0, 0, 0, 0.08)' },
+                          pointLabels: { display: true, font: { size: 14, weight: '700' }, color: '#334155' },
+                          ticks: { display: true, backdropColor: 'transparent', color: '#64748b', font: { size: 10 }, precision: 0 },
                         },
                       },
                     }}
-                    height="400px"
-                    fullscreenHeight="800px"
+                    height="420px"
+                    fullscreenHeight="760px"
                   />
                 );
               })()}
