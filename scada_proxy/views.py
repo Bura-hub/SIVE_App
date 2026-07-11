@@ -74,7 +74,7 @@ def check_scada_connection():
 
 
 @extend_schema(
-    tags=["SCADA Proxy"],
+    tags=["SCADA"],
     description="Verifica el estado de conexión con el sistema SCADA (token y API).",
     responses={
         200: OpenApiResponse(
@@ -102,7 +102,7 @@ class ScadaConnectionStatusView(APIView):
 # ========================= SCADA Proxy Views =========================
 
 @extend_schema(
-    tags=["SCADA Proxy"],
+    tags=["SCADA"],
     description="Obtiene la lista de instituciones desde el sistema SCADA.",
     responses={200: SCADAResponseSerializer}
 )
@@ -123,7 +123,7 @@ class InstitutionsView(ScadaProxyView):
 
 
 @extend_schema(
-    tags=["SCADA Proxy"],
+    tags=["SCADA"],
     description="Obtiene las categorías de dispositivos desde el sistema SCADA.",
     responses={200: SCADAResponseSerializer}
 )
@@ -144,7 +144,7 @@ class DeviceCategoriesView(ScadaProxyView):
 
 
 @extend_schema(
-    tags=["SCADA Proxy"],
+    tags=["SCADA"],
     description="Obtiene dispositivos desde el sistema SCADA, filtrando por categoría, institución o nombre.",
     parameters=[
         OpenApiParameter("category_id", str, OpenApiParameter.QUERY, description="Filtrar por ID de categoría (UUID de SCADA) o nombre de categoría (ej. 'inverter')"),
@@ -215,7 +215,7 @@ class DevicesView(ScadaProxyView):
 
 
 @extend_schema(
-    tags=["SCADA Proxy"],
+    tags=["SCADA"],
     description="Obtiene mediciones de un dispositivo desde el sistema SCADA.",
     parameters=[
         OpenApiParameter("from_date", str, OpenApiParameter.QUERY, description="Fecha de inicio en formato ISO 8601"),
@@ -251,7 +251,7 @@ class MeasurementsView(ScadaProxyView):
 # ========================= Local Models Views =========================
 
 @extend_schema(
-    tags=["Datos Locales"],
+    tags=["SCADA"],
     description="Lista todas las instituciones locales registradas.",
     parameters=[OpenApiParameter("search", str, OpenApiParameter.QUERY, description="Buscar por nombre de institución")],
     responses={200: InstitutionSerializer(many=True)}
@@ -264,7 +264,7 @@ class LocalInstitutionListView(generics.ListAPIView):
     search_fields = ['name']
 
 @extend_schema(
-    tags=["Datos Locales"],
+    tags=["SCADA"],
     description="Lista todas las categorías de dispositivos locales con datos SCADA enriquecidos (sin indicatorConfigurations).",
     parameters=[OpenApiParameter("search", str, OpenApiParameter.QUERY, description="Buscar por nombre de categoría (inverter, electricmeter, weatherstation)")],
     responses={200: DeviceCategorySerializer(many=True)}
@@ -301,7 +301,7 @@ class LocalDeviceCategoryListView(generics.ListAPIView):
 
 
 @extend_schema(
-    tags=["Datos Locales"],
+    tags=["SCADA"],
     description="Lista todos los dispositivos locales activos, con soporte de filtros, búsqueda y ordenamiento.",
     parameters=[
         OpenApiParameter("category", int, OpenApiParameter.QUERY, description="ID de la categoría(1:inv 2:Med 3:Est)"),
@@ -328,7 +328,7 @@ class LocalDeviceListView(generics.ListAPIView):
     # consultas N+1; se eliminó.
 
 @extend_schema(
-    tags=["Datos Locales"],
+    tags=["SCADA"],
     description="Lista mediciones históricas filtradas por dispositivo y rango de fechas.",
     parameters=[
         OpenApiParameter("device", str, OpenApiParameter.QUERY, description="ID o SCADA_ID del dispositivo (string)"),
@@ -420,7 +420,7 @@ class HistoricalMeasurementsView(generics.ListAPIView):
             return None
 
 @extend_schema(
-    tags=["Datos Locales"],
+    tags=["SCADA"],
     description="Obtiene un resumen diario (promedio, máximo, mínimo y suma) de las mediciones de un dispositivo.",
     parameters=[
         OpenApiParameter("device", str, OpenApiParameter.QUERY, description="Scada_ID del dispositivo (UUID o string)"),
@@ -531,7 +531,7 @@ class DailySummaryMeasurementsView(ScadaProxyView):
 # ========================= Celery Tasks Views =========================
 
 @extend_schema(
-    tags=["Tareas"],
+    tags=["Operación"],
     description="Lanza una tarea para obtener mediciones históricas.",
     request=OpenApiTypes.OBJECT,
     examples=[
@@ -580,7 +580,7 @@ class HistoricalMeasurementsTaskView(APIView):
 
 
 @extend_schema(
-    tags=["Tareas"],
+    tags=["Operación"],
     description="Consulta el estado de una tarea por su ID.",
     parameters=[OpenApiParameter("task_id", str, OpenApiParameter.PATH, description="ID de la tarea")],
     responses={200: TaskProgressSerializer}
@@ -614,7 +614,7 @@ class TaskProgressView(APIView):
 
 
 @extend_schema(
-    tags=["Tareas"],
+    tags=["Operación"],
     request=OpenApiTypes.OBJECT,
     examples=[
         OpenApiExample(
@@ -656,7 +656,7 @@ class CancelTaskView(APIView):
         return Response({"task_id": task_id, "message": "Cancelación solicitada."})
     
 @extend_schema(
-    tags=["Tareas"],
+    tags=["Operación"],
     description="Obtiene las tareas activas, reservadas y programadas en Celery.",
     responses={200: OpenApiExample(
         "Respuesta Ejemplo",
@@ -689,7 +689,7 @@ class ActiveTasksView(APIView):
 
 
 @extend_schema(
-    tags=["Tareas"],
+    tags=["Operación"],
     description="Lista el historial de tareas ejecutadas en el sistema.",
     responses={200: TaskProgressSerializer(many=True)}
 )
@@ -703,7 +703,7 @@ class TaskHistoryView(generics.ListAPIView):
 from django.db import models
 
 @extend_schema(
-    tags=["Sincronización"],
+    tags=["Operación"],
     description="Sincroniza categorías, instituciones y dispositivos desde SCADA hacia la base local.",
     responses={200: OpenApiExample(
         "Ejemplo Respuesta",
@@ -738,7 +738,7 @@ class SyncLocalDevicesView(APIView):
 
 
 @extend_schema(
-    tags=["Sincronización"],
+    tags=["Operación"],
     description="Repara las relaciones faltantes de categoría e institución en dispositivos específicos o todos los dispositivos.",
     request=OpenApiExample(
         "Ejemplo Request",

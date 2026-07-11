@@ -439,7 +439,7 @@ class CalculateKPIsView(APIView):
             },
             500: {"description": "Error interno del servidor"},
         },
-        tags=["Dashboard"]
+        tags=["Operación"]
     )
     def post(self, request, *args, **kwargs):
         """
@@ -500,7 +500,7 @@ class CalculateDailyDataView(APIView):
             },
             500: {"description": "Error interno del servidor"},
         },
-        tags=["Dashboard"]
+        tags=["Operación"]
     )
     def post(self, request, *args, **kwargs):
         """
@@ -573,7 +573,7 @@ class InstitutionsListView(APIView):
             },
             500: {"description": "Error interno del servidor"},
         },
-        tags=["Instituciones"]
+        tags=["Indicadores"]
     )
     def get(self, request, *args, **kwargs):
         """
@@ -638,7 +638,7 @@ class ElectricMetersListView(APIView):
             404: {"description": "Institución no encontrada"},
             500: {"description": "Error interno del servidor"},
         },
-        tags=["Medidores Eléctricos"]
+        tags=["Indicadores"]
     )
     def get(self, request, *args, **kwargs):
         """
@@ -721,6 +721,7 @@ class ElectricMetersListView(APIView):
 
 
 # indicators/views.py
+@extend_schema(tags=["Indicadores"])
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
@@ -803,7 +804,7 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 @extend_schema(
-    tags=["Inversores"],
+    tags=["Indicadores"],
     description="Lista todos los indicadores de inversores con opciones de filtrado.",
     parameters=[
         OpenApiParameter("institution_id", int, OpenApiParameter.QUERY, description="ID de la institución"),
@@ -895,7 +896,7 @@ class InverterIndicatorsView(APIView):
 
 
 @extend_schema(
-    tags=["Inversores"],
+    tags=["Indicadores"],
     description="Lista todos los datos de gráficos de inversores con opciones de filtrado.",
     parameters=[
         OpenApiParameter("institution_id", int, OpenApiParameter.QUERY, description="ID de la institución"),
@@ -971,7 +972,7 @@ class InverterChartDataView(APIView):
 
 
 @extend_schema(
-    tags=["Inversores"],
+    tags=["Operación"],
     description="Ejecuta el cálculo de indicadores de inversores.",
     request=InverterCalculationRequestSerializer,
     responses={
@@ -1045,7 +1046,7 @@ class CalculateInverterDataView(APIView):
 
 
 @extend_schema(
-    tags=["Medidores Eléctricos"],
+    tags=["Operación"],
     description="Ejecuta el cálculo de indicadores eléctricos.",
     request=InverterCalculationRequestSerializer,  # Reutilizamos el mismo serializer
     responses={
@@ -1119,7 +1120,7 @@ class CalculateElectricalDataView(APIView):
 
 
 @extend_schema(
-    tags=["Inversores"],
+    tags=["Indicadores"],
     description="Lista inversores filtrados por institución.",
     parameters=[
         OpenApiParameter("institution_id", int, OpenApiParameter.QUERY, description="ID de la institución"),
@@ -1198,7 +1199,7 @@ class WeatherStationIndicatorsView(APIView):
             400: {"description": "Parámetros inválidos"},
             500: {"description": "Error interno del servidor"},
         },
-        tags=["Estaciones Meteorológicas"]
+        tags=["Indicadores"]
     )
     def get(self, request, *args, **kwargs):
         """
@@ -1316,7 +1317,7 @@ class WeatherStationChartDataView(APIView):
             400: {"description": "Parámetros inválidos"},
             500: {"description": "Error interno del servidor"},
         },
-        tags=["Estaciones Meteorológicas"]
+        tags=["Indicadores"]
     )
     def get(self, request, *args, **kwargs):
         """
@@ -1431,7 +1432,7 @@ class CalculateWeatherStationDataView(APIView):
             400: {"description": "Parámetros inválidos"},
             500: {"description": "Error interno del servidor"},
         },
-        tags=["Estaciones Meteorológicas"]
+        tags=["Operación"]
     )
     def post(self, request, *args, **kwargs):
         """
@@ -1517,7 +1518,7 @@ class WeatherStationsListView(APIView):
             },
             500: {"description": "Error interno del servidor"},
         },
-        tags=["Estaciones Meteorológicas"]
+        tags=["Indicadores"]
     )
     def get(self, request, *args, **kwargs):
         """

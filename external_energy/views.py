@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 from django.conf import settings
 from django.utils import timezone
 from django.db import models
@@ -51,6 +52,7 @@ def _is_valid_number(value):
 
 @cache_page(XM_CACHE_TTL)
 @vary_on_headers('Authorization')
+@extend_schema(tags=["Mercado Energético (XM)"], summary="Precios de energía del mercado (XM)")
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def energy_prices(request):
@@ -206,6 +208,7 @@ def energy_prices(request):
         )
 
 
+@extend_schema(tags=["Mercado Energético (XM)"], summary="Ahorros estimados por energía")
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def energy_savings(request):
@@ -320,6 +323,7 @@ def energy_savings(request):
         )
 
 
+@extend_schema(tags=["Operación"], summary="Sincronizar datos externos del mercado (XM)")
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def sync_external_data(request):
@@ -354,6 +358,7 @@ def sync_external_data(request):
 
 @cache_page(XM_CACHE_TTL)
 @vary_on_headers('Authorization')
+@extend_schema(tags=["Mercado Energético (XM)"], summary="Resumen del mercado energético")
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def market_overview(request):
@@ -464,6 +469,7 @@ def _xm_metric_response(request, fetch_method, prefix, default_range, error_labe
 
 @cache_page(XM_CACHE_TTL)
 @vary_on_headers('Authorization')
+@extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de generación del sistema (XM)")
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def generation_data(request):
@@ -473,6 +479,7 @@ def generation_data(request):
 
 @cache_page(XM_CACHE_TTL)
 @vary_on_headers('Authorization')
+@extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de demanda del sistema (XM)")
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def demand_data(request):
@@ -482,6 +489,7 @@ def demand_data(request):
 
 @cache_page(XM_CACHE_TTL)
 @vary_on_headers('Authorization')
+@extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de emisiones (XM)")
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def emissions_data(request):
@@ -490,6 +498,7 @@ def emissions_data(request):
 
 @cache_page(XM_CACHE_TTL)
 @vary_on_headers('Authorization')
+@extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de exportaciones de energía (XM)")
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def exports_data(request):
@@ -498,6 +507,7 @@ def exports_data(request):
 
 @cache_page(XM_CACHE_TTL)
 @vary_on_headers('Authorization')
+@extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de importaciones de energía (XM)")
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def imports_data(request):

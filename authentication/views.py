@@ -645,7 +645,7 @@ class LogoutAllDevicesView(APIView):
 # ========================= Vista de Imagen de Perfil =========================
 
 @extend_schema(
-    tags=["Perfil de Usuario"],
+    tags=["Autenticación"],
     request=ProfileImageSerializer,
     responses={200: ProfileImageResponseSerializer, 400: "Bad Request", 401: "Unauthorized"},
     description="Gestiona la imagen de perfil del usuario autenticado."

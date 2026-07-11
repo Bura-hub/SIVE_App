@@ -348,12 +348,25 @@ SOLAR_INSTALLATION_COST_COP = float(os.getenv('SOLAR_INSTALLATION_COST_COP', '50
 # ========================= Documentación de la API (drf-spectacular) =========================
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'MTE - SIVE API',
+    'TITLE': 'MTE · SIVE — API',
     'DESCRIPTION': (
-        'API completa para el sistema MTE - SIVE con autenticación avanzada, '
-        'monitoreo de sistemas eléctricos, estaciones meteorológicas e inversores. '
-        'Incluye funcionalidades de seguridad mejoradas, tokens de refresco, '
-        'y auditoría completa de acceso.'
+        'API del **Sistema de Visualización Energético (SIVE)** — Universidad de Nariño.\n\n'
+        'Expone los datos históricos e indicadores de consumo/generación de energía y variables '
+        'climáticas, tomados del conector SCADA y del mercado eléctrico colombiano (XM).\n\n'
+        '## Autenticación\n'
+        'La mayoría de endpoints requieren token: cabecera `Authorization: Token <access_token>` '
+        '(obtén el token en `POST /auth/login/`). No es `Bearer`.\n\n'
+        '## URL base\n'
+        'En producción la API se sirve bajo el prefijo `/sive/` '
+        '(p. ej. `https://mte.udenar.edu.co/sive/api/`).\n\n'
+        '## Grupos\n'
+        '- **Autenticación** — login, refresco, perfil y sesiones.\n'
+        '- **Dashboard** — resumen e insumos de las gráficas del inicio.\n'
+        '- **Indicadores** — indicadores de medidores, inversores y estaciones.\n'
+        '- **Reportes** — generación y descarga de reportes (PDF/Excel/CSV).\n'
+        '- **SCADA** — proxy al conector remoto y datos locales sincronizados.\n'
+        '- **Mercado Energético (XM)** — precios, ahorros, demanda y emisiones.\n'
+        '- **Operación** — cálculos manuales, sincronización y gestión de tareas (uso administrativo).'
     ),
     'VERSION': '2.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
@@ -382,11 +395,15 @@ SPECTACULAR_SETTINGS = {
             }
         }
     },
+    # Orden y descripción de los grupos (drf-spectacular respeta este orden en Swagger/Redoc).
     'TAGS': [
-        {'name': 'Autenticación', 'description': 'Endpoints para autenticación y gestión de usuarios'},
-        {'name': 'Indicadores', 'description': 'KPIs y métricas del sistema'},
-        {'name': 'SCADA', 'description': 'Integración con sistemas SCADA'},
-        {'name': 'Reportes', 'description': 'Generación y gestión de reportes'},
+        {'name': 'Autenticación', 'description': 'Login, refresco de token, cambio de contraseña, perfil y gestión de sesiones.'},
+        {'name': 'Dashboard', 'description': 'Resumen de consumo/generación/balance e insumos de las gráficas del inicio.'},
+        {'name': 'Indicadores', 'description': 'Indicadores de medidores eléctricos, inversores y estaciones meteorológicas, más el catálogo de instituciones.'},
+        {'name': 'Reportes', 'description': 'Generación y descarga de reportes en PDF, Excel y CSV.'},
+        {'name': 'SCADA', 'description': 'Proxy al conector SCADA remoto y consulta de los datos locales sincronizados.'},
+        {'name': 'Mercado Energético (XM)', 'description': 'Datos del mercado eléctrico colombiano vía XM: precios, ahorros, demanda y emisiones.'},
+        {'name': 'Operación', 'description': 'Endpoints administrativos: cálculos manuales de indicadores, sincronización SCADA y gestión de tareas.'},
     ],
 }
 
