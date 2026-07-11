@@ -44,3 +44,13 @@ Dockerfile.claude
 iniciobash.txt
 scada_devices_full.json
 .audit/
+.docker/
+
+# Documentos internos de auditoría/planeación (solo local, no versionar)
+AUDITORIA_SIVE/
+
+# Config de despliegue específica del servidor (local)
+deploy/mte-sive-ssl-vhost.conf
+
+# Backups de editor
+*.save
