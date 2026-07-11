@@ -953,8 +953,8 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               pointBorderWidth: 2,
                             },
                             {
-                              label: 'Performance Ratio',
-                              data: inverterData.results.slice().reverse().map(item => item.performance_ratio || 0),
+                              label: 'Potencia Máxima (kW)',
+                              data: inverterData.results.slice().reverse().map(item => (item.max_power_w || 0) / 1000),
                               borderColor: '#8B5CF6',
                               backgroundColor: 'rgba(139, 92, 246, 0.1)',
                               fill: false,
@@ -1002,8 +1002,8 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6 xl:gap-8 w-full">
                       {/* Calidad de energía y factor de potencia */}
                       <ChartCard
-                        title="Calidad de Energía y Factor de Potencia"
-                        description="Factor de potencia, THD y estabilidad del sistema"
+                        title="Factor de Potencia"
+                        description="Factor de potencia promedio entregado por los inversores"
                         type="line"
                         data={{
                           labels: inverterData.results.slice().reverse().map(item => {
@@ -1018,34 +1018,13 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                           datasets: [
                             {
                               label: 'Factor de Potencia Promedio',
-                              data: inverterData.results.slice().reverse().map(item => item.avg_power_factor || item.power_factor || item.power_factor_avg || 0),
+                              data: inverterData.results.slice().reverse().map(item => item.avg_power_factor_pct || 0),
                               borderColor: '#3B82F6',
                               backgroundColor: 'rgba(59, 130, 246, 0.1)',
                               fill: true,
                               tension: 0.4,
                               pointRadius: 3,
                               pointBackgroundColor: '#3B82F6',
-                            },
-                            {
-                              label: 'THD de Voltaje (%)',
-                              data: inverterData.results.slice().reverse().map(item => item.max_voltage_thd_pct || item.voltage_thd_pct || item.thd_voltage || item.voltage_thd || 0),
-                              borderColor: '#EF4444',
-                              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                              fill: true,
-                              tension: 0.4,
-                              pointRadius: 3,
-                              pointBackgroundColor: '#EF4444',
-                            },
-                            {
-                              label: 'THD de Corriente (%)',
-                              data: inverterData.results.slice().reverse().map(item => item.max_current_thd_pct || item.current_thd_pct || item.thd_current || item.current_thd || 0),
-                              borderColor: '#8B5CF6',
-                              backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                              fill: false,
-                              tension: 0.4,
-                              pointRadius: 3,
-                              borderDash: [6, 3],
-                              pointBackgroundColor: '#8B5CF6',
                             }
                           ]
                         }}
@@ -1308,7 +1287,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                           { label: 'Inversor', width: 'w-24 lg:w-28 xl:w-36' },
                           { label: 'Energía Generada (kWh)', width: 'w-32 lg:w-36 xl:w-40' },
                           { label: 'Eficiencia DC-AC (%)', width: 'w-28 lg:w-32 xl:w-36' },
-                          { label: 'Performance Ratio', width: 'w-28 lg:w-32 xl:w-36' },
+                          { label: 'Potencia Máx (kW)', width: 'w-28 lg:w-32 xl:w-36' },
                           { label: 'Factor de Potencia', width: 'w-24 lg:w-28 xl:w-32' },
                           { label: 'Temperatura (°C)', width: 'w-24 lg:w-28 xl:w-32' }
                         ].map((header) => (
@@ -1361,17 +1340,17 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-semibold text-blue-700">
-                                {(item.performance_ratio || 0).toFixed(2)}
+                                {((item.max_power_w || 0) / 1000).toFixed(1)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="flex items-center">
                                 <div className="text-xs lg:text-sm font-semibold text-gray-900">
-                                  {(item.avg_power_factor || 0).toFixed(2)}
+                                  {(item.avg_power_factor_pct || 0).toFixed(2)}
                                 </div>
                                 <div className={`ml-2 w-2 h-2 rounded-full ${
-                                  (item.avg_power_factor || 0) > 0.95 ? 'bg-green-500' : 
-                                  (item.avg_power_factor || 0) > 0.85 ? 'bg-yellow-500' : 'bg-red-500'
+                                  (item.avg_power_factor_pct || 0) > 0.95 ? 'bg-green-500' :
+                                  (item.avg_power_factor_pct || 0) > 0.85 ? 'bg-yellow-500' : 'bg-red-500'
                                 }`}></div>
                               </div>
                             </td>
