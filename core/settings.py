@@ -357,10 +357,12 @@ SPECTACULAR_SETTINGS = {
     ),
     'VERSION': '2.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
-    # El esquema OpenAPI expone toda la superficie de la API; se restringe a
-    # administradores (antes era público sin autenticación). El UI de Swagger/Redoc
-    # carga el esquema, así que sin sesión de admin no muestra la API.
-    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAdminUser'],
+    # Documentación (schema + Swagger + Redoc) accesible sin sesión: en el navegador la
+    # autenticación es por cookie de sesión, pero la app usa token (localStorage), así que
+    # exigir sesión hacía la doc inusable. Se expone solo el MAPA de la API (rutas/params);
+    # cada endpoint sigue protegido por token para USARSE. Aceptable para un tool interno
+    # detrás de Apache. Para re-restringir a admin: IsAdminUser (requiere login por /admin/).
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
     'SECURITY': [
         {"TokenAuth": []},
         {"SessionAuth": []}
