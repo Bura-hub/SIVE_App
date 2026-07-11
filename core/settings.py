@@ -147,6 +147,9 @@ DATABASES = {
         'PASSWORD': os.getenv('password_user_postgres'),
         'HOST': os.getenv('POSTGRES_HOST', 'db'),
         'PORT': os.getenv('port_postgres', '5432'),
+        # Reutiliza la conexión TCP hasta 60s en vez de abrir/cerrar una por request.
+        'CONN_MAX_AGE': 60,
+        'CONN_HEALTH_CHECKS': True,
         'OPTIONS': {
             'options': '-c client_encoding=UTF8'
         }
