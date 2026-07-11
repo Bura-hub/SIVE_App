@@ -2,6 +2,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import LoginPage from './components/LoginPage'; // Eager: la pantalla de login debe cargar de inmediato
 import Sidebar from './components/Sidebar'; // Componente de barra lateral
+import ErrorBoundary from './components/ErrorBoundary'; // Límite de error global de pantallas
 
 // Code-splitting: cada pantalla se carga bajo demanda en su propio chunk
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -151,7 +152,11 @@ function App() {
       <main className="flex-1 p-8 bg-gray-100 rounded-tl-3xl shadow-inner">
         {/* Suspense muestra el fallback mientras se descarga el chunk de la pantalla */}
         <Suspense fallback={<PageLoader />}>
-          {renderPageContent()} {/* Renderiza el componente correspondiente */}
+          {/* Si una pantalla lanza un error de render, el ErrorBoundary muestra un fallback
+              en vez de tumbar toda la app; key={currentPage} lo resetea al navegar. */}
+          <ErrorBoundary key={currentPage}>
+            {renderPageContent()} {/* Renderiza el componente correspondiente */}
+          </ErrorBoundary>
         </Suspense>
       </main>
 
