@@ -36,6 +36,14 @@ class ErrorBoundary extends React.Component {
             return this.props.children;
         }
 
+        // Fallback compacto opcional (p. ej. para un gráfico individual): se le pasa una
+        // función que recibe {reset} o un nodo. Si no, se usa el fallback grande de pantalla.
+        if (this.props.fallback) {
+            return typeof this.props.fallback === 'function'
+                ? this.props.fallback({ reset: this.handleReset, error: this.state.error })
+                : this.props.fallback;
+        }
+
         return (
             <div className="flex items-center justify-center min-h-[60vh] p-6" role="alert">
                 <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center">

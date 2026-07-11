@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Line, Bar, PolarArea } from 'react-chartjs-2';
+import ErrorBoundary from '../ErrorBoundary';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -393,6 +394,18 @@ export function ChartCard({
     ? chartOptions
     : { responsive: true, maintainAspectRatio: false, ...(options || {}) };
 
+  // Fallback compacto si el gráfico falla al renderizar: aísla el fallo a esta tarjeta en
+  // vez de tumbar toda la pantalla.
+  const chartErrorFallback = (
+    <div className="w-full h-full flex flex-col items-center justify-center text-center text-gray-500 p-4">
+      <svg className="w-8 h-8 text-red-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+      </svg>
+      <p className="text-sm font-medium">No se pudo mostrar este gráfico</p>
+    </div>
+  );
+
   return (
     <>
       {/* Contenedor principal de la tarjeta del gráfico */}
@@ -450,7 +463,9 @@ export function ChartCard({
         {/* Contenedor del gráfico con padding y altura definida */}
         <div className="p-6">
           <div className="chart-container relative w-full" style={{ height: height }}>
-            <ChartComponent ref={chartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
+            <ErrorBoundary fallback={chartErrorFallback}>
+              <ChartComponent ref={chartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
+            </ErrorBoundary>
             
             {/* Overlay sutil para indicar interactividad */}
             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-gray-50/20 pointer-events-none group-hover:to-gray-50/10 transition duration-300 rounded-lg"></div>
@@ -539,7 +554,9 @@ export function ChartCard({
               <div className="flex-1 p-8 overflow-hidden bg-gradient-to-br from-white to-slate-50/30">
                 <div className="h-full w-full">
                   <div className="chart-container w-full h-full" style={{ height: fullscreenHeight, maxHeight: maxFullscreenHeight }}>
-                    <ChartComponent ref={fullscreenChartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
+                    <ErrorBoundary fallback={chartErrorFallback}>
+                      <ChartComponent ref={fullscreenChartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
+                    </ErrorBoundary>
                   </div>
                 </div>
               </div>
