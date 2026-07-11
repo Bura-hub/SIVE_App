@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Line, Bar, PolarArea } from 'react-chartjs-2';
 import ErrorBoundary from '../ErrorBoundary';
@@ -123,6 +123,7 @@ export function ChartCard({
     
     resetZoomForChart(normalChart);
     resetZoomForChart(fullscreenChart);
+    setIsZoomed(false);
   };
 
   // Efecto para sincronizar el zoom entre las dos vistas cuando se maximiza
@@ -183,36 +184,18 @@ export function ChartCard({
     }
   }, [isFullscreen]);
 
-  // Efecto para detectar cuando el zoom está activo
-  useEffect(() => {
-    const checkZoomStatus = () => {
-      const normalChart = getChartInstance(chartRef);
-      const fullscreenChart = getChartInstance(fullscreenChartRef);
-      
-      let hasZoom = false;
-      
-      if (normalChart && normalChart.scales && normalChart.scales.x && normalChart.scales.y) {
-        const xScale = normalChart.scales.x;
-        const yScale = normalChart.scales.y;
-        hasZoom = (xScale.min !== null || xScale.max !== null ||
-                   yScale.min !== null || yScale.max !== null);
-      }
+  // El estado `isZoomed` (para habilitar el botón "Resetear Zoom") se actualiza por EVENTOS del
+  // plugin de zoom (onZoomComplete/onPanComplete abajo) y se limpia en resetChartZoom. Antes se
+  // hacía con un setInterval de 500ms por cada ChartCard leyendo chart.scales, lo que consumía
+  // CPU de forma continua (p. ej. 6 gráficas en el Inicio = 12 lecturas/seg permanentes).
 
-      if (!hasZoom && fullscreenChart && fullscreenChart.scales && fullscreenChart.scales.x && fullscreenChart.scales.y) {
-        const xScale = fullscreenChart.scales.x;
-        const yScale = fullscreenChart.scales.y;
-        hasZoom = (xScale.min !== null || xScale.max !== null ||
-                   yScale.min !== null || yScale.max !== null);
-      }
-      
-      setIsZoomed(hasZoom);
-    };
-    
-    // Verificar el estado del zoom cada 500ms
-    const interval = setInterval(checkZoomStatus, 500);
-    
-    return () => clearInterval(interval);
-  }, []);
+  // A11y: cerrar la vista maximizada con la tecla Escape.
+  useEffect(() => {
+    if (!isFullscreen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setIsFullscreen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isFullscreen]);
 
   // Iconos SVG modernos
   const ResetIcon = () => (
@@ -234,7 +217,8 @@ export function ChartCard({
   );
 
   // Opciones genéricas para los gráficos (con soporte para zoom/pan y tooltips mejorados)
-  const chartOptions = {
+  // Memoizado para no recrear el objeto en cada render (evita updates espurios del chart).
+  const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -290,6 +274,7 @@ export function ChartCard({
           enabled: true,
           mode: 'x',
           modifierKey: 'ctrl',
+          onPanComplete: () => setIsZoomed(true),
         },
         zoom: {
           wheel: {
@@ -305,7 +290,8 @@ export function ChartCard({
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
             borderColor: 'rgba(59, 130, 246, 0.3)',
             borderWidth: 1,
-          }
+          },
+          onZoomComplete: () => setIsZoomed(true),
         }
       }
     },
@@ -372,7 +358,7 @@ export function ChartCard({
       intersect: false,
     },
     animation: {
-      duration: 1000,
+      duration: 400,
       easing: 'easeInOutQuart',
     },
     transitions: {
@@ -383,16 +369,19 @@ export function ChartCard({
         }
       }
     }
-  };
+  }), []);
 
   // Los `chartOptions` de arriba son para gráficos cartesianos (línea/barra): escalas x/y,
   // tooltip por context.parsed.y y zoom en x. Para tipos radiales (p. ej. polarArea) esas
   // opciones rompen el render (escalas cartesianas -> tamaños raros; parsed.y -> NaN en el
   // tooltip), así que ahí se respetan las `options` que pasa el llamador.
   const isCartesian = type === 'line' || type === 'bar';
-  const effectiveOptions = isCartesian
-    ? chartOptions
-    : { responsive: true, maintainAspectRatio: false, ...(options || {}) };
+  const effectiveOptions = useMemo(
+    () => (isCartesian
+      ? chartOptions
+      : { responsive: true, maintainAspectRatio: false, ...(options || {}) }),
+    [isCartesian, chartOptions, options]
+  );
 
   // Fallback compacto si el gráfico falla al renderizar: aísla el fallo a esta tarjeta en
   // vez de tumbar toda la pantalla.
@@ -504,10 +493,19 @@ export function ChartCard({
           backdrop-filter/transform/overflow-hidden que, si no, atrapan el `position: fixed`
           y hacen que el "pantalla completa" quede recortado dentro de la tarjeta. */}
       {isFullscreen && createPortal(
-        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2">
-          <div className="bg-white rounded-3xl shadow-2xl w-11/12 h-5/6 max-w-7xl max-h-[95vh] relative overflow-hidden border border-gray-100">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[9999] p-2"
+          onClick={() => setIsFullscreen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-11/12 h-5/6 max-w-7xl max-h-[95vh] relative overflow-hidden border border-gray-100 flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-label={title ? `${title} — vista ampliada` : 'Gráfico ampliado'}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header del modal con diseño elegante similar a ProfileSettings */}
-            <div className="flex items-center justify-between p-8 border-b border-gray-100 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+            <div className="flex items-center justify-between p-8 border-b border-gray-100 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 shrink-0">
               <div className="space-y-2">
                 <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-blue-700 bg-clip-text text-transparent">
                   {title}
@@ -548,16 +546,14 @@ export function ChartCard({
               </div>
             </div>
 
-            {/* Contenido principal del modal */}
-            <div className="flex h-[calc(100%-200px)]">
-              {/* Área del gráfico */}
-              <div className="flex-1 p-8 overflow-hidden bg-gradient-to-br from-white to-slate-50/30">
-                <div className="h-full w-full">
-                  <div className="chart-container w-full h-full" style={{ height: fullscreenHeight, maxHeight: maxFullscreenHeight }}>
-                    <ErrorBoundary fallback={chartErrorFallback}>
-                      <ChartComponent ref={fullscreenChartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
-                    </ErrorBoundary>
-                  </div>
+            {/* Contenido principal del modal: ocupa el espacio restante del flex-col */}
+            <div className="flex flex-1 min-h-0">
+              {/* Área del gráfico (min-h-0 permite que el canvas se ajuste sin desbordar/recortar) */}
+              <div className="flex-1 min-h-0 p-8 overflow-hidden bg-gradient-to-br from-white to-slate-50/30">
+                <div className="chart-container w-full h-full">
+                  <ErrorBoundary fallback={chartErrorFallback}>
+                    <ChartComponent ref={fullscreenChartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
+                  </ErrorBoundary>
                 </div>
               </div>
 
@@ -644,8 +640,8 @@ export function ChartCard({
               </div>
             </div>
 
-            {/* Indicador de controles en la parte inferior */}
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/60 text-white px-6 py-3 rounded-full text-sm backdrop-blur-sm border border-white/10">
+            {/* Indicador de controles: footer en el flujo (antes era absolute bottom-4 y tapaba el eje X) */}
+            <div className="shrink-0 w-fit mx-auto mb-4 mt-1 bg-black/60 text-white px-6 py-3 rounded-full text-sm backdrop-blur-sm border border-white/10">
               <div className="flex items-center space-x-8">
                 <span className="flex items-center">
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
