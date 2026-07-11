@@ -24,7 +24,7 @@ from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
@@ -92,7 +92,7 @@ def get_client_ip(request):
     ],
     description="Obtiene tokens de acceso y refresco para el usuario especificado."
 )
-@method_decorator(ratelimit(key='ip', rate='5/m', method='POST'), name='post')
+@method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=False), name='post')
 class LoginView(ObtainAuthToken):
     """
     Vista de login mejorada con rate limiting, logging de seguridad y tokens de refresco
@@ -112,6 +112,13 @@ class LoginView(ObtainAuthToken):
         increment_failed_attempts nunca se llamaba) y registra cada intento en
         LoginAttempt para auditoría.
         """
+        # Rate limit real: sin block=True el decorador solo marca request.limited.
+        if getattr(request, 'limited', False):
+            return Response(
+                {'detail': 'Demasiados intentos de inicio de sesión. Espera un momento e inténtalo de nuevo.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         client_ip = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
         username = request.data.get('username', '')
@@ -342,7 +349,7 @@ class LogoutView(APIView):
     responses={200: RefreshTokenResponseSerializer},
     description="Renueva el token de acceso usando un token de refresco válido."
 )
-@method_decorator(ratelimit(key='ip', rate='10/m', method='POST'), name='post')
+@method_decorator(ratelimit(key='ip', rate='10/m', method='POST', block=False), name='post')
 class RefreshTokenView(APIView):
     """
     Vista para renovar tokens de acceso usando tokens de refresco
@@ -356,6 +363,13 @@ class RefreshTokenView(APIView):
         """
         Renueva el token de acceso
         """
+        # Rate limit real: sin block=True el decorador solo marca request.limited.
+        if getattr(request, 'limited', False):
+            return Response(
+                {'detail': 'Demasiados intentos. Espera un momento e inténtalo de nuevo.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         # La validación (raise_exception=True) va FUERA del try: un refresh token
         # inválido/expirado debe devolver 400 (vía DRF), no 500.
         serializer = RefreshTokenRequestSerializer(data=request.data)
@@ -582,7 +596,7 @@ class SessionInfoView(APIView):
     responses={201: "Usuario registrado exitosamente"},
     description="Registra un nuevo usuario en el sistema."
 )
-@method_decorator(ratelimit(key='ip', rate='3/h', method='POST'), name='post')
+@method_decorator(ratelimit(key='ip', rate='3/h', method='POST', block=False), name='post')
 class UserRegistrationView(APIView):
     """
     Vista para registro de usuarios
@@ -595,6 +609,13 @@ class UserRegistrationView(APIView):
         """
         Registra un nuevo usuario
         """
+        # Rate limit real: sin block=True el decorador solo marca request.limited.
+        if getattr(request, 'limited', False):
+            return Response(
+                {'detail': 'Demasiados intentos de registro. Espera un momento e inténtalo de nuevo.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         # Validación fuera del try: datos inválidos (contraseña débil, email
         # duplicado, etc.) deben devolver 400 (vía DRF), no 500.
         serializer = UserRegistrationSerializer(data=request.data)
@@ -609,6 +630,15 @@ class UserRegistrationView(APIView):
                 'username': user.username,
                 'email': user.email
             }, status=status.HTTP_201_CREATED)
+        except IntegrityError:
+            # Carrera SELECT+INSERT (TOCTOU): otro registro creó el mismo
+            # usuario/correo entre la validación y el save(), o el índice único
+            # parcial de email (case-insensitive) lo rechazó. Cerramos con 409
+            # claro en vez de un 500 genérico.
+            logger.warning('IntegrityError al registrar el usuario (usuario/correo duplicado)')
+            return Response({
+                'error': 'El usuario o correo ya existe'
+            }, status=status.HTTP_409_CONFLICT)
         except Exception:
             logger.exception('Error al registrar el usuario')
             return Response({
@@ -661,7 +691,7 @@ class LogoutAllDevicesView(APIView):
     responses={200: ProfileImageResponseSerializer, 400: "Bad Request", 401: "Unauthorized"},
     description="Gestiona la imagen de perfil del usuario autenticado."
 )
-@method_decorator(ratelimit(key='user', rate='10/h', method='POST'), name='post')
+@method_decorator(ratelimit(key='user', rate='10/h', method='POST', block=False), name='post')
 class ProfileImageView(APIView):
     """
     Vista para gestionar la imagen de perfil del usuario
@@ -672,6 +702,13 @@ class ProfileImageView(APIView):
         """
         Sube una nueva imagen de perfil
         """
+        # Rate limit real: sin block=True el decorador solo marca request.limited.
+        if getattr(request, 'limited', False):
+            return Response(
+                {'detail': 'Demasiadas subidas de imagen. Espera un momento e inténtalo de nuevo.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         try:
             # Usar request.FILES para archivos subidos
             data = {'profile_image': request.FILES.get('profile_image')}

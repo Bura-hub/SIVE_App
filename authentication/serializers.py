@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from django.contrib.auth.models import User
 from .models import UserProfile, AuthToken, RefreshToken, LoginAttempt
-from .validators import CustomPasswordValidator
+from .validators import CustomPasswordValidator, validate_image_file
 import ipaddress
 import re
 
@@ -285,7 +285,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # Campos adicionales del perfil
     phone_number = serializers.CharField(required=False, allow_blank=True)
     notification_preferences = serializers.JSONField(required=False, default=dict)
-    
+
+    # Avatar con los mismos límites que la subida de imagen de perfil (<=5MB,
+    # whitelist JPG/PNG/WebP). Antes el registro (AllowAny) aceptaba cualquier
+    # archivo sin pasar por estos límites.
+    avatar = serializers.ImageField(
+        required=False, allow_null=True, validators=[validate_image_file]
+    )
+
     class Meta:
         model = UserProfile
         fields = [
@@ -356,14 +363,35 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         """
         password = attrs.get('password')
         confirm_password = attrs.get('confirm_password')
-        
+
         if password != confirm_password:
             raise serializers.ValidationError("Las contraseñas no coinciden")
-        
-        # Verificar que el email sea único
+
+        # Longitudes mínimas en el servidor (no solo del cliente): username>=3,
+        # first_name>=2, last_name>=2.
+        username = (attrs.get('username') or '').strip()
+        if len(username) < 3:
+            raise serializers.ValidationError(
+                {'username': 'El nombre de usuario debe tener al menos 3 caracteres.'}
+            )
+        first_name = (attrs.get('first_name') or '').strip()
+        if len(first_name) < 2:
+            raise serializers.ValidationError(
+                {'first_name': 'El nombre debe tener al menos 2 caracteres.'}
+            )
+        last_name = (attrs.get('last_name') or '').strip()
+        if len(last_name) < 2:
+            raise serializers.ValidationError(
+                {'last_name': 'El apellido debe tener al menos 2 caracteres.'}
+            )
+
+        # Verificar que el email sea único (case-insensitive: los correos no
+        # distinguen mayúsculas en la práctica).
         email = attrs.get('email')
-        if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError("Este correo electrónico ya está registrado")
+        if email and User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError(
+                {'email': 'Este correo electrónico ya está registrado'}
+            )
 
         # Aplicar la política de fortaleza completa (AUTH_PASSWORD_VALIDATORS:
         # longitud 12, CommonPasswordValidator, CustomPasswordValidator, etc.),
@@ -475,24 +503,14 @@ class ProfileImageSerializer(serializers.Serializer):
     
     def validate_profile_image(self, value):
         """
-        Validación personalizada para la imagen de perfil
+        Validación personalizada para la imagen de perfil.
+
+        Reutiliza validate_image_file (tamaño <=5MB + whitelist JPG/PNG/WebP), el
+        mismo validador que aplica el registro, para que ambos flujos sean coherentes.
+        Las dimensiones se validan en la vista después de guardar para evitar
+        problemas con archivos temporales.
         """
-        # Verificar tamaño máximo (5MB)
-        if value.size > 5 * 1024 * 1024:  # 5MB en bytes
-            raise serializers.ValidationError(
-                "La imagen no puede ser mayor a 5MB"
-            )
-        
-        # Verificar formato de archivo
-        allowed_formats = ['image/jpeg', 'image/png', 'image/webp']
-        if value.content_type not in allowed_formats:
-            raise serializers.ValidationError(
-                "Solo se permiten imágenes en formato JPG, PNG o WebP"
-            )
-        
-        # Las dimensiones se validarán en la vista después de guardar
-        # para evitar problemas con archivos temporales
-        
+        validate_image_file(value)
         return value
 
 
