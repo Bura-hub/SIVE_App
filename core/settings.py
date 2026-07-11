@@ -357,12 +357,11 @@ SPECTACULAR_SETTINGS = {
     ),
     'VERSION': '2.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
-    # Documentación (schema + Swagger + Redoc) accesible sin sesión: en el navegador la
-    # autenticación es por cookie de sesión, pero la app usa token (localStorage), así que
-    # exigir sesión hacía la doc inusable. Se expone solo el MAPA de la API (rutas/params);
-    # cada endpoint sigue protegido por token para USARSE. Aceptable para un tool interno
-    # detrás de Apache. Para re-restringir a admin: IsAdminUser (requiere login por /admin/).
-    'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
+    # Documentación (schema + Swagger + Redoc): SOLO admin. Se accede logueándose primero
+    # por /admin/ (SessionAuthentication está en DEFAULT_AUTHENTICATION_CLASSES, así que la
+    # cookie de sesión del admin autentica estas vistas). NO sirve el token de la app: el
+    # navegador no lo envía en cargas de página, solo manda cookies.
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAdminUser'],
     'SECURITY': [
         {"TokenAuth": []},
         {"SessionAuth": []}
