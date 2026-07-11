@@ -13,7 +13,8 @@
 ### 🎯 Objetivo Principal
 Transformar datos complejos en información accionable, proporcionando a analistas y ejecutivos una visión clara y dinámica del comportamiento de los sistemas energéticos y climáticos.
 
-**Estado del Proyecto: 95% de avance** - Fase de maduración y refinamiento completada.
+**Estado del Proyecto:** en producción bajo `https://mte.udenar.edu.co/sive/`, en fase de
+remediación y refinamiento continuo (ver *Estado de Desarrollo* más abajo).
 
 ## 🚀 Características Principales
 
@@ -86,7 +87,7 @@ Transformar datos complejos en información accionable, proporcionando a analist
 ### 1. Clonar el Repositorio
 ```bash
 git clone <URL_DEL_REPOSITORIO>
-cd MteSive_App
+cd <carpeta-del-repo>
 ```
 
 ### 2. Configurar Variables de Entorno
@@ -94,9 +95,8 @@ cd MteSive_App
 # Copiar archivo de ejemplo
 cp env.example .env
 
-# Editar variables de entorno
-notepad .env  # Windows
-nano .env     # Linux/Mac
+# Editar variables de entorno (ver env.example para la lista completa)
+nano .env
 ```
 
 ### 3. Desplegar con Docker
@@ -297,26 +297,28 @@ docker-compose -f docker-compose.prod.yml restart db
 
 ## 📈 Estado de Desarrollo
 
-### ✅ Funcionalidades Completadas (95%)
-- Sistema de autenticación y gestión de usuarios
-- Dashboard principal con KPIs en tiempo real
-- Módulos de detalles eléctricos, inversores y clima
-- Integración con API SCADA y sincronización automática
-- Cálculo automático de indicadores energéticos
-- Sistema de reportes y exportación de datos
-- Módulo de datos externos de energía
-- Interfaz de usuario responsiva y moderna
+### ✅ Funcionalidades operativas
+- Autenticación por token con expiración/refresh, rate limiting y bloqueo temporal
+- Dashboard con KPIs (mensuales + inversores activos en tiempo real)
+- Pantallas de detalle Eléctricos / Inversores / Estaciones (refactorizadas sobre el hook
+  compartido `useDeviceDetail`) con filtros, cálculo y paginación
+- Integración con API SCADA (proxy) y con el mercado XM (`external_energy`, `pydataxm`)
+- Cálculo de indicadores en Celery + capa `services/` (funciones puras, vistas finas)
+- Reportes en PDF/Excel/CSV
+- Despliegue en producción en Docker bajo Apache, subruta `/sive/`
 
-### 🔄 En Desarrollo (5%)
-- Optimización de rendimiento con datos reales
-- Pruebas de carga y estabilidad
-- Refinamiento de algoritmos de cálculo
+### 🔧 Remediación reciente (Olas 0–5)
+- Migración del frontend de CRA a **Vite** (build/tests con Vitest)
+- Extracción de la lógica de indicadores a `indicators/services/` y adelgazamiento de vistas
+- Saneamiento anti roll-over de acumuladores y de rangos diarios (zona horaria Colombia)
+- **Auditoría y saneamiento de las tarjetas KPI** de las 4 pantallas (info-al-click profesional,
+  corrección de campos/agregaciones, rosa de vientos polar real)
 
-### 🎯 Próximos Pasos
-- **Integración con Datos Reales**: Conexión a fuentes SCADA reales
-- **Módulo de Pronósticos**: Implementación de modelos predictivos
-- **Alertas Inteligentes**: Sistema de notificaciones automáticas
-- **Móvil**: Aplicación móvil nativa o PWA
+### 🎯 Próximos pasos
+- Mejora de **formato de reportes** (encabezados/paginación, resumen ejecutivo, logos)
+- Organización de la documentación OpenAPI (tags/descripciones por endpoint)
+- **Métricas normalizadas por capacidad** (kWh/kWp, Performance Ratio de flota, disponibilidad):
+  requieren registrar la potencia nominal y disponer de irradiancia POA
 
 ## 🤝 Contribución
 
@@ -344,7 +346,7 @@ Las contribuciones son bienvenidas:
 - **Código BPIN**: 2021000100499
 - **Tipo**: Sistema de Visualización Energético
 - **Ubicación**: Departamento de Nariño, Colombia
-- **Estado**: 95% de avance - Fase de maduración
+- **Estado**: en producción bajo `/sive/`, en remediación y refinamiento continuo
 
 ## 📄 Licencia
 
