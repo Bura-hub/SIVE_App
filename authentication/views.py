@@ -97,7 +97,13 @@ class LoginView(ObtainAuthToken):
     """
     Vista de login mejorada con rate limiting, logging de seguridad y tokens de refresco
     """
-    
+    # El login se autentica por credenciales en el body, NO por backend de autenticación.
+    # Sin esto, SessionAuthentication (que está en los defaults para que el admin acceda a
+    # /docs) exige CSRF en el POST cuando el navegador trae una cookie de sesión de /admin,
+    # devolviendo 403 "CSRF Failed" y rompiendo el login. Ver bug del 403 en el login.
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
     def post(self, request, *args, **kwargs):
         """
         Maneja la solicitud POST para iniciar sesión.
@@ -341,6 +347,9 @@ class RefreshTokenView(APIView):
     """
     Vista para renovar tokens de acceso usando tokens de refresco
     """
+    # Público por refresh_token en el body: sin SessionAuthentication para no exigir CSRF
+    # cuando el navegador trae cookie de sesión de /admin (mismo bug del login).
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -578,6 +587,8 @@ class UserRegistrationView(APIView):
     """
     Vista para registro de usuarios
     """
+    # Endpoint público: sin SessionAuthentication para evitar el CSRF con cookie de sesión.
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
