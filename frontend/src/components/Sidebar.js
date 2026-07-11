@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import siveLogo from './sive-logo.svg';
 import TransitionOverlay from './TransitionOverlay';
-import { IconHome, IconGauge, IconInverter, IconCloudSun, IconGlobe, IconFileDown } from './icons';
+import { IconHome, IconDashboard, IconGauge, IconInverter, IconCloudSun, IconGlobe, IconFileDown } from './icons';
 import { fetchWithAuth } from '../utils/apiConfig';
 import ProfileSettings from './ProfileSettings';
 import HelpSupport from './HelpSupport';
@@ -110,15 +110,22 @@ function Sidebar({
   };
 
   const navItems = [
-    { 
-      name: 'Inicio', 
-      page: 'dashboard', 
+    {
+      name: 'Inicio',
+      page: 'home',
       icon: <IconHome className="w-5 h-5 shrink-0" />,
       activeClasses: 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/25',
       inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-blue-600'
     },
-    { 
-      name: 'Medidores', 
+    {
+      name: 'Dashboard',
+      page: 'dashboard',
+      icon: <IconDashboard className="w-5 h-5 shrink-0" />,
+      activeClasses: 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/25',
+      inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-blue-600'
+    },
+    {
+      name: 'Medidores',
       page: 'electricalDetails', 
       icon: <IconGauge className="w-5 h-5 shrink-0" />,
       activeClasses: 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg shadow-green-500/25',

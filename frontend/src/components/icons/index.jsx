@@ -33,6 +33,14 @@ export const IconHome = (p) => base(p, (
   <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
 ));
 
+// Dashboard: gráfico de barras (panorama mensual)
+export const IconDashboard = (p) => base(p, (<>
+  <path d="M3 21h18" />
+  <path d="M7 21V11" />
+  <path d="M12 21V4" />
+  <path d="M17 21v-7" />
+</>));
+
 // Medidores: velocímetro (instrumento de medición)
 export const IconGauge = (p) => base(p, (<>
   <path d="m12 14 4-4" />

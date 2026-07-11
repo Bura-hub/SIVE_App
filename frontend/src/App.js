@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar'; // Componente de barra lateral
 import ErrorBoundary from './components/ErrorBoundary'; // Límite de error global de pantallas
 
 // Code-splitting: cada pantalla se carga bajo demanda en su propio chunk
+const Home = lazy(() => import('./components/Home'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const ElectricalDetails = lazy(() => import('./components/ElectricalDetails'));
 const InverterDetails = lazy(() => import('./components/InverterDetails'));
@@ -33,7 +34,7 @@ function App() {
   // Persistir la página actual en localStorage
   const [currentPage, setCurrentPage] = useState(() => {
     const savedPage = localStorage.getItem('currentPage');
-    return authToken ? (savedPage || 'dashboard') : 'login';
+    return authToken ? (savedPage || 'home') : 'login';
   });
 
   // Estado para controlar si la barra lateral está minimizada
@@ -53,8 +54,8 @@ function App() {
     localStorage.setItem('authToken', token);
     localStorage.setItem('username', user);
     localStorage.setItem('isSuperuser', superuser);
-    setCurrentPage('dashboard'); // Redirige al dashboard
-    localStorage.setItem('currentPage', 'dashboard'); // Persistir la página
+    setCurrentPage('home'); // Redirige a la presentación (Inicio)
+    localStorage.setItem('currentPage', 'home'); // Persistir la página
   };
 
   // Cierra sesión limpiando los datos de sesión y redirigiendo al login
@@ -106,6 +107,8 @@ function App() {
     switch (currentPage) {
       case 'login':
         return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+      case 'home':
+        return <Home {...commonProps} />;
       case 'dashboard':
         return <Dashboard {...commonProps} />;
       case 'electricalDetails':
