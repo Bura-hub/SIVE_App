@@ -307,8 +307,13 @@ services:
 volumes:
   postgres_data_prod:
     driver: local
+  # external: el volumen ya existía fuera de compose (de una corrida previa). Se marca
+  # external para usar el existente sin recrearlo (silencia el WARN y, de paso, protege
+  # los datos de un `down -v` accidental). En un despliegue NUEVO, crearlo antes:
+  #   docker volume create mtesive_app_redis_data_prod
   redis_data_prod:
-    driver: local
+    external: true
+    name: mtesive_app_redis_data_prod
   # Volumen con nombre para media (reportes, imágenes de perfil): compartido por backend/
   # celery de forma consistente sin importar desde qué carpeta se invoque compose. Antes
   # era el bind relativo ./media, cuyo host-path cambiaba según el directorio de invocación
