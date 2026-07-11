@@ -1544,7 +1544,7 @@ def generate_csv_file(report_data, file_path):
     # Obtener columnas del primer registro
     columns = list(report_data[0].keys())
     
-    with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+    with open(file_path, 'w', newline='', encoding='utf-8-sig') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=columns)
         writer.writeheader()
         writer.writerows(report_data)
