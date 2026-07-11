@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import siveLogo from './sive-logo.svg';
-import background from './bg.webp';
+import LoginBackground from './LoginBackground';
 import TransitionOverlay from './TransitionOverlay';
 import { fetchWithAuth, handleApiResponse } from '../utils/apiConfig';
 import { buildApiUrl, getEndpoint } from '../config';
@@ -404,25 +404,12 @@ function LoginPage({ onLoginSuccess }) {
     };
 
     return (
-        <div 
-            className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat p-4 font-inter relative overflow-hidden"
-            style={{ backgroundColor: '#0f172a', backgroundImage: `url(${background})` }}
+        <div
+            className="min-h-screen flex items-center justify-center p-4 font-inter relative overflow-hidden"
+            style={{ backgroundColor: '#0f172a' }}
         >
-            {/* Partículas flotantes animadas */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                {[...Array(6)].map((_, i) => (
-                    <div
-                        key={i}
-                        className="absolute w-2 h-2 bg-blue-400 rounded-full opacity-20 animate-float"
-                        style={{
-                            left: `${Math.random() * 100}%`,
-                            top: `${Math.random() * 100}%`,
-                            animationDelay: `${Math.random() * 3}s`,
-                            animationDuration: `${3 + Math.random() * 2}s`
-                        }}
-                    />
-                ))}
-            </div>
+            {/* Fondo vectorial solar/noche (SVG + CSS, sin imágenes) */}
+            <LoginBackground />
 
             {/* Card de login mejorado */}
             <div className={`login-card-enhanced transform transition duration-300 ease-out ${

@@ -172,6 +172,59 @@ code {
     position: relative;
     display: inline-block;
 }
+
+/* ===== Fondo vectorial del login (solar / noche) — reemplaza bg.webp + partículas ===== */
+.login-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+.login-bg__base {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(120% 90% at 82% 12%, rgba(245, 185, 66, .28), rgba(245, 185, 66, .06) 32%, transparent 55%),
+        radial-gradient(140% 120% at 78% 8%, rgba(56, 189, 248, .10), transparent 45%),
+        linear-gradient(160deg, #0d1730 0%, #0f172a 40%, #0a1122 100%);
+}
+.login-bg__svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.login-bg__vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(90% 70% at 50% 55%, transparent 40%, rgba(6, 10, 20, .55) 100%);
+}
+
+@keyframes login-sun-spin { to { transform: rotate(360deg); } }
+@keyframes login-sun-breathe { 0%, 100% { opacity: .55; transform: scale(1); } 50% { opacity: .9; transform: scale(1.06); } }
+@keyframes login-flow { to { stroke-dashoffset: -320; } }
+@keyframes login-cell-twinkle { 0%, 100% { opacity: .10; } 50% { opacity: .30; } }
+
+/* Animaciones vía compositor (transform / opacity / dashoffset), sin JS por frame */
+.login-bg__rays { transform-box: fill-box; transform-origin: center; animation: login-sun-spin 90s linear infinite; }
+.login-bg__sunglow { transform-box: fill-box; transform-origin: center; animation: login-sun-breathe 10s ease-in-out infinite; }
+.login-bg__flow { stroke-dasharray: 14 22; animation: login-flow 6s linear infinite; }
+.login-bg__flow--b { animation-duration: 8s; }
+.login-bg__flow--c { animation-duration: 10s; }
+.login-bg__shine { animation: login-cell-twinkle 7s ease-in-out infinite; }
+.login-bg__shine--b { animation-duration: 9s; animation-delay: 1.5s; }
+
+@media (prefers-reduced-motion: reduce) {
+    .login-bg__rays,
+    .login-bg__sunglow,
+    .login-bg__flow,
+    .login-bg__shine {
+        animation: none !important;
+    }
+    .login-bg__sunglow { opacity: .8; }
+}
 /* Grupos de input */
 .input-group {
     text-align: left;
