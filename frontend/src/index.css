@@ -823,22 +823,24 @@ code {
 
   --u-r-sm:8px; --u-r-md:12px; --u-r-lg:16px; --u-r-pill:999px;
 
-  /* Vidrio del chip (sobre color) */
-  --u-glass:      linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,.15));
-  --u-glass-hover:linear-gradient(180deg,rgba(255,255,255,.38),rgba(255,255,255,.20));
-  --u-glass-open: linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,.24));
-  --u-glass-br:   rgba(255,255,255,.48);
-  --u-glass-br-open:rgba(255,255,255,.62);
+  /* Vidrio OSCURO del chip: translúcido slate con texto blanco. Contrasta por sí
+     mismo sobre CUALQUIER fondo (header de color o contenido blanco al hacer scroll),
+     ya que en CSS no se puede detectar el color que hay detrás del elemento fijo. */
+  --u-glass:      linear-gradient(180deg,rgba(17,24,42,.66),rgba(13,19,33,.58));
+  --u-glass-hover:linear-gradient(180deg,rgba(17,24,42,.74),rgba(13,19,33,.66));
+  --u-glass-open: linear-gradient(180deg,rgba(17,24,42,.80),rgba(13,19,33,.72));
+  --u-glass-br:   rgba(255,255,255,.18);
+  --u-glass-br-open:rgba(255,255,255,.26);
   --u-chip-shadow:
     0 12px 26px -10px rgba(9,15,40,.55),
     0 4px 10px -3px rgba(9,15,40,.42),
-    inset 0 1px 0 rgba(255,255,255,.60),
-    inset 0 -1px 0 rgba(9,15,40,.14);
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -1px 0 rgba(9,15,40,.20);
   --u-chip-shadow-hover:
     0 16px 34px -10px rgba(9,15,40,.60),
     0 6px 14px -4px rgba(9,15,40,.46),
-    inset 0 1px 0 rgba(255,255,255,.66),
-    inset 0 -1px 0 rgba(9,15,40,.14);
+    inset 0 1px 0 rgba(255,255,255,.26),
+    inset 0 -1px 0 rgba(9,15,40,.20);
   --u-menu-shadow:
     0 2px 4px rgba(15,23,42,.10),
     0 12px 28px -8px rgba(15,23,42,.20),
@@ -857,11 +859,11 @@ code {
     --u-online:#34d399; --u-admin:#c4b5fd; --u-admin-bg:#241d3b; --u-admin-br:#3c2f63;
     --u-solar:#f7c766; --u-danger:#f87171; --u-danger-wash:#2a1618;
     --u-ring:#60a5fa;
-    --u-glass:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.06));
-    --u-glass-hover:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.10));
-    --u-glass-open:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.12));
-    --u-glass-br:rgba(255,255,255,.28);
-    --u-glass-br-open:rgba(255,255,255,.42);
+    --u-glass:linear-gradient(180deg,rgba(17,24,42,.66),rgba(13,19,33,.58));
+    --u-glass-hover:linear-gradient(180deg,rgba(17,24,42,.74),rgba(13,19,33,.66));
+    --u-glass-open:linear-gradient(180deg,rgba(17,24,42,.80),rgba(13,19,33,.72));
+    --u-glass-br:rgba(255,255,255,.18);
+    --u-glass-br-open:rgba(255,255,255,.26);
     --u-chip-shadow:0 14px 30px -10px rgba(0,0,0,.6),0 5px 12px -3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(0,0,0,.3);
     --u-chip-shadow-hover:0 18px 38px -10px rgba(0,0,0,.66),0 7px 16px -4px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.34),inset 0 -1px 0 rgba(0,0,0,.3);
     --u-menu-shadow:0 2px 6px rgba(0,0,0,.55),0 16px 34px -8px rgba(0,0,0,.6),0 36px 66px -20px rgba(0,0,0,.72);
@@ -874,11 +876,11 @@ code {
   --u-online:#34d399; --u-admin:#c4b5fd; --u-admin-bg:#241d3b; --u-admin-br:#3c2f63;
   --u-solar:#f7c766; --u-danger:#f87171; --u-danger-wash:#2a1618;
   --u-ring:#60a5fa;
-  --u-glass:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.06));
-  --u-glass-hover:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.10));
-  --u-glass-open:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.12));
-  --u-glass-br:rgba(255,255,255,.28);
-  --u-glass-br-open:rgba(255,255,255,.42);
+  --u-glass:linear-gradient(180deg,rgba(17,24,42,.66),rgba(13,19,33,.58));
+  --u-glass-hover:linear-gradient(180deg,rgba(17,24,42,.74),rgba(13,19,33,.66));
+  --u-glass-open:linear-gradient(180deg,rgba(17,24,42,.80),rgba(13,19,33,.72));
+  --u-glass-br:rgba(255,255,255,.18);
+  --u-glass-br-open:rgba(255,255,255,.26);
   --u-chip-shadow:0 14px 30px -10px rgba(0,0,0,.6),0 5px 12px -3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(0,0,0,.3);
   --u-chip-shadow-hover:0 18px 38px -10px rgba(0,0,0,.66),0 7px 16px -4px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.34),inset 0 -1px 0 rgba(0,0,0,.3);
   --u-menu-shadow:0 2px 6px rgba(0,0,0,.55),0 16px 34px -8px rgba(0,0,0,.6),0 36px 66px -20px rgba(0,0,0,.72);
