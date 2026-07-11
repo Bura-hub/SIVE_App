@@ -27,6 +27,7 @@ import {
 
 // Importar funciones de manejo de errores de autenticación y utilidades de API
 import * as apiUtils from '../utils/apiConfig';
+import { DASHBOARD_KPI_INFO } from '../utils/kpiInfo';
 
 // Importaciones desde Chart.js y el plugin de zoom
 import {
@@ -242,7 +243,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
     avgDailyTemp: { title: "Temp. prom. diaria", value: "Cargando...", unit: "°C", description: "Rango normal", status: "normal", icon: Icons.temperature },
     relativeHumidity: { title: "Humedad relativa", value: "Cargando...", unit: "%", description: "", status: "normal", icon: Icons.humidity },
     windSpeed: { title: "Velocidad del viento", value: "Cargando...", unit: "km/h", description: "Moderado", status: "moderado", icon: Icons.wind },
-    irradiance: { title: "Irradiancia solar", value: "N/A", unit: "W/m²", description: "Datos no disponibles", status: "normal", icon: Icons.irradiance }
+    irradiance: { title: "Irradiancia solar", value: "Cargando...", unit: "W/m²", description: "", status: "normal", icon: Icons.irradiance }
   });
 
   // Estado para mostrar información detallada de KPIs
@@ -434,16 +435,15 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
         change: data.windSpeed?.change || "Datos disponibles"
       },
       irradiance: {
-        // Para irradiancia, usar valores por defecto hasta que el backend lo proporcione
+        ...(data.irradiance || {}),
         title: "Irradiancia solar",
-        value: data.irradiance ? parseFloat(data.irradiance.value) : "N/A",
+        value: data.irradiance ? parseFloat(data.irradiance.value) : 0,
         unit: "W/m²",
-        description: "Rango normal",
         status: "normal",
         icon: Icons.irradiance,
         color: "text-amber-700",
         previousMonthValue: data.irradiance?.previousMonthValue || data.irradiance?.previousMonth || 0,
-        change: data.irradiance?.change || "Datos no disponibles"
+        change: data.irradiance?.change || ""
       },
       activeInverters: {
         ...(data.activeInverters || {}),
@@ -506,85 +506,8 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
     }
   }, [showKpiInfo, isOpening]);
 
-  // Función para obtener información detallada de cada KPI
-  const getKpiDetailedInfo = (kpiKey) => {
-    const kpiInfo = {
-      totalConsumption: {
-        title: "Consumo Total de Energía",
-        description: "Representa la cantidad total de energía eléctrica consumida por todas las instalaciones monitoreadas.",
-        calculation: "Se calcula sumando el totalActivePower de todos los medidores eléctricos activos durante el período mensual.",
-        dataSource: "Datos obtenidos de medidores eléctricos SCADA en tiempo real.",
-        units: "kWh (convertido a MWh para visualización)",
-        frequency: "Actualización cada 5 minutos desde SCADA, cálculo mensual automático."
-      },
-      totalGeneration: {
-        title: "Generación Total de Energía",
-        description: "Representa la cantidad total de energía solar generada por todos los inversores activos.",
-        calculation: "Se calcula sumando la energía generada por todos los inversores solares durante el período mensual.",
-        dataSource: "Datos obtenidos de inversores solares SCADA en tiempo real.",
-        units: "kWh (convertido a MWh para visualización)",
-        frequency: "Actualización cada 5 minutos desde SCADA, cálculo mensual automático."
-      },
-      energyBalance: {
-        title: "Equilibrio Energético",
-        description: "Representa la diferencia entre la energía generada y la consumida (Generación - Consumo).",
-        calculation: "Balance = Generación Total - Consumo Total. Valores positivos indican superávit, negativos déficit.",
-        dataSource: "Cálculo derivado de los KPIs de generación y consumo.",
-        units: "kWh (convertido a MWh para visualización)",
-        frequency: "Cálculo automático mensual basado en generación y consumo."
-      },
-      averageInstantaneousPower: {
-        title: "Potencia Instantánea Promedio",
-        description: "Representa la potencia promedio que están generando los inversores solares en tiempo real.",
-        calculation: "Se calcula como el promedio de la potencia instantánea de todos los inversores activos durante el período.",
-        dataSource: "Datos de potencia instantánea de inversores solares SCADA.",
-        units: "W (convertido a kW para visualización)",
-        frequency: "Actualización cada 5 minutos desde SCADA, promedio mensual automático."
-      },
-      avgDailyTemp: {
-        title: "Temperatura Promedio Diaria",
-        description: "Representa la temperatura ambiental promedio registrada por las estaciones meteorológicas.",
-        calculation: "Se calcula como el promedio de las temperaturas máximas y mínimas diarias registradas.",
-        dataSource: "Datos de estaciones meteorológicas SCADA y sensores locales.",
-        units: "°C (grados Celsius)",
-        frequency: "Actualización cada hora, promedio diario y mensual automático."
-      },
-      relativeHumidity: {
-        title: "Humedad Relativa Promedio",
-        description: "Representa el porcentaje de humedad en el aire respecto a la capacidad máxima de retención.",
-        calculation: "Se calcula como el promedio de las mediciones de humedad relativa durante el período.",
-        dataSource: "Sensores de humedad en estaciones meteorológicas SCADA.",
-        units: "% (porcentaje)",
-        frequency: "Actualización cada hora, promedio mensual automático."
-      },
-      windSpeed: {
-        title: "Velocidad del Viento Promedio",
-        description: "Representa la velocidad promedio del viento registrada por las estaciones meteorológicas.",
-        calculation: "Se calcula como el promedio de las velocidades del viento registradas durante el período.",
-        dataSource: "Anemómetros en estaciones meteorológicas SCADA.",
-        units: "km/h (kilómetros por hora)",
-        frequency: "Actualización cada hora, promedio mensual automático."
-      },
-      irradiance: {
-        title: "Irradiancia Solar Promedio",
-        description: "Representa la intensidad promedio de radiación solar incidente en la superficie.",
-        calculation: "Se calcula como el promedio de las mediciones de irradiancia durante el período.",
-        dataSource: "Piranómetros en estaciones meteorológicas SCADA.",
-        units: "W/m² (vatios por metro cuadrado)",
-        frequency: "Actualización cada hora, promedio mensual automático."
-      },
-      activeInverters: {
-        title: "Inversores Activos",
-        description: "Representa el número de inversores solares que están funcionando correctamente.",
-        calculation: "Se cuenta el número de inversores con estado 'online' en el sistema SCADA.",
-        dataSource: "Estado de conexión de inversores en tiempo real desde SCADA.",
-        units: "Cantidad (número de inversores)",
-        frequency: "Verificación cada 5 minutos desde SCADA."
-      }
-    };
-    
-    return kpiInfo[kpiKey] || null;
-  };
+  // Info-al-click de cada tarjeta (centralizada en utils/kpiInfo.js).
+  const getKpiDetailedInfo = (kpiKey) => DASHBOARD_KPI_INFO[kpiKey] || null;
 
   // Modificar las funciones de actualización de gráficos para usar unidades dinámicas
   const updateConsumptionChart = (currentData, prevData) => {
@@ -1250,6 +1173,15 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     <span className="text-base font-semibold text-teal-800">Frecuencia</span>
                     <p className="text-sm text-teal-700 mt-2 leading-relaxed">
                       {getKpiDetailedInfo(showKpiInfo).frequency}
+                    </p>
+                  </div>
+
+                  <div className={`bg-amber-50 p-4 rounded-xl border border-amber-200 lg:col-span-2 transition duration-300 delay-150 ${
+                    isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
+                  }`}>
+                    <span className="text-base font-semibold text-amber-800">Interpretación / Umbral</span>
+                    <p className="text-sm text-amber-700 mt-2 leading-relaxed">
+                      {getKpiDetailedInfo(showKpiInfo).interpretation}
                     </p>
                   </div>
                 </div>

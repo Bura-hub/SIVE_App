@@ -6,6 +6,7 @@ import TransitionOverlay from './TransitionOverlay';
 import InverterFilters from './InverterFilters';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { buildApiUrl, ENDPOINTS } from '../utils/apiConfig';
+import { INVERTER_KPI_INFO } from '../utils/kpiInfo';
 import { IconInverter, IconScale, IconActivity, IconWaveform, IconRefresh } from './icons';
 
 //###########################################################################
@@ -188,12 +189,12 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           icon: activeIcon,
           color: "text-purple-700"
         },
-        performanceRatio: { 
-          title: "Performance Ratio", 
-          value: "0.00", 
-          unit: "", 
-          change: "Sin datos", 
-          status: "normal", 
+        maxPower: {
+          title: "Potencia Máxima",
+          value: "0.0",
+          unit: "kW",
+          change: "Sin datos",
+          status: "normal",
           icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M3 3v18h18"></path>
             <path d="M18 17V9"></path>
@@ -220,21 +221,21 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           icon: <IconScale size={24} />,
           color: "text-orange-700"
         },
-        frequencyStability: { 
-          title: "Estabilidad Frecuencia", 
-          value: "0.0", 
-          unit: "Hz", 
-          change: "Sin datos", 
-          status: "normal", 
+        avgFrequency: {
+          title: "Frecuencia Promedio",
+          value: "0.0",
+          unit: "Hz",
+          change: "Sin datos",
+          status: "normal",
           icon: <IconActivity size={24} />,
           color: "text-teal-700"
         },
-        thdVoltage: { 
-          title: "THD Voltaje", 
-          value: "0.0", 
-          unit: "%", 
-          change: "Sin datos", 
-          status: "normal", 
+        currentUnbalance: {
+          title: "Desbalance de Corriente",
+          value: "0.0",
+          unit: "%",
+          change: "Sin datos",
+          status: "normal",
           icon: <IconWaveform size={24} />,
           color: "text-pink-600"
         }
@@ -255,25 +256,24 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     const uniqueInverters = new Set(results.map(item => item.device_id || item.device_name).filter(id => id));
     const activeInvertersCount = uniqueInverters.size;
     
-    // Calcular performance ratio promedio
-    const performanceRatios = results.map(item => item.performance_ratio || 0).filter(pr => pr > 0);
-    const averagePerformanceRatio = performanceRatios.length > 0 ? performanceRatios.reduce((sum, pr) => sum + pr, 0) / performanceRatios.length : 0;
-    
-    // Calcular factor de potencia promedio
-    const powerFactors = results.map(item => item.avg_power_factor || item.power_factor || 0).filter(pf => pf > 0);
+    // Potencia máxima del rango (max_power_w en W -> kW). Reemplaza al Performance Ratio,
+    // irreparable en inversores (no miden irradiancia -> siempre 0).
+    const maxPowerKW = Math.max(0, ...results.map(item => (item.max_power_w || 0))) / 1000;
+
+    // Calcular factor de potencia promedio (el serializer expone avg_power_factor_pct, escala 0-1).
+    const powerFactors = results.map(item => item.avg_power_factor_pct || 0).filter(pf => pf > 0);
     const averagePowerFactor = powerFactors.length > 0 ? powerFactors.reduce((sum, pf) => sum + pf, 0) / powerFactors.length : 0;
-    
+
     // Calcular desbalance de fases promedio
     const phaseUnbalances = results.map(item => item.max_voltage_unbalance_pct || item.voltage_unbalance_pct || 0).filter(unb => unb > 0);
     const averagePhaseUnbalance = phaseUnbalances.length > 0 ? phaseUnbalances.reduce((sum, unb) => sum + unb, 0) / phaseUnbalances.length : 0;
-    
+
     // Calcular frecuencia promedio
     const frequencies = results.map(item => item.avg_frequency_hz || item.frequency_hz || 0).filter(freq => freq > 0);
     const averageFrequency = frequencies.length > 0 ? frequencies.reduce((sum, freq) => sum + freq, 0) / frequencies.length : 0;
-    
-    // Calcular THD de voltaje promedio
-    const thdVoltages = results.map(item => item.max_voltage_thd_pct || item.voltage_thd_pct || 0).filter(thd => thd > 0);
-    const averageThdVoltage = thdVoltages.length > 0 ? thdVoltages.reduce((sum, thd) => sum + thd, 0) / thdVoltages.length : 0;
+
+    // Desbalance de corriente máximo del rango. Reemplaza al THD de voltaje (inexistente en el modelo).
+    const maxCurrentUnbalance = Math.max(0, ...results.map(item => (item.max_current_unbalance_pct || 0)));
 
     // Determinar cambios y estados basándose en los datos
     const getChangeText = (value, unit, isPercentage = false) => {
@@ -326,12 +326,12 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         icon: activeIcon,
         color: "text-purple-700"
       },
-      performanceRatio: { 
-        title: "Performance Ratio", 
-        value: averagePerformanceRatio.toFixed(2), 
-        unit: "", 
-        change: getChangeText(averagePerformanceRatio, "", true), 
-        status: getStatus(averagePerformanceRatio, { excellent: 0.9, good: 0.8, warning: 0.7 }), 
+      maxPower: {
+        title: "Potencia Máxima",
+        value: maxPowerKW.toFixed(1),
+        unit: "kW",
+        change: maxPowerKW > 0 ? `${maxPowerKW.toFixed(1)} kW` : "Sin datos",
+        status: maxPowerKW > 0 ? "positivo" : "normal",
         icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M3 3v18h18"></path>
           <path d="M18 17V9"></path>
@@ -358,21 +358,21 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         icon: <IconScale size={24} />,
         color: "text-orange-700"
       },
-      frequencyStability: { 
-        title: "Estabilidad Frecuencia", 
-        value: averageFrequency.toFixed(1), 
-        unit: "Hz", 
-        change: getChangeText(averageFrequency, " Hz"), 
+      avgFrequency: {
+        title: "Frecuencia Promedio",
+        value: averageFrequency.toFixed(1),
+        unit: "Hz",
+        change: averageFrequency > 0 ? `Δ ${(averageFrequency - 60).toFixed(2)} Hz vs 60` : "Sin datos",
         status: getStatus(Math.abs(averageFrequency - 60), { excellent: 0.1, good: 0.5, warning: 1 }, true), // Invertir lógica para frecuencia
         icon: <IconActivity size={24} />,
         color: "text-teal-700"
       },
-      thdVoltage: { 
-        title: "THD Voltaje", 
-        value: averageThdVoltage.toFixed(1), 
-        unit: "%", 
-        change: getChangeText(averageThdVoltage, "%"), 
-        status: getStatus(averageThdVoltage, { excellent: 2, good: 5, warning: 8 }, true), // Invertir lógica para THD
+      currentUnbalance: {
+        title: "Desbalance de Corriente",
+        value: maxCurrentUnbalance.toFixed(1),
+        unit: "%",
+        change: getChangeText(maxCurrentUnbalance, "%"),
+        status: getStatus(maxCurrentUnbalance, { excellent: 2, good: 5, warning: 10 }, true), // Invertir lógica para desbalance
         icon: <IconWaveform size={24} />,
         color: "text-pink-600"
       }
@@ -381,6 +381,9 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
 
   // Estado para los KPIs dinámicos
   const [kpiData, setKpiData] = useState({});
+
+  // Info-al-click de cada tarjeta (centralizada en utils/kpiInfo.js).
+  const getKpiDetailedInfo = (kpiKey) => INVERTER_KPI_INFO[kpiKey] || null;
 
   
 
@@ -452,12 +455,10 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     }
   }, [filters, fetchInverterData]);
 
-  // Efecto para inicializar KPIs cuando se monta el componente
+  // Recalcular KPIs cuando cambian los datos (null → {results:[]} al montar)
   useEffect(() => {
-    // Inicializar KPIs con valores por defecto
-    const defaultKPIs = calculateDynamicKPIs({ results: [] });
-    setKpiData(defaultKPIs);
-  }, [calculateDynamicKPIs]);
+    setKpiData(calculateDynamicKPIs(inverterData || { results: [] }));
+  }, [inverterData, calculateDynamicKPIs]);
 
   // Función para mostrar transición
 
@@ -779,6 +780,15 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                 <span className="text-base font-semibold text-teal-800">Frecuencia</span>
                 <p className="text-sm text-teal-700 mt-2 leading-relaxed">
                   {getKpiDetailedInfo(showKpiInfo).frequency}
+                </p>
+              </div>
+
+              <div className={`bg-amber-50 p-4 rounded-xl border border-amber-200 lg:col-span-2 transition duration-300 delay-700 ${
+                isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
+              }`}>
+                <span className="text-base font-semibold text-amber-800">Interpretación / Umbral</span>
+                <p className="text-sm text-amber-700 mt-2 leading-relaxed">
+                  {getKpiDetailedInfo(showKpiInfo).interpretation}
                 </p>
               </div>
             </div>

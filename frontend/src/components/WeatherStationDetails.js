@@ -5,6 +5,7 @@ import TransitionOverlay from './TransitionOverlay';
 import WeatherStationFilters from './WeatherStationFilters';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { ENDPOINTS, buildApiUrl } from '../utils/apiConfig';
+import { WEATHER_KPI_INFO } from '../utils/kpiInfo';
 import { IconCloudSun, IconRefresh, IconSun, IconWind, IconDroplets } from './icons';
 
 // Importaciones desde Chart.js y el plugin de zoom
@@ -143,9 +144,10 @@ const calculateTheoreticalPVPower = (irradiance, temperature = 25) => {
     temperature = 25; // Usar temperatura estándar si no es válida
   }
 
-  // Parámetros estándar de un panel solar (pueden ser configurables)
-  const panelEfficiency = 0.20; // 20% eficiencia estándar
-  const panelArea = 1.6; // 1.6 m² por panel
+  // Parámetros de referencia, unificados con el backend (theoretical_pv_power_w):
+  // eficiencia 17% sobre 1 m² de referencia. Ver AUDITORIA_SIVE/PLAN_KPIS.md.
+  const panelEfficiency = 0.17; // 17% (igual que el backend)
+  const panelArea = 1.0; // 1 m² de referencia (igual que el backend)
   const temperatureCoefficient = -0.004; // -0.4% por °C
   const standardTemperature = 25; // Temperatura estándar de prueba
 
@@ -167,30 +169,20 @@ const getPredominantWindDirection = (data) => {
     return "N/A";
   }
 
-  const windDirections = data.map(item => item?.wind_direction_deg || 0).filter(deg => deg !== null && deg !== undefined);
-
-  if (windDirections.length === 0) {
-    return "N/A";
-  }
-
-  const directionCounts = [0, 0, 0, 0, 0, 0, 0, 0]; // N, NE, E, SE, S, SW, W, NW
-
-  windDirections.forEach(deg => {
-    if (deg >= 337.5 || deg < 22.5) directionCounts[0]++; // N
-    else if (deg >= 22.5 && deg < 67.5) directionCounts[1]++; // NE
-    else if (deg >= 67.5 && deg < 112.5) directionCounts[2]++; // E
-    else if (deg >= 112.5 && deg < 157.5) directionCounts[3]++; // SE
-    else if (deg >= 157.5 && deg < 202.5) directionCounts[4]++; // S
-    else if (deg >= 202.5 && deg < 247.5) directionCounts[5]++; // SW
-    else if (deg >= 247.5 && deg < 292.5) directionCounts[6]++; // W
-    else if (deg >= 292.5 && deg < 337.5) directionCounts[7]++; // NW
+  // El backend expone wind_direction_distribution: { N: n, NE: n, ... } por registro.
+  // Sumamos la distribución sobre el rango y devolvemos el sector con mayor conteo.
+  const totals = {};
+  data.forEach(item => {
+    const dist = item?.wind_direction_distribution;
+    if (dist && typeof dist === 'object') {
+      Object.entries(dist).forEach(([dir, count]) => {
+        totals[dir] = (totals[dir] || 0) + (Number(count) || 0);
+      });
+    }
   });
 
-  const maxCount = Math.max(...directionCounts);
-  const predominantDirection = directionCounts.findIndex(count => count === maxCount);
-
-  const directionNames = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  return directionNames[predominantDirection] || "N/A";
+  const ranked = Object.entries(totals).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
+  return ranked.length > 0 ? ranked[0][0] : "N/A";
 };
 
 // Definición única de los KPIs meteorológicos base (iconos del módulo común;
@@ -205,14 +197,14 @@ const WEATHER_KPI_BASE = {
     icon: <IconSun size={24} />,
     color: "text-orange-700"
   },
-  hsp: {
-    title: "Horas Solares Pico",
+  temperature: {
+    title: "Temperatura Ambiente",
     value: "0.0",
-    unit: "HSP",
-    change: "Equivalente solar",
+    unit: "°C",
+    change: "Promedio del período",
     status: "normal",
-    icon: <IconSun size={24} />,
-    color: "text-yellow-700"
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></svg>,
+    color: "text-red-700"
   },
   windSpeed: {
     title: "Velocidad del Viento",
@@ -318,19 +310,19 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         title: "Irradiancia Acumulada",
         value: (latestData.daily_irradiance_kwh_m2 || 0).toFixed(2),
         unit: "kWh/m²",
-        change: latestData.daily_hsp_hours ? `${latestData.daily_hsp_hours.toFixed(1)} HSP` : "N/A",
+        change: latestData.daily_hsp_hours ? `≈ ${latestData.daily_hsp_hours.toFixed(1)} HSP` : "N/A",
         status: "normal",
         icon: initialKpiData.irradiance.icon,
         color: initialKpiData.irradiance.color
       },
-      hsp: {
-        title: "Horas Solares Pico",
-        value: (latestData.daily_hsp_hours || 0).toFixed(1),
-        unit: "HSP",
-        change: "Equivalente solar",
+      temperature: {
+        title: "Temperatura Ambiente",
+        value: (latestData.avg_temperature_c ?? null) !== null ? latestData.avg_temperature_c.toFixed(1) : "N/A",
+        unit: "°C",
+        change: "Promedio del período",
         status: "normal",
-        icon: initialKpiData.hsp.icon,
-        color: initialKpiData.hsp.color
+        icon: initialKpiData.temperature.icon,
+        color: initialKpiData.temperature.color
       },
       windSpeed: {
         title: "Velocidad del Viento",
@@ -511,60 +503,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   }, [weatherData, processKPIData]);
 
   // Función para obtener información detallada de cada KPI
-  const getKpiDetailedInfo = (kpiKey) => {
-    const kpiInfo = {
-      irradiance: {
-        title: "Irradiancia Acumulada",
-        description: "Representa la cantidad total de radiación solar incidente en la superficie durante el período seleccionado.",
-        calculation: "Se calcula sumando la irradiancia instantánea (W/m²) a lo largo del tiempo, convertida a energía acumulada (kWh/m²).",
-        dataSource: "Datos obtenidos de piranómetros en estaciones meteorológicas SCADA, mediciones de radiación solar global.",
-        units: "kWh/m² (kilovatios-hora por metro cuadrado)",
-        frequency: "Actualización cada hora desde SCADA, cálculo automático de acumulación según el período seleccionado."
-      },
-      hsp: {
-        title: "Horas Solares Pico",
-        description: "Representa el equivalente en horas de radiación solar a una intensidad estándar de 1000 W/m².",
-        calculation: "HSP = Irradiancia Acumulada (kWh/m²) / 1000 W/m². Es una medida estándar para comparar sitios solares.",
-        dataSource: "Cálculo derivado de la irradiancia acumulada, normalizado a condiciones estándar de medición.",
-        units: "HSP (Horas Solares Pico)",
-        frequency: "Cálculo automático basado en irradiancia acumulada, actualización según el período seleccionado."
-      },
-      windSpeed: {
-        title: "Velocidad del Viento",
-        description: "Representa la velocidad promedio del viento registrada por las estaciones meteorológicas durante el período.",
-        calculation: "Se calcula como el promedio de las velocidades del viento registradas durante el período de análisis.",
-        dataSource: "Anemómetros en estaciones meteorológicas SCADA, mediciones de velocidad del viento en tiempo real.",
-        units: "km/h (kilómetros por hora)",
-        frequency: "Actualización cada hora desde SCADA, promedio automático del período seleccionado."
-      },
-      windDirection: {
-        title: "Dirección del Viento",
-        description: "Indica la dirección predominante del viento durante el período de análisis.",
-        calculation: "Se determina la dirección más frecuente del viento basándose en las mediciones de la rosa de los vientos.",
-        dataSource: "Veletas en estaciones meteorológicas SCADA, mediciones de dirección del viento en tiempo real.",
-        units: "Dirección cardinal (N, NE, E, SE, S, SW, W, NW)",
-        frequency: "Actualización cada hora desde SCADA, análisis de frecuencia direccional del período."
-      },
-      precipitation: {
-        title: "Precipitación Acumulada",
-        description: "Representa la cantidad total de lluvia registrada por las estaciones meteorológicas durante el período.",
-        calculation: "Se suma la precipitación diaria registrada por los pluviómetros durante el período de análisis.",
-        dataSource: "Pluviómetros en estaciones meteorológicas SCADA, mediciones de precipitación en tiempo real.",
-        units: "cm/día (centímetros por día)",
-        frequency: "Actualización cada hora desde SCADA, acumulación automática del período seleccionado."
-      },
-      pvPower: {
-        title: "Potencia Fotovoltaica",
-        description: "Representa la potencia teórica que podría generar un sistema fotovoltaico basándose en la irradiancia solar.",
-        calculation: "Potencia = Irradiancia (W/m²) × Área del panel (m²) × Eficiencia del panel (%).",
-        dataSource: "Cálculo derivado de irradiancia solar y parámetros estándar de paneles fotovoltaicos.",
-        units: "W (vatios)",
-        frequency: "Cálculo automático basado en irradiancia, actualización según el período seleccionado."
-      }
-    };
-    
-    return kpiInfo[kpiKey] || null;
-  };
+  // Info-al-click de cada tarjeta (centralizada en utils/kpiInfo.js).
+  const getKpiDetailedInfo = (kpiKey) => WEATHER_KPI_INFO[kpiKey] || null;
 
   // Estados para mostrar información detallada de KPIs
   const [showKpiInfo, setShowKpiInfo] = useState(null);
@@ -871,6 +811,15 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 <span className="text-base font-semibold text-teal-800">Frecuencia</span>
                 <p className="text-sm text-teal-700 mt-2 leading-relaxed">
                   {getKpiDetailedInfo(showKpiInfo).frequency}
+                </p>
+              </div>
+
+              <div className={`bg-amber-50 p-4 rounded-xl border border-amber-200 lg:col-span-2 transition duration-300 delay-700 ${
+                isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
+              }`}>
+                <span className="text-base font-semibold text-amber-800">Interpretación / Umbral</span>
+                <p className="text-sm text-amber-700 mt-2 leading-relaxed">
+                  {getKpiDetailedInfo(showKpiInfo).interpretation}
                 </p>
               </div>
             </div>

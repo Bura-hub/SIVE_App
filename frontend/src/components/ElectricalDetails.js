@@ -6,6 +6,7 @@ import ElectricMeterFilters from './ElectricMeterFilters';
 import { buildApiUrl, ENDPOINTS } from '../utils/apiConfig';
 import { IconGauge, IconRefresh } from './icons';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
+import { METER_KPI_INFO } from '../utils/kpiInfo';
 
 //###########################################################################
 // Importaciones Chart.js
@@ -145,7 +146,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   // KPIs dinámicos basados en datos reales
   const [kpiData, setKpiData] = useState({
     totalEnergyConsumed: { 
-      title: "Energía Total Consumida", 
+      title: "Energía Importada de la Red",
       value: "0.00", 
       unit: "kWh", 
       change: "Este período", 
@@ -271,73 +272,53 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   // Actualizar KPIs cuando cambien los datos del medidor
   useEffect(() => {
     if (meterData && meterData.results && meterData.results.length > 0) {
-      const latestData = meterData.results[0];
-      const totalEnergy = meterData.results.reduce((sum, item) => sum + (item.imported_energy_kwh || 0), 0);
-      
+      const results = meterData.results;
+      const totalEnergy = results.reduce((sum, item) => sum + (item.imported_energy_kwh || 0), 0);
+
+      // Demanda pico = MÁXIMO del rango (no el último día) + fecha en que ocurrió.
+      const peakRow = results.reduce(
+        (best, item) => ((item.peak_demand_kw || 0) > (best?.peak_demand_kw || 0) ? item : best),
+        null
+      );
+      const peakDemand = peakRow?.peak_demand_kw || 0;
+
+      // Demanda promedio y factor de carga coherentes con el rango.
+      const avgDemands = results.map(item => item.avg_demand_kw || 0).filter(v => v > 0);
+      const avgDemand = avgDemands.length > 0 ? avgDemands.reduce((s, v) => s + v, 0) / avgDemands.length : 0;
+      const loadFactor = peakDemand > 0 ? Math.min(100, (avgDemand / peakDemand) * 100) : 0;
+
+      // Factor de potencia promedio del rango (medidores: campo avg_power_factor).
+      const powerFactors = results.map(item => item.avg_power_factor || 0).filter(pf => pf > 0);
+      const avgPowerFactor = powerFactors.length > 0 ? powerFactors.reduce((s, pf) => s + pf, 0) / powerFactors.length : 0;
+
       setKpiData(prev => ({
         totalEnergyConsumed: {
           ...prev.totalEnergyConsumed,
           value: totalEnergy.toFixed(2),
-          change: `${meterData.results.length} registros`
+          change: `${results.length} registros`
         },
         peakDemand: {
           ...prev.peakDemand,
-          value: (latestData.peak_demand_kw || 0).toFixed(2),
-          change: latestData.date ? new Date(latestData.date).toLocaleDateString('es-ES') : 'Último registro'
+          value: peakDemand.toFixed(2),
+          change: peakRow?.date ? `Máx. ${new Date(peakRow.date).toLocaleDateString('es-ES')}` : 'Máximo del rango'
         },
         loadFactor: {
           ...prev.loadFactor,
-          value: (latestData.load_factor_pct || 0).toFixed(1),
-          change: latestData.load_factor_pct > 80 ? 'Excelente' : latestData.load_factor_pct > 60 ? 'Bueno' : 'Mejorable'
+          value: loadFactor.toFixed(1),
+          change: loadFactor > 80 ? 'Excelente' : loadFactor > 60 ? 'Bueno' : 'Mejorable'
         },
         powerFactor: {
           ...prev.powerFactor,
-          value: (latestData.avg_power_factor || 0).toFixed(2),
-          change: latestData.avg_power_factor > 0.95 ? 'Óptimo' : latestData.avg_power_factor > 0.85 ? 'Bueno' : 'Mejorable'
+          value: avgPowerFactor.toFixed(2),
+          change: avgPowerFactor > 0.95 ? 'Óptimo' : avgPowerFactor > 0.90 ? 'Bueno' : 'Mejorable'
         }
       }));
     }
   }, [meterData]);
 
   // Función para obtener información detallada de cada KPI
-  const getKpiDetailedInfo = (kpiKey) => {
-    const kpiInfo = {
-      totalEnergyConsumed: {
-        title: "Energía Total Consumida",
-        description: "Representa la cantidad total de energía eléctrica consumida por los medidores monitoreados en la institución seleccionada.",
-        calculation: "Se calcula sumando la energía importada (imported_energy_kwh) de todos los medidores activos durante el período seleccionado.",
-        dataSource: "Datos obtenidos de medidores eléctricos SCADA en tiempo real, incluyendo lecturas de energía activa.",
-        units: "kWh (kilovatios-hora)",
-        frequency: "Actualización cada 5 minutos desde SCADA, cálculo automático según el período seleccionado."
-      },
-      peakDemand: {
-        title: "Demanda Pico",
-        description: "Representa la máxima potencia demandada por los medidores eléctricos en un momento específico del período.",
-        calculation: "Se identifica el valor más alto de potencia activa (peak_demand_kw) registrado durante el período de análisis.",
-        dataSource: "Mediciones de potencia instantánea desde medidores eléctricos SCADA.",
-        units: "kW (kilovatios)",
-        frequency: "Actualización cada 5 minutos desde SCADA, identificación automática del pico máximo."
-      },
-      loadFactor: {
-        title: "Factor de Carga",
-        description: "Indica la eficiencia del uso de la capacidad instalada, comparando la demanda promedio con la demanda máxima.",
-        calculation: "Factor de Carga = (Demanda Promedio / Demanda Máxima) × 100%. Valores altos indican uso eficiente.",
-        dataSource: "Cálculo derivado de las mediciones de potencia activa de medidores eléctricos.",
-        units: "% (porcentaje)",
-        frequency: "Cálculo automático basado en datos de potencia, actualización según el período seleccionado."
-      },
-      powerFactor: {
-        title: "Factor de Potencia",
-        description: "Mide la eficiencia del uso de la potencia aparente, indicando qué tan bien se aprovecha la energía eléctrica.",
-        calculation: "Factor de Potencia = Potencia Activa / Potencia Aparente. Valores cercanos a 1.0 indican alta eficiencia.",
-        dataSource: "Mediciones de potencia activa y aparente desde medidores eléctricos SCADA.",
-        units: "Adimensional (sin unidades)",
-        frequency: "Actualización cada 5 minutos desde SCADA, promedio automático del período seleccionado."
-      }
-    };
-    
-    return kpiInfo[kpiKey] || null;
-  };
+  // Info-al-click de cada tarjeta (centralizada en utils/kpiInfo.js).
+  const getKpiDetailedInfo = (kpiKey) => METER_KPI_INFO[kpiKey] || null;
 
   // useEffect para manejar la animación de apertura
   useEffect(() => {
@@ -643,6 +624,15 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                 <span className="text-base font-semibold text-teal-800">Frecuencia</span>
                 <p className="text-sm text-teal-700 mt-2 leading-relaxed">
                   {getKpiDetailedInfo(showKpiInfo).frequency}
+                </p>
+              </div>
+
+              <div className={`bg-amber-50 p-4 rounded-xl border border-amber-200 lg:col-span-2 transition duration-300 delay-700 ${
+                isAnimating ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'
+              }`}>
+                <span className="text-base font-semibold text-amber-800">Interpretación / Umbral</span>
+                <p className="text-sm text-amber-700 mt-2 leading-relaxed">
+                  {getKpiDetailedInfo(showKpiInfo).interpretation}
                 </p>
               </div>
             </div>
