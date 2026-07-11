@@ -11,33 +11,6 @@ import { IconInverter, IconScale, IconActivity, IconWaveform, IconRefresh } from
 
 //###########################################################################
 // Importaciones Chart.js
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler // Para gráficos con relleno de área
-} from 'chart.js';
-import zoomPlugin from 'chartjs-plugin-zoom'
-
-// Registro de los componentes de Chart.js necesarios
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-  zoomPlugin
-);
 
 // Configuración de gráficos
 const CHART_OPTIONS = {
@@ -141,7 +114,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
 
   // Estado para la pestaña activa
 
-
   // Estado para la animación de transición
   const [showTransition, setShowTransition] = useState(false);
   const [transitionType, setTransitionType] = useState('info');
@@ -154,7 +126,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   // Iconos mejorados más acordes a cada título
   const generationIcon = <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-solar-panel" aria-hidden="true"><path d="M12 2v20"></path><path d="M2 12h20"></path><path d="M20 12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"></path><path d="M4 12V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8"></path><path d="M12 6v4"></path><path d="M8 8h8"></path></svg>;
   
-  const efficiencyIcon = <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-gauge" aria-hidden="true"><path d="M12 2v10"></path><path d="m19.777 4.3-1.531 1.532a3 3 0 0 0 0 4.242l1.532 1.531"></path><path d="M4.223 4.3l1.531 1.532a3 3 0 0 1 0 4.242L4.223 11.7"></path><path d="M12 22c4.97 0 9-4.03 9-9s-4.03-9-9-9-9 4.03-9 9 4.03 9 9 9Z"></path><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"></path></svg>;
   
   const activeIcon = <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-cpu" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><path d="M9 1v3"></path><path d="M15 1v3"></path><path d="M9 21v3"></path><path d="M15 21v3"></path><path d="M1 9h3"></path><path d="M1 15h3"></path><path d="M21 9h3"></path><path d="M21 15h3"></path></svg>;
 
@@ -171,17 +142,8 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           icon: generationIcon,
           color: "text-blue-700"
         },
-        averageEfficiency: { 
-          title: "Eficiencia Promedio", 
-          value: "0.0", 
-          unit: "%", 
-          change: "Sin datos", 
-          status: "normal", 
-          icon: efficiencyIcon,
-          color: "text-green-700"
-        },
-        activeInverters: { 
-          title: "Inversores Activos", 
+        activeInverters: {
+          title: "Inversores Activos",
           value: "0", 
           unit: "", 
           change: "Sin datos", 
@@ -249,9 +211,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     const totalGenerationMWh = totalGenerationKWh / 1000;
     
     // Calcular eficiencia promedio
-    const efficiencies = results.map(item => item.dc_ac_efficiency_pct || 0).filter(eff => eff > 0);
-    const averageEfficiency = efficiencies.length > 0 ? efficiencies.reduce((sum, eff) => sum + eff, 0) / efficiencies.length : 0;
-    
     // Contar inversores únicos activos
     const uniqueInverters = new Set(results.map(item => item.device_id || item.device_name).filter(id => id));
     const activeInvertersCount = uniqueInverters.size;
@@ -308,16 +267,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         icon: generationIcon,
         color: "text-blue-700"
       },
-      averageEfficiency: { 
-        title: "Eficiencia Promedio", 
-        value: averageEfficiency.toFixed(1), 
-        unit: "%", 
-        change: getChangeText(averageEfficiency, "%", true), 
-        status: getStatus(averageEfficiency, { excellent: 95, good: 90, warning: 80 }), 
-        icon: efficiencyIcon,
-        color: "text-green-700"
-      },
-      activeInverters: { 
+      activeInverters: {
         title: "Inversores Activos", 
         value: activeInvertersCount.toString(), 
         unit: "", 
@@ -414,6 +364,14 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
 
   // Popover de información detallada de KPIs.
   const [showKpiInfo, setShowKpiInfo] = useState(null);
+  // A11y: cerrar el overlay de info del KPI con la tecla Escape.
+  useEffect(() => {
+    if (!showKpiInfo) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setShowKpiInfo(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showKpiInfo]);
+
   const [isAnimating, setIsAnimating] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
 
@@ -706,7 +664,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         {/* Overlay de información detallada del KPI - Se superpone en toda la sección */}
         {showKpiInfo && getKpiDetailedInfo(showKpiInfo) && (
           <div 
-            className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
+            role="dialog" aria-modal="true" aria-label="Información del indicador" className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
               isAnimating 
                 ? 'opacity-0 scale-95 translate-y-4 backdrop-blur-none' 
                 : isOpening
@@ -941,18 +899,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               pointBorderWidth: 2,
                             },
                             {
-                              label: 'Eficiencia DC-AC (%)',
-                              data: inverterData.results.slice().reverse().map(item => item.dc_ac_efficiency_pct || 0),
-                              borderColor: '#F59E0B',
-                              backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                              fill: true,
-                              tension: 0.4,
-                              pointRadius: 4,
-                              pointBackgroundColor: '#F59E0B',
-                              pointBorderColor: '#ffffff',
-                              pointBorderWidth: 2,
-                            },
-                            {
                               label: 'Potencia Máxima (kW)',
                               data: inverterData.results.slice().reverse().map(item => (item.max_power_w || 0) / 1000),
                               borderColor: '#8B5CF6',
@@ -1139,20 +1085,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               pointBorderColor: '#ffffff',
                               pointBorderWidth: 2,
                               yAxisID: 'y'
-                            },
-                            {
-                              label: 'Eficiencia DC-AC (%)',
-                              data: inverterData.results.slice().reverse().map(item => item.dc_ac_efficiency_pct || 0),
-                              borderColor: '#10B981',
-                              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                              fill: false,
-                              tension: 0.4,
-                              pointRadius: 4,
-                              borderDash: [8, 4],
-                              pointBackgroundColor: '#10B981',
-                              pointBorderColor: '#ffffff',
-                              pointBorderWidth: 2,
-                              yAxisID: 'y1'
                             }
                           ]
                         }}
@@ -1286,7 +1218,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                           { label: 'Fecha', width: 'w-20 lg:w-24 xl:w-32' },
                           { label: 'Inversor', width: 'w-24 lg:w-28 xl:w-36' },
                           { label: 'Energía Generada (kWh)', width: 'w-32 lg:w-36 xl:w-40' },
-                          { label: 'Eficiencia DC-AC (%)', width: 'w-28 lg:w-32 xl:w-36' },
                           { label: 'Potencia Máx (kW)', width: 'w-28 lg:w-32 xl:w-36' },
                           { label: 'Factor de Potencia', width: 'w-24 lg:w-28 xl:w-32' },
                           { label: 'Temperatura (°C)', width: 'w-24 lg:w-28 xl:w-32' }
@@ -1328,17 +1259,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="text-xs lg:text-sm font-semibold text-gray-900">
-                                  {(item.dc_ac_efficiency_pct || 0).toFixed(1)}%
-                                </div>
-                                <div className={`ml-2 w-2 h-2 rounded-full ${
-                                  (item.dc_ac_efficiency_pct || 0) > 90 ? 'bg-green-500' : 
-                                  (item.dc_ac_efficiency_pct || 0) > 80 ? 'bg-yellow-500' : 'bg-red-500'
-                                }`}></div>
-                              </div>
-                            </td>
-                            <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-semibold text-blue-700">
                                 {((item.max_power_w || 0) / 1000).toFixed(1)}
                               </div>
@@ -1363,7 +1283,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="7" className="px-4 lg:px-6 py-8 lg:py-12 text-center">
+                          <td colSpan="6" className="px-4 lg:px-6 py-8 lg:py-12 text-center">
                             <div className="flex flex-col items-center">
                               <svg className="w-10 h-10 lg:w-12 lg:h-12 text-gray-400 mb-3 lg:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

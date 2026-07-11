@@ -10,19 +10,6 @@ import { METER_KPI_INFO } from '../utils/kpiInfo';
 
 //###########################################################################
 // Importaciones Chart.js
-import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, PointElement, LineElement, BarElement,
-  Title, Tooltip, Legend, Filler
-} from 'chart.js';
-import zoomPlugin from 'chartjs-plugin-zoom';
-
-ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement, BarElement,
-  Title, Tooltip, Legend, Filler, zoomPlugin
-);
-
-
 
 // Configuración de gráficos
 const CHART_OPTIONS = {
@@ -96,8 +83,6 @@ const CHART_OPTIONS = {
   transitions: { zoom: { animation: { duration: 300, easing: 'easeInOutQuart' } } }
 };
 
-
-
 // Componente de encabezado de sección
 const SectionHeader = ({ title, icon, infoText }) => (
   <div className="flex items-center justify-between mb-6">
@@ -118,10 +103,6 @@ const SectionHeader = ({ title, icon, infoText }) => (
   </div>
 );
 
-
-
-
-
 // Componente principal
 function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigateTo, isSidebarMinimized, setIsSidebarMinimized }) {
   // Estados consolidados
@@ -140,6 +121,14 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
 
   // Estados para mostrar información detallada de KPIs
   const [showKpiInfo, setShowKpiInfo] = useState(null);
+  // A11y: cerrar el overlay de info del KPI con la tecla Escape.
+  useEffect(() => {
+    if (!showKpiInfo) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setShowKpiInfo(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showKpiInfo]);
+
   const [isAnimating, setIsAnimating] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
 
@@ -235,9 +224,6 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   const endIndex = startIndex + itemsPerPage;
   const currentItems = meterData?.results?.slice(startIndex, endIndex) || [];
 
-
-
-
   // Cargar datos iniciales al montar el componente
   useEffect(() => {
     if (authToken) {
@@ -330,8 +316,6 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
       return () => clearTimeout(timer);
     }
   }, [showKpiInfo, isOpening]);
-
-
 
   // Estados de carga y error (suavizados)
   if (loading) {
@@ -550,7 +534,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
         {/* Overlay de información detallada del KPI - Se superpone en toda la sección */}
         {showKpiInfo && getKpiDetailedInfo(showKpiInfo) && (
           <div 
-            className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
+            role="dialog" aria-modal="true" aria-label="Información del indicador" className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
               isAnimating 
                 ? 'opacity-0 scale-95 translate-y-4 backdrop-blur-none' 
                 : isOpening
@@ -716,7 +700,6 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
 
           {meterData && !meterLoading && (
             <>
-
 
               {/* Gráficos con diseño moderno */}
               {meterData.results && meterData.results.length > 0 && (
@@ -1219,7 +1202,6 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
             </div>
           </section>
         )}
-
 
       <TransitionOverlay show={showTransition} type={transitionType} message={transitionMessage} />
     </div>

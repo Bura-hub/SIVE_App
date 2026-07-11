@@ -9,35 +9,6 @@ import { WEATHER_KPI_INFO } from '../utils/kpiInfo';
 import { IconCloudSun, IconRefresh, IconSun, IconWind, IconDroplets } from './icons';
 
 // Importaciones desde Chart.js y el plugin de zoom
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-import zoomPlugin from 'chartjs-plugin-zoom'
-
-// Registro de los componentes de Chart.js necesarios
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-  zoomPlugin
-);
 
 // Configuración de gráficos
 const CHART_OPTIONS = {
@@ -484,6 +455,14 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
 
   // Estados para mostrar información detallada de KPIs
   const [showKpiInfo, setShowKpiInfo] = useState(null);
+  // A11y: cerrar el overlay de info del KPI con la tecla Escape.
+  useEffect(() => {
+    if (!showKpiInfo) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setShowKpiInfo(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showKpiInfo]);
+
   const [isAnimating, setIsAnimating] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
 
@@ -537,8 +516,6 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
           </div>
         </div>
       </header>
-
-
 
       {/* KPIs */}
       <section className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-4 lg:p-8 -mt-4 lg:-mt-8 mb-6 lg:mb-8">
@@ -713,7 +690,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         {/* Overlay de información detallada del KPI - Se superpone en toda la sección */}
         {showKpiInfo && getKpiDetailedInfo(showKpiInfo) && (
           <div 
-            className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
+            role="dialog" aria-modal="true" aria-label="Información del indicador" className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
               isAnimating 
                 ? 'opacity-0 scale-95 translate-y-4 backdrop-blur-none' 
                 : isOpening
@@ -1269,8 +1246,6 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                         </div>
       </section>
       )}
-
-
 
       {/* Datos Históricos Detallados */}
       {weatherData?.results && weatherData.results.length > 0 && (

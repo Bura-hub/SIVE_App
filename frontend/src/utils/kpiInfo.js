@@ -150,15 +150,6 @@ export const INVERTER_KPI_INFO = {
     frequency: "Muestreo ~2 min; suma sobre el rango de fechas.",
     interpretation: "Sin umbral fijo; contrástese con la irradiancia del período — baja generación con alta irradiancia indica pérdidas o inversores caídos.",
   },
-  averageEfficiency: {
-    title: "Eficiencia Promedio (DC/AC)",
-    description: "Eficiencia de conversión DC→AC de los inversores.",
-    calculation: "Promedio de energía_AC/energía_DC × 100, acotado a [0,100].",
-    dataSource: "Inversores solares del conector SCADA.",
-    units: "%.",
-    frequency: "Muestreo ~2 min; promedio sobre el rango de fechas.",
-    interpretation: "Rango sano típico 95–98%. AVISO: el conector reporta dcPower<acPower en muchas filas, por lo que el valor puede aparecer saturado en ~100%; no leer como eficiencia real hasta validar la instrumentación DC.",
-  },
   activeInverters: {
     title: "Inversores Activos",
     description: "Número de inversores DISTINTOS con registros en el rango seleccionado (no es estado 'online' instantáneo).",

@@ -30,37 +30,6 @@ import * as apiUtils from '../utils/apiConfig';
 import { DASHBOARD_KPI_INFO } from '../utils/kpiInfo';
 
 // Importaciones desde Chart.js y el plugin de zoom
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler // Para gráficos con relleno de área
-} from 'chart.js';
-import zoomPlugin from 'chartjs-plugin-zoom'
-
-// Registro de los componentes de Chart.js necesarios
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-  zoomPlugin
-);
-
-
-
-
 
 // Estados posibles para las tareas
 export const TaskStatus = {
@@ -248,6 +217,14 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
 
   // Estado para mostrar información detallada de KPIs
   const [showKpiInfo, setShowKpiInfo] = useState(null);
+  // A11y: cerrar el overlay de info del KPI con la tecla Escape.
+  useEffect(() => {
+    if (!showKpiInfo) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setShowKpiInfo(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showKpiInfo]);
+
   const [isAnimating, setIsAnimating] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
 
@@ -1119,7 +1096,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
             {/* Overlay de información detallada del KPI - Se superpone en toda la sección */}
             {showKpiInfo && getKpiDetailedInfo(showKpiInfo) && (
               <div 
-                className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
+                role="dialog" aria-modal="true" aria-label="Información del indicador" className={`absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl border-2 border-gray-200 shadow-2xl z-20 p-8 overflow-y-auto transition duration-300 ease-out transform ${
                   isAnimating 
                     ? 'opacity-0 scale-95 translate-y-4 backdrop-blur-none' 
                     : isOpening
