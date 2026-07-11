@@ -5,6 +5,7 @@ import TransitionOverlay from './TransitionOverlay';
 import ElectricMeterFilters from './ElectricMeterFilters';
 import { buildApiUrl, ENDPOINTS } from '../utils/apiConfig';
 import { IconGauge, IconRefresh } from './icons';
+import { useDeviceDetail } from '../hooks/useDeviceDetail';
 
 //###########################################################################
 // Importaciones Chart.js
@@ -129,22 +130,8 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   const [transitionType, setTransitionType] = useState('info');
   const [transitionMessage, setTransitionMessage] = useState('');
   
-  // Estados de filtros
-  const [filters, setFilters] = useState({
-    timeRange: 'daily',
-    institutionId: null,
-    deviceId: null,
-    startDate: null,
-    endDate: null
-  });
-  
-  // Estados de medidores eléctricos
-  const [meterData, setMeterData] = useState(null);
-  const [meterLoading, setMeterLoading] = useState(false);
-  const [meterError, setMeterError] = useState(null);
-  const requestSeqRef = useRef(0);
-  const debounceRef = useRef(null);
-  const lastFiltersRef = useRef(null);
+  // Filtros, datos y lógica de fetch: extraídos a useDeviceDetail (Ola 5).
+  // (el hook se inicializa más abajo, tras definir showTransitionAnimation).
 
   // Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -203,155 +190,21 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
     setTimeout(() => setShowTransition(false), duration);
   };
 
-  const handleFilterChange = (filterType, value, message) => {
-    setFilters(prev => ({ ...prev, [filterType]: value }));
-    showTransitionAnimation('info', message, 1500);
-  };
-
-  const fetchMeterData = useCallback(async (filters) => {
-    let seq = 0;
-    try {
-      seq = ++requestSeqRef.current;
-      if (!filters || !filters.institutionId) return; // no tocar UI si no hay institución
-      setMeterLoading(true);
-      setMeterError(null);
-      
-      // Usar fechas por defecto si no se han especificado
-      const defaultEndDate = new Date();
-      const defaultStartDate = new Date();
-      defaultStartDate.setDate(defaultStartDate.getDate() - 10);
-      
-      const timeRange = filters.timeRange || 'daily';
-      const baseParams = {
-        time_range: timeRange,
-        ...(filters.institutionId && { institution_id: filters.institutionId }),
-        ...(filters.deviceId && { device_id: filters.deviceId }),
-        start_date: filters.startDate || defaultStartDate.toISOString().split('T')[0],
-        end_date: filters.endDate || defaultEndDate.toISOString().split('T')[0]
-      };
-
-      const indicatorsParams = new URLSearchParams(baseParams);
-
-      const indicatorsUrl = buildApiUrl(ENDPOINTS.electrical.indicators, baseParams);
-      const indicatorsResp = await fetch(indicatorsUrl, {
-          headers: {
-            'Authorization': `Token ${authToken}`,
-            'Content-Type': 'application/json'
-          }
-      });
-
-      if (!indicatorsResp.ok) {
-        const errText = await indicatorsResp.text();
-        throw new Error(errText || indicatorsResp.statusText);
-      }
-
-      const indicatorsData = await indicatorsResp.json();
-
-      // 🔍 AGREGAR LOGS PARA DEBUGGEAR FECHAS
-      console.log('�� DATOS RECIBIDOS DE LA API:');
-      console.log('Total registros:', indicatorsData.results?.length);
-      if (indicatorsData.results?.length > 0) {
-        console.log('Primera fecha (raw):', indicatorsData.results[0].date);
-        console.log('Última fecha (raw):', indicatorsData.results[indicatorsData.results.length - 1].date);
-        console.log('Primera fecha (convertida):', new Date(indicatorsData.results[0].date));
-        console.log('Última fecha (convertida):', new Date(indicatorsData.results[indicatorsData.results.length - 1].date));
-      }
-
-      if (seq === requestSeqRef.current) {
-        setMeterData(indicatorsData);
-        
-
-      }
-    } catch (error) {
-      // Mostrar error solo si esta solicitud sigue siendo la vigente
-      if (seq === requestSeqRef.current) {
-        setMeterError(error.message || 'Error desconocido');
-      }
-    } finally {
-      if (seq === requestSeqRef.current) setMeterLoading(false);
-    }
-  }, [authToken]);
-
-  const calculateElectricalData = useCallback(async () => {
-    try {
-      if (!filters.institutionId) {
-        showTransitionAnimation('error', 'Debe seleccionar una institución primero', 3000);
-        return;
-      }
-
-      if (!filters.startDate || !filters.endDate) {
-        showTransitionAnimation('error', 'Debe seleccionar fechas de inicio y fin', 3000);
-        return;
-      }
-
-      setMeterLoading(true);
-      setMeterError(null);
-
-      const response = await fetch(buildApiUrl(ENDPOINTS.electrical.calculate), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          time_range: filters.timeRange,
-          start_date: filters.startDate,
-          end_date: filters.endDate,
-          institution_id: filters.institutionId,
-          device_id: filters.deviceId
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al calcular datos eléctricos');
-      }
-
-      const result = await response.json();
-      showTransitionAnimation('success', 'Cálculo de datos eléctricos iniciado correctamente', 3000);
-      
-      // Recargar datos después de un breve delay
-      setTimeout(() => {
-        fetchMeterData(filters);
-      }, 2000);
-
-    } catch (error) {
-      console.error('Error calculando datos eléctricos:', error);
-      setMeterError(error.message || 'Error desconocido al calcular datos');
-      showTransitionAnimation('error', `Error: ${error.message}`, 4000);
-    } finally {
-      setMeterLoading(false);
-    }
-  }, [filters, authToken, fetchMeterData, showTransitionAnimation]);
-
-  const handleFiltersChange = useCallback((newFilters) => {
-    console.log('Filters changed in ElectricalDetails:', newFilters);
-    console.log('Previous filters:', filters);
-    setFilters(newFilters);
-    
-    // Evitar fetch si filtros no cambiaron
-    const prev = lastFiltersRef.current || {};
-    const same = prev.timeRange === newFilters.timeRange &&
-                 prev.institutionId === newFilters.institutionId &&
-                 prev.deviceId === newFilters.deviceId &&
-                 prev.startDate === newFilters.startDate &&
-                 prev.endDate === newFilters.endDate;
-    if (same) return;
-    lastFiltersRef.current = newFilters;
-
-    // Si se seleccionó una institución, cargar datos inmediatamente
-    if (newFilters.institutionId && (!prev.institutionId || prev.institutionId !== newFilters.institutionId)) {
-      fetchMeterData(newFilters);
-      return;
-    }
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    // Ocultar loader mientras debouncing para evitar parpadeos si el usuario cambia rápidamente
-    setMeterLoading(false);
-    debounceRef.current = setTimeout(() => {
-      fetchMeterData(newFilters);
-    }, 450);
-  }, [fetchMeterData]);
+  // Filtros + datos + fetch (race-guard, dedup, debounce) y cálculo: en useDeviceDetail.
+  const {
+    data: meterData,
+    loading: meterLoading,
+    error: meterError,
+    filters,
+    handleFiltersChange,
+    calculate: calculateElectricalData,
+    fetchData: fetchMeterData,
+  } = useDeviceDetail({
+    indicatorsEndpoint: ENDPOINTS.electrical.indicators,
+    calculateEndpoint: ENDPOINTS.electrical.calculate,
+    authToken,
+    onNotify: showTransitionAnimation,
+  });
 
   // Funciones de paginación
   const resetPagination = () => {
