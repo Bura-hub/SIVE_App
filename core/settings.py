@@ -89,6 +89,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Comprime las respuestas de la API (JSON). La API usa auth por token en header
+    # (no cookies de sesión para datos), por lo que el riesgo BREACH es bajo.
+    'django.middleware.gzip.GZipMiddleware',
     # WhiteNoise sirve los estáticos (admin/DRF/Swagger) directamente desde gunicorn,
     # sin depender de un servidor de archivos aparte. Debe ir justo tras SecurityMiddleware.
     'whitenoise.middleware.WhiteNoiseMiddleware',
