@@ -140,7 +140,7 @@ services:
       sh -c "python manage.py migrate &&
              (python manage.py bootstrap_scada_if_empty || true) &&
              python manage.py collectstatic --noinput &&
-             gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 --max-requests 1000 --max-requests-jitter 100 core.wsgi:application"
+             gunicorn --bind 0.0.0.0:8000 --workers 3 --threads 4 --worker-class gthread --timeout 120 --max-requests 1000 --max-requests-jitter 100 core.wsgi:application"
 
   # ================================
   # Worker de Celery
