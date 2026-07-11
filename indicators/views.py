@@ -48,6 +48,7 @@ from indicators.services.date_ranges import (  # noqa: E402
 from indicators.services.formatting import auto_energy_unit, format_energy_value  # noqa: E402
 from indicators.services.kpi import calculate_kpi_metrics, summarize_inverter_status  # noqa: E402
 from indicators.services.queries import apply_device_filter  # noqa: E402
+from indicators.serializers import DashboardChartPointSerializer  # noqa: E402
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
@@ -331,21 +332,7 @@ class ChartDataView(APIView):
             ),
         ],
         responses={
-            200: {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "date": {"type": "string"},
-                        "daily_consumption": {"type": "number"},
-                        "daily_generation": {"type": "number"},
-                        "daily_balance": {"type": "number"},
-                        "avg_daily_temp": {"type": "number"},
-                        "avg_wind_speed": {"type": "number"},
-                        "avg_irradiance": {"type": "number"},
-                    }
-                }
-            },
+            200: DashboardChartPointSerializer(many=True),
             500: {"description": "Error interno del servidor"},
         },
         tags=["Dashboard"]
@@ -425,7 +412,7 @@ class ChartDataView(APIView):
                 for item in chart_data
             ]
             
-            return Response(response_data)
+            return Response(DashboardChartPointSerializer(response_data, many=True).data)
         except Exception as e:
             logger.error(f"Error al obtener los datos del gráfico: {e}", exc_info=True)
             return Response({'error': 'Ocurrió un error inesperado al procesar la solicitud.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

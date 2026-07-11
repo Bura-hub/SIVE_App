@@ -152,6 +152,27 @@ class ChartDataValidationTests(TestCase):
     def test_sin_auth_no_autorizado(self):
         self.assertIn(self._get({}, authed=False).status_code, (401, 403))
 
+    def test_forma_de_respuesta_con_serializer(self):
+        # Con datos reales, la respuesta (DashboardChartPointSerializer) conserva la forma:
+        # cada punto tiene los campos + el objeto 'units' con la unidad escalada.
+        from indicators.models import DailyChartData
+        DailyChartData.objects.create(
+            date=date(2026, 7, 5), daily_consumption=1500.0, daily_generation=800.0,
+            daily_balance=-700.0, avg_daily_temp=22.5, avg_wind_speed=3.0, avg_irradiance=400.0)
+        resp = self._get({'start_date': '2026-07-01', 'end_date': '2026-07-10'})
+        resp.render()
+        import json
+        data = json.loads(resp.content)
+        self.assertEqual(len(data), 1)
+        point = data[0]
+        for k in ('date', 'daily_consumption', 'daily_generation', 'daily_balance',
+                  'avg_daily_temp', 'avg_wind_speed', 'avg_irradiance', 'units'):
+            self.assertIn(k, point)
+        self.assertIn('consumption', point['units'])
+        # 1500 kWh -> escala a MWh (divisor 1000) -> 1.5
+        self.assertEqual(point['units']['consumption'], 'MWh')
+        self.assertAlmostEqual(point['daily_consumption'], 1.5, places=3)
+
 
 @override_settings(ALLOWED_HOSTS=['testserver'])
 class InverterChartDataValidationTests(TestCase):

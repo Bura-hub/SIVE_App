@@ -270,3 +270,26 @@ class WeatherStationCalculationResponseSerializer(serializers.Serializer):
     estimated_completion_time = serializers.CharField(
         help_text="Tiempo estimado de finalización de la tarea"
     )
+
+class DashboardChartUnitsSerializer(serializers.Serializer):
+    """Unidades (ya escaladas) de cada punto del gráfico del dashboard."""
+    consumption = serializers.CharField()
+    generation = serializers.CharField()
+    balance = serializers.CharField()
+    temperature = serializers.CharField()
+    wind_speed = serializers.CharField()
+    irradiance = serializers.CharField()
+
+
+class DashboardChartPointSerializer(serializers.Serializer):
+    """Un punto (día) del gráfico del dashboard (ChartDataView). Los valores de energía
+    vienen ya escalados a la unidad de `units`. Reemplaza el schema inline del @extend_schema
+    y hace explícita la forma de la respuesta (Ola 5)."""
+    date = serializers.CharField()
+    daily_consumption = serializers.FloatField()
+    daily_generation = serializers.FloatField()
+    daily_balance = serializers.FloatField()
+    avg_daily_temp = serializers.FloatField(allow_null=True)
+    avg_wind_speed = serializers.FloatField()
+    avg_irradiance = serializers.FloatField()
+    units = DashboardChartUnitsSerializer()
