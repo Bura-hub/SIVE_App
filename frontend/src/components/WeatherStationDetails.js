@@ -399,13 +399,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       }
     });
 
-    // Normalizar para que el máximo sea 10 (mejor visualización). Sin datos -> ceros (no
-    // se dibuja el antiguo círculo uniforme falso).
-    const maxCount = Math.max(...directionCounts);
-    if (maxCount > 0) {
-      return directionCounts.map(count => (count / maxCount) * 10);
-    }
-
+    // Conteos CRUDOS por dirección (sin normalizar) para poder apilar las bandas de
+    // velocidad en la rosa polar. Sin datos -> ceros (no se dibuja el círculo uniforme falso).
     return directionCounts;
   };
 
@@ -1103,84 +1098,86 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         <section className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-4 lg:p-8 mb-6 lg:mb-8">
           <div className="space-y-6 lg:space-y-8">
             <div className="w-full">
-              <ChartCard
-              title="Rosa de los Vientos"
-                description="Distribución de dirección y velocidad del viento en el período seleccionado"
-                type="radar"
-                data={{
-                  labels: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
-                  datasets: [
-                    {
-                      label: 'Frecuencia de Viento (0-5 km/h)',
-                      data: calculateWindRoseData(weatherData.results, 0, 5),
-                      borderColor: '#10B981',
-                      backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                      pointBackgroundColor: '#10B981',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                      pointRadius: 4,
-                    },
-                    {
-                      label: 'Frecuencia de Viento (5-10 km/h)',
-                      data: calculateWindRoseData(weatherData.results, 5, 10),
-                      borderColor: '#F59E0B',
-                      backgroundColor: 'rgba(245, 158, 11, 0.2)',
-                      pointBackgroundColor: '#F59E0B',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                      pointRadius: 4,
-                    },
-                    {
-                      label: 'Frecuencia de Viento (10+ km/h)',
-                      data: calculateWindRoseData(weatherData.results, 10, Infinity),
-                      borderColor: '#EF4444',
-                      backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                      pointBackgroundColor: '#EF4444',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                      pointRadius: 4,
-                    }
-                  ],
-                }}
-                options={{
-                  ...CHART_OPTIONS,
-                  plugins: {
-                    ...CHART_OPTIONS.plugins,
-                    title: { display: false },
-                    legend: {
-                      ...CHART_OPTIONS.plugins.legend,
-                      position: 'top',
-                      align: 'start',
-                      labels: {
-                        ...CHART_OPTIONS.plugins.legend.labels,
-                        usePointStyle: true,
-                        padding: 20,
-                        font: { size: 13, weight: '600' }
-                      }
-                    }
-                  },
-                  scales: {
-                    r: {
-                      beginAtZero: true,
-                      max: weatherData?.results && weatherData.results.length > 0 ? 
-                        Math.max(...weatherData.results.map(item => 
-                          Math.max(
-                            calculateWindRoseData([item], 0, 5)[0],
-                            calculateWindRoseData([item], 5, 10)[0],
-                            calculateWindRoseData([item], 10, Infinity)[0]
-                          )
-                        )) + 5 : 10,
-                      grid: { color: 'rgba(0, 0, 0, 0.1)' },
-                      ticks: {
-                        stepSize: 1,
-                        font: { size: 12 }
-                      }
-                    }
-                  }
-                }}
-                height="400px"
-                fullscreenHeight="800px"
-              />
+              {(() => {
+                // Rosa de los vientos APILADA por banda de velocidad. Cada banda trae los
+                // conteos crudos por dirección; para el apilado polar (cada sector nace del
+                // centro) se dibujan valores ACUMULADOS de mayor a menor, de modo que la banda
+                // más lenta queda encima (más cerca del centro) y la más rápida detrás (más
+                // lejos). El tooltip muestra el valor propio de cada banda, no el acumulado.
+                const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                const slow = calculateWindRoseData(weatherData.results, 0, 5);      // 0-5 km/h
+                const mid = calculateWindRoseData(weatherData.results, 5, 10);      // 5-10 km/h
+                const fast = calculateWindRoseData(weatherData.results, 10, Infinity); // 10+ km/h
+                const sum = (a, b) => a.map((v, i) => v + (b[i] || 0));
+                const cumAll = sum(sum(slow, mid), fast); // total (banda rápida, dibujada al fondo)
+                const cumMid = sum(slow, mid);            // lenta+media
+                const rawByDs = [fast, mid, slow];        // valor propio de cada dataset (para tooltip)
+                return (
+                  <ChartCard
+                    title="Rosa de los Vientos"
+                    description="Frecuencia del viento por dirección, apilada por banda de velocidad (banda asignada por la velocidad media de cada día)"
+                    type="polarArea"
+                    data={{
+                      labels,
+                      datasets: [
+                        {
+                          label: '10+ km/h',
+                          data: cumAll,
+                          backgroundColor: 'rgba(239, 68, 68, 0.75)',   // rojo (fondo, banda rápida)
+                          borderColor: '#ffffff',
+                          borderWidth: 1,
+                        },
+                        {
+                          label: '5-10 km/h',
+                          data: cumMid,
+                          backgroundColor: 'rgba(245, 158, 11, 0.8)',   // ámbar (media)
+                          borderColor: '#ffffff',
+                          borderWidth: 1,
+                        },
+                        {
+                          label: '0-5 km/h',
+                          data: slow,
+                          backgroundColor: 'rgba(16, 185, 129, 0.85)',  // verde (encima, banda lenta)
+                          borderColor: '#ffffff',
+                          borderWidth: 1,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        title: { display: false },
+                        legend: {
+                          position: 'top',
+                          align: 'start',
+                          labels: { usePointStyle: true, padding: 20, font: { size: 13, weight: '600' } },
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: (ctx) => {
+                              const own = (rawByDs[ctx.datasetIndex] || [])[ctx.dataIndex] || 0;
+                              return `${ctx.dataset.label}: ${own} lecturas`;
+                            },
+                          },
+                        },
+                        zoom: { zoom: { wheel: { enabled: false }, pinch: { enabled: false } }, pan: { enabled: false } },
+                      },
+                      scales: {
+                        r: {
+                          beginAtZero: true,
+                          grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                          angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+                          pointLabels: { display: true, font: { size: 14, weight: '600' } },
+                          ticks: { backdropColor: 'transparent', font: { size: 11 } },
+                        },
+                      },
+                    }}
+                    height="400px"
+                    fullscreenHeight="800px"
+                  />
+                );
+              })()}
                           </div>
                         </div>
         </section>

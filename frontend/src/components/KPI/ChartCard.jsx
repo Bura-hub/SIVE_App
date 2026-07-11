@@ -1,12 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Line, Bar } from 'react-chartjs-2';
+import { Line, Bar, PolarArea } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  RadialLinearScale,
   PointElement,
   LineElement,
   BarElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
@@ -22,9 +24,11 @@ import zoomPlugin from 'chartjs-plugin-zoom';
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  RadialLinearScale,
   PointElement,
   LineElement,
   BarElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
@@ -49,8 +53,8 @@ export function ChartCard({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
 
-  // Selección dinámica del tipo de gráfico: línea o barras
-  const ChartComponent = type === "bar" ? Bar : Line;
+  // Selección dinámica del tipo de gráfico: línea, barras o rosa polar (rosa de los vientos)
+  const ChartComponent = type === "bar" ? Bar : type === "polarArea" ? PolarArea : Line;
 
   // Función para resetear el zoom del gráfico utilizando la referencia correcta
   const resetZoom = () => {
