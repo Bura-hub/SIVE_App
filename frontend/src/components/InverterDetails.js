@@ -4,6 +4,7 @@ import { KpiCard } from "./KPI/KpiCard";
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import InverterFilters from './InverterFilters';
+import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { buildApiUrl, ENDPOINTS } from '../utils/apiConfig';
 import { IconInverter, IconScale, IconActivity, IconWaveform, IconRefresh } from './icons';
 
@@ -135,19 +136,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Estados para los filtros
-  const [filters, setFilters] = useState({
-    timeRange: 'daily',
-    institutionId: '',
-    deviceId: '',
-    startDate: '',
-    endDate: ''
-  });
-
-  // Estados para los datos de indicadores
-  const [inverterData, setInverterData] = useState({ results: [] });
-  const [inverterLoading, setInverterLoading] = useState(false);
-  const [inverterError, setInverterError] = useState(null);
+  // Filtros, datos y fetch: en useDeviceDetail (el hook se inicializa más abajo).
 
   // Estado para la pestaña activa
 
@@ -157,10 +146,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   const [transitionType, setTransitionType] = useState('info');
   const [transitionMessage, setTransitionMessage] = useState('');
 
-  // Referencias para control de requests
-  const requestSeqRef = useRef(0);
-  const lastFiltersRef = useRef(null);
-  
   // Variables de estado para paginación de la tabla
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -400,378 +385,30 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   
 
   // Función para obtener datos de inversores
-  const fetchInverterData = useCallback(async (filters) => {
-    let seq = 0;
-    try {
-      seq = ++requestSeqRef.current;
-      if (!filters || !filters.institutionId) return; // no tocar UI si no hay institución
-      setInverterLoading(true);
-      setInverterError(null);
-      
-      // Usar fechas por defecto si no se han especificado
-      const defaultEndDate = new Date();
-      const defaultStartDate = new Date();
-      defaultStartDate.setDate(defaultStartDate.getDate() - 10);
-      
-      const timeRange = filters.timeRange || 'daily';
-      const baseParams = {
-        time_range: timeRange,
-        ...(filters.institutionId && { institution_id: filters.institutionId }),
-        ...(filters.deviceId && { device_id: filters.deviceId }),
-        start_date: filters.startDate || defaultStartDate.toISOString().split('T')[0],
-        end_date: filters.endDate || defaultEndDate.toISOString().split('T')[0]
-      };
-
-      const indicatorsUrl = buildApiUrl(ENDPOINTS.inverters.indicators, baseParams);
-      const indicatorsResp = await fetch(indicatorsUrl, {
-          headers: {
-            'Authorization': `Token ${authToken}`,
-            'Content-Type': 'application/json'
-          }
-      });
-
-      if (!indicatorsResp.ok) {
-        const errText = await indicatorsResp.text();
-        throw new Error(errText || indicatorsResp.statusText);
-      }
-
-      const indicatorsData = await indicatorsResp.json();
-
-      if (seq === requestSeqRef.current) {
-        setInverterData(indicatorsData);
-        // Calcular KPIs dinámicamente basándose en los nuevos datos
-        const dynamicKPIs = calculateDynamicKPIs(indicatorsData);
-        setKpiData(dynamicKPIs);
-      }
-    } catch (error) {
-      // Mostrar error solo si esta solicitud sigue siendo la vigente
-      if (seq === requestSeqRef.current) {
-        setInverterError(error.message || 'Error desconocido');
-      }
-    } finally {
-      if (seq === requestSeqRef.current) setInverterLoading(false);
-    }
-  }, [authToken, calculateDynamicKPIs]);
-
-  // Función para obtener información detallada de cada KPI
-  const getKpiDetailedInfo = (kpiKey) => {
-    const kpiInfo = {
-      totalGeneration: {
-        title: "Generación Total de Energía",
-        description: "Representa la cantidad total de energía solar generada por todos los inversores activos en la institución seleccionada.",
-        calculation: "Se calcula sumando la energía generada (total_generation_kwh) de todos los inversores durante el período seleccionado.",
-        dataSource: "Datos obtenidos de inversores solares SCADA en tiempo real, incluyendo mediciones de energía activa generada.",
-        units: "kWh (kilovatios-hora)",
-        frequency: "Actualización cada 5 minutos desde SCADA, cálculo automático según el período seleccionado."
-      },
-      averageEfficiency: {
-        title: "Eficiencia Promedio",
-        description: "Indica el rendimiento promedio de los inversores solares, comparando la energía generada con la energía solar incidente.",
-        calculation: "Eficiencia = (Energía Generada / Energía Solar Incidente) × 100%. Valores altos indican mejor rendimiento.",
-        dataSource: "Cálculo derivado de las mediciones de generación y condiciones ambientales de los inversores.",
-        units: "% (porcentaje)",
-        frequency: "Cálculo automático basado en datos de generación, actualización según el período seleccionado."
-      },
-      activeInverters: {
-        title: "Inversores Activos",
-        description: "Representa el número de inversores solares que están funcionando correctamente en el sistema.",
-        calculation: "Se cuenta el número de inversores con estado 'online' y funcionamiento normal en el sistema SCADA.",
-        dataSource: "Estado de conexión y operación de inversores en tiempo real desde SCADA.",
-        units: "Cantidad (número de inversores)",
-        frequency: "Verificación cada 5 minutos desde SCADA, conteo automático de dispositivos activos."
-      },
-      performanceRatio: {
-        title: "Performance Ratio",
-        description: "Mide la eficiencia del sistema fotovoltaico comparando la generación real con la generación teórica esperada.",
-        calculation: "PR = (Energía Generada Real / Energía Teórica) × 100%. Valores cercanos a 100% indican excelente rendimiento.",
-        dataSource: "Cálculo derivado de generación real y condiciones ambientales (irradiancia, temperatura).",
-        units: "Adimensional (sin unidades)",
-        frequency: "Cálculo automático basado en datos de generación y ambientales, actualización según el período."
-      },
-      powerFactor: {
-        title: "Factor de Potencia",
-        description: "Indica la eficiencia del uso de la potencia aparente en los inversores solares.",
-        calculation: "Factor de Potencia = Potencia Activa / Potencia Aparente. Valores cercanos a 1.0 indican alta eficiencia.",
-        dataSource: "Mediciones de potencia activa y aparente desde inversores solares SCADA.",
-        units: "Adimensional (sin unidades)",
-        frequency: "Actualización cada 5 minutos desde SCADA, promedio automático del período seleccionado."
-      },
-      phaseUnbalance: {
-        title: "Desbalance de Fases",
-        description: "Mide la diferencia en el voltaje entre las fases del sistema trifásico de los inversores.",
-        calculation: "Desbalance = ((Vmax - Vmin) / Vpromedio) × 100%. Valores bajos indican mejor balance del sistema.",
-        dataSource: "Mediciones de voltaje por fase desde inversores solares SCADA.",
-        units: "% (porcentaje)",
-        frequency: "Actualización cada 5 minutos desde SCADA, cálculo automático del desbalance."
-      },
-      frequencyStability: {
-        title: "Estabilidad de Frecuencia",
-        description: "Indica la estabilidad de la frecuencia de operación del sistema eléctrico de los inversores.",
-        calculation: "Se mide la desviación de la frecuencia nominal (60 Hz). Valores estables indican buen funcionamiento.",
-        dataSource: "Mediciones de frecuencia desde inversores solares SCADA.",
-        units: "Hz (Hertz)",
-        frequency: "Actualización cada 5 minutos desde SCADA, monitoreo continuo de estabilidad."
-      },
-      thdVoltage: {
-        title: "THD de Voltaje",
-        description: "Mide la distorsión armónica total en el voltaje de salida de los inversores solares.",
-        calculation: "THD = √(Σ(Vh²) / V1²) × 100%. Valores bajos indican mejor calidad de energía.",
-        dataSource: "Análisis armónico del voltaje desde inversores solares SCADA.",
-        units: "% (porcentaje)",
-        frequency: "Actualización cada 5 minutos desde SCADA, análisis automático de distorsión armónica."
-      }
-    };
-    
-    return kpiInfo[kpiKey] || null;
+  const showTransitionAnimation = (type = 'info', message = '', duration = 2000) => {
+    setTransitionType(type);
+    setTransitionMessage(message);
+    setShowTransition(true);
+    setTimeout(() => setShowTransition(false), duration);
   };
 
-  // Estados para mostrar información detallada de KPIs
-  const [showKpiInfo, setShowKpiInfo] = useState(null);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [isOpening, setIsOpening] = useState(false);
+  // Filtros + datos + fetch (race-guard, dedup, debounce) y cálculo: en useDeviceDetail.
+  const {
+    data: inverterData,
+    loading: inverterLoading,
+    error: inverterError,
+    filters,
+    handleFiltersChange,
+    calculate: calculateInverterData,
+    fetchData: fetchInverterData,
+  } = useDeviceDetail({
+    indicatorsEndpoint: ENDPOINTS.inverters.indicators,
+    calculateEndpoint: ENDPOINTS.inverters.calculate,
+    authToken,
+    onNotify: showTransitionAnimation,
+    initialData: { results: [] },
+  });
 
-  // useEffect para manejar la animación de apertura
-  useEffect(() => {
-    if (showKpiInfo && isOpening) {
-      // Pequeño delay para que la animación de entrada funcione
-      const timer = setTimeout(() => {
-        setIsOpening(false);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [showKpiInfo, isOpening]);
-
-  // Función para obtener datos de gráficos
-  const fetchChartData = useCallback(async (filters, requestSeq) => {
-    try {
-      if (!filters || !filters.institutionId) return;
-      
-      const defaultEndDate = new Date();
-      const defaultStartDate = new Date();
-      defaultStartDate.setDate(defaultStartDate.getDate() - 30); // Últimos 30 días para gráficos
-      
-      const chartBaseParams = {
-        time_range: filters.timeRange || 'daily',
-        institution_id: filters.institutionId,
-        ...(filters.deviceId && { device_id: filters.deviceId }),
-        start_date: filters.startDate || defaultStartDate.toISOString().split('T')[0],
-        end_date: filters.endDate || defaultEndDate.toISOString().split('T')[0]
-      };
-
-      const chartUrl = buildApiUrl(ENDPOINTS.inverters.chartData, chartBaseParams);
-      const chartResp = await fetch(chartUrl, {
-        headers: {
-          'Authorization': `Token ${authToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!chartResp.ok) {
-        const errText = await chartResp.text();
-        throw new Error(errText || chartResp.statusText);
-      }
-
-      const chartData = await chartResp.json();
-
-      if (requestSeq === requestSeqRef.current) {
-        // Procesar datos de gráficos
-        processChartData(chartData.results || []);
-      }
-    } catch (error) {
-      console.error('Error al obtener datos de gráficos:', error);
-      // No mostrar error en UI para gráficos, solo en consola
-    }
-  }, [authToken]);
-
-  // Función para procesar datos de gráficos y actualizar estados
-  const processChartData = useCallback((chartData) => {
-    if (!chartData || chartData.length === 0) return;
-
-    // Agrupar datos por fecha para procesamiento
-    const dataByDate = {};
-    chartData.forEach(item => {
-      const date = item.date;
-      if (!dataByDate[date]) {
-        dataByDate[date] = {
-          efficiency: [],
-          generation: [],
-          irradiance: [],
-          temperature: [],
-          dcPower: [],
-          acPower: []
-        };
-      }
-      
-      // Agregar datos horarios si existen
-      if (item.hourly_efficiency) dataByDate[date].efficiency.push(...item.hourly_efficiency);
-      if (item.hourly_generation) dataByDate[date].generation.push(...item.hourly_generation);
-      if (item.hourly_irradiance) dataByDate[date].irradiance.push(...item.hourly_irradiance);
-      if (item.hourly_temperature) dataByDate[date].temperature.push(...item.hourly_temperature);
-      if (item.hourly_dc_power) dataByDate[date].dcPower.push(...item.hourly_dc_power);
-      if (item.hourly_ac_power) dataByDate[date].acPower.push(...item.hourly_ac_power);
-    });
-
-    // Ordenar fechas
-    const sortedDates = Object.keys(dataByDate).sort();
-
-    // Generar datos para gráficos
-    const labels = sortedDates.map(date => {
-      const d = new Date(date);
-      return d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
-    });
-
-    // Gráfico de Generación Diaria (4.2. Energía Total Generada)
-      const dailyGenerationData = {
-      labels,
-      datasets: [{
-            label: 'Generación Diaria (kWh)',
-        data: sortedDates.map(date => {
-          const dailyGen = dataByDate[date].generation.reduce((sum, val) => sum + (val || 0), 0);
-          return Math.round(dailyGen * 100) / 100; // Redondear a 2 decimales
-        }),
-            borderColor: '#3B82F6',
-            backgroundColor: 'rgba(59, 130, 246, 0.2)',
-            fill: true,
-            tension: 0.4,
-        pointRadius: 3,
-        pointBackgroundColor: '#3B82F6',
-      }]
-    };
-
-    // Gráfico de Eficiencia (4.1. Eficiencia de Conversión DC-AC)
-    const efficiencyData = {
-      labels,
-      datasets: [
-        {
-          label: 'Eficiencia Promedio (%)',
-          data: sortedDates.map(date => {
-            const avgEfficiency = dataByDate[date].efficiency.reduce((sum, val) => sum + (val || 0), 0) / 
-                                Math.max(dataByDate[date].efficiency.filter(v => v !== null).length, 1);
-            return Math.round(avgEfficiency * 100) / 100;
-          }),
-          borderColor: '#F59E0B',
-          backgroundColor: 'rgba(245, 158, 11, 0.2)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 3,
-          pointBackgroundColor: '#F59E0B',
-        },
-        {
-          label: 'Meta de Eficiencia (%)',
-          data: labels.map(() => 95),
-          borderColor: '#EF4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          fill: false,
-          tension: 0.4,
-          pointRadius: 0,
-          borderDash: [5, 5],
-        }
-      ]
-    };
-
-    // Aquí se procesarían los datos para los gráficos si fuera necesario
-    // Por ahora, los gráficos se generan directamente desde los datos de la API
-  }, []);
-
-
-
-
-
-
-
-  // Función para calcular datos de inversores
-  const calculateInverterData = useCallback(async () => {
-    if (!filters.institutionId) {
-      showTransitionAnimation('info', 'Selecciona una institución primero', 2000);
-      return;
-    }
-
-    try {
-      setInverterLoading(true);
-      
-
-      
-      showTransitionAnimation('info', 'Calculando datos de inversores...', 2000);
-
-      const defaultEndDate = new Date();
-      const defaultStartDate = new Date();
-      defaultStartDate.setDate(defaultStartDate.getDate() - 30);
-
-      const requestData = {
-        time_range: filters.timeRange || 'daily',
-        start_date: filters.startDate || defaultStartDate.toISOString().split('T')[0],
-        end_date: filters.endDate || defaultEndDate.toISOString().split('T')[0],
-        institution_id: filters.institutionId,
-        ...(filters.deviceId && { device_id: filters.deviceId })
-      };
-
-      const response = await fetch(buildApiUrl(ENDPOINTS.inverters.calculate), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${authToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestData)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || response.statusText);
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        showTransitionAnimation('success', `Cálculo iniciado: ${result.message}`, 3000);
-        // Esperar un momento y luego recargar los datos
-        setTimeout(() => {
-          fetchInverterData(filters);
-        }, 2000);
-      } else {
-        showTransitionAnimation('error', `Error en el cálculo: ${result.message}`, 3000);
-      }
-    } catch (error) {
-      console.error('Error al calcular datos:', error);
-      showTransitionAnimation('error', `Error: ${error.message}`, 3000);
-    } finally {
-      setInverterLoading(false);
-    }
-  }, [filters, authToken, fetchInverterData]);
-
-  // Función para manejar cambios en los filtros
-  const handleFiltersChange = useCallback((newFilters) => {
-    setFilters(newFilters);
-    
-    // Evitar fetch si filtros no cambiaron
-    const prev = lastFiltersRef.current || {};
-    const same = prev.timeRange === newFilters.timeRange &&
-                 prev.institutionId === newFilters.institutionId &&
-                 prev.deviceId === newFilters.deviceId &&
-                 prev.startDate === newFilters.startDate &&
-                 prev.endDate === newFilters.endDate;
-    if (same) return;
-    lastFiltersRef.current = newFilters;
-
-    // Si se seleccionó una institución, cargar datos inmediatamente
-    if (newFilters.institutionId && (!prev.institutionId || prev.institutionId !== newFilters.institutionId)) {
-      fetchInverterData(newFilters);
-      return;
-    }
-
-    // Si hay institución y fechas, cargar datos
-    if (newFilters.institutionId && (newFilters.startDate || newFilters.endDate)) {
-      // Debounce para evitar múltiples requests
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      setInverterLoading(false);
-      debounceRef.current = setTimeout(() => {
-        fetchInverterData(newFilters);
-      }, 450);
-    }
-  }, [fetchInverterData]);
-
-  // Referencia para debounce
-  const debounceRef = useRef(null);
-  
   // Funciones de paginación
   const goToPage = (page) => {
     if (page >= 1 && page <= totalPages) {
@@ -818,15 +455,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   }, [calculateDynamicKPIs]);
 
   // Función para mostrar transición
-  const showTransitionAnimation = (type = 'info', message = '', duration = 2000) => {
-    setTransitionType(type);
-    setTransitionMessage(message);
-    setShowTransition(true);
-    
-    setTimeout(() => {
-      setShowTransition(false);
-    }, duration);
-  };
 
   // Modificar onLogout para incluir animación
   const handleLogout = () => {

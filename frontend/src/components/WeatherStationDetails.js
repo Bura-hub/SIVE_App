@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import WeatherStationFilters from './WeatherStationFilters';
+import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { ENDPOINTS, buildApiUrl } from '../utils/apiConfig';
 import { IconCloudSun, IconRefresh, IconSun, IconWind, IconDroplets } from './icons';
 
@@ -260,33 +261,14 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   const [transitionType, setTransitionType] = useState('info');
   const [transitionMessage, setTransitionMessage] = useState('');
   
-  // Estados de filtros
-  const [filters, setFilters] = useState({
-    timeRange: 'daily',
-    institutionId: null,
-    deviceId: null,
-    startDate: null,
-    endDate: null
-  });
-  
-  // Estados de datos meteorológicos
-  const [weatherData, setWeatherData] = useState(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
-  const [weatherError, setWeatherError] = useState(null);
-  const requestSeqRef = useRef(0);
-  const debounceRef = useRef(null);
-  const lastFiltersRef = useRef(null);
+  // Filtros, datos y fetch: en useDeviceDetail (el hook se inicializa más abajo).
 
   // Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(20);
 
-  // Verificar que los estados estén correctamente inicializados
+  // Al montar, limpiar los KPIs (data/loading/error ya los inicia el hook).
   useEffect(() => {
-    // Limpiar estados al montar el componente
-    setWeatherData(null);
-    setWeatherError(null);
-    setWeatherLoading(false);
     setKpiData({});
   }, []);
 
@@ -301,147 +283,25 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     setTimeout(() => setShowTransition(false), duration);
   };
 
-  const handleFilterChange = (newFilters) => {
-    // Verificar si realmente hay cambios significativos
-    const hasSignificantChanges = 
-      newFilters.institutionId !== filters.institutionId ||
-      newFilters.deviceId !== filters.deviceId ||
-      newFilters.startDate !== filters.startDate ||
-      newFilters.endDate !== filters.endDate ||
-      newFilters.timeRange !== filters.timeRange;
-    
-    if (!hasSignificantChanges) {
-      return;
-    }
-    
-    setFilters(newFilters);
-    
-    // Si se seleccionó una institución, cargar datos inmediatamente
-    if (newFilters.institutionId && (!filters.institutionId || filters.institutionId !== newFilters.institutionId)) {
-      // Limpiar estado anterior antes de cargar nuevos datos
-      setWeatherData(null);
-      setWeatherError(null);
-      fetchWeatherData(newFilters);
-      return;
-    }
+  // Filtros + datos + fetch (race-guard, dedup, debounce 300ms, blank durante carga)
+  // y cálculo: en useDeviceDetail.
+  const {
+    data: weatherData,
+    loading: weatherLoading,
+    error: weatherError,
+    filters,
+    handleFiltersChange: handleFilterChange,
+    calculate: calculateWeatherData,
+    fetchData: fetchWeatherData,
+  } = useDeviceDetail({
+    indicatorsEndpoint: ENDPOINTS.weather.indicators,
+    calculateEndpoint: ENDPOINTS.weather.calculate,
+    authToken,
+    onNotify: showTransitionAnimation,
+    debounceMs: 300,
+    clearOnFetch: true,
+  });
 
-    // Para otros cambios, usar debouncing
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    
-    debounceRef.current = setTimeout(() => {
-      // Limpiar estado anterior antes de cargar nuevos datos
-      setWeatherData(null);
-      setWeatherError(null);
-      fetchWeatherData(newFilters);
-    }, 300);
-  };
-
-  // Función para obtener datos de estaciones meteorológicas
-  const fetchWeatherData = useCallback(async (filters) => {
-    let seq = 0;
-    try {
-      seq = ++requestSeqRef.current;
-      if (!filters || !filters.institutionId) return; // no tocar UI si no hay institución
-      setWeatherLoading(true);
-      setWeatherError(null);
-      
-      // Usar fechas por defecto si no se han especificado
-      const defaultEndDate = new Date();
-      const defaultStartDate = new Date();
-      defaultStartDate.setDate(defaultStartDate.getDate() - 10);
-      
-      const timeRange = filters.timeRange || 'daily';
-      const baseParams = {
-        time_range: timeRange,
-        ...(filters.institutionId && { institution_id: filters.institutionId }),
-        ...(filters.deviceId && { device_id: filters.deviceId }),
-        start_date: filters.startDate || defaultStartDate.toISOString().split('T')[0],
-        end_date: filters.endDate || defaultEndDate.toISOString().split('T')[0]
-      };
-
-      const indicatorsParams = new URLSearchParams(baseParams);
-
-      const indicatorsUrl = buildApiUrl(ENDPOINTS.weather.indicators, baseParams);
-      const indicatorsResp = await fetch(indicatorsUrl, {
-          headers: {
-            'Authorization': `Token ${authToken}`,
-            'Content-Type': 'application/json'
-          }
-      });
-
-      if (!indicatorsResp.ok) {
-        const errText = await indicatorsResp.text();
-        throw new Error(errText || indicatorsResp.statusText);
-      }
-
-      const indicatorsData = await indicatorsResp.json();
-
-      if (seq === requestSeqRef.current) {
-        setWeatherData(indicatorsData);
-      }
-    } catch (error) {
-      // Mostrar error solo si esta solicitud sigue siendo la vigente
-      if (seq === requestSeqRef.current) {
-        setWeatherError(error.message || 'Error desconocido');
-      }
-    } finally {
-      if (seq === requestSeqRef.current) setWeatherLoading(false);
-    }
-  }, [authToken]);
-
-  const calculateWeatherData = useCallback(async () => {
-    try {
-      if (!filters.institutionId) {
-        showTransitionAnimation('error', 'Debe seleccionar una institución primero', 3000);
-        return;
-      }
-
-      if (!filters.startDate || !filters.endDate) {
-        showTransitionAnimation('error', 'Debe seleccionar fechas de inicio y fin', 3000);
-        return;
-      }
-
-      setWeatherLoading(true);
-      setWeatherError(null);
-
-      const response = await fetch(buildApiUrl(ENDPOINTS.weather.calculate), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          time_range: filters.timeRange,
-          start_date: filters.startDate,
-          end_date: filters.endDate,
-          institution_id: filters.institutionId,
-          device_id: filters.deviceId
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al calcular datos meteorológicos');
-      }
-
-      const result = await response.json();
-      showTransitionAnimation('success', 'Cálculo de datos meteorológicos iniciado correctamente', 3000);
-      
-      // Recargar datos después de un breve delay
-      setTimeout(() => {
-        fetchWeatherData(filters);
-      }, 2000);
-
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      setWeatherError(error.message || 'Error desconocido al calcular datos');
-      showTransitionAnimation('error', error.message || 'Error al calcular datos meteorológicos', 3000);
-    } finally {
-      setWeatherLoading(false);
-    }
-  }, [filters, authToken, fetchWeatherData]);
-
-  // Función para procesar datos de KPIs
   const processKPIData = useCallback((latestData) => {
     console.log('🔍 processKPIData iniciado con:', latestData);
     // Verificar que latestData existe y es válido

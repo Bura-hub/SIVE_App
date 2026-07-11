@@ -14,8 +14,8 @@ import { buildApiUrl } from '../utils/apiConfig';
  * @param {string} p.authToken           token de la sesión
  * @param {function} [p.onNotify]        (type, message, duration) para las animaciones de transición
  */
-export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authToken, onNotify }) {
-  const [data, setData] = useState(null);
+export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authToken, onNotify, initialData = null, debounceMs = 450, clearOnFetch = false }) {
+  const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
@@ -39,6 +39,7 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
     try {
       seq = ++requestSeqRef.current;
       if (!f || !f.institutionId) return;  // no tocar UI si no hay institución
+      if (clearOnFetch) { setData(initialData); setError(null); }  // blank durante carga
       setLoading(true);
       setError(null);
 
@@ -68,7 +69,7 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
     } finally {
       if (seq === requestSeqRef.current) setLoading(false);
     }
-  }, [authToken, indicatorsEndpoint]);
+  }, [authToken, indicatorsEndpoint, clearOnFetch, initialData]);
 
   const handleFiltersChange = useCallback((newFilters) => {
     setFilters(newFilters);
@@ -90,8 +91,8 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setLoading(false);  // evitar parpadeo mientras se debouncing
-    debounceRef.current = setTimeout(() => fetchData(newFilters), 450);
-  }, [fetchData]);
+    debounceRef.current = setTimeout(() => fetchData(newFilters), debounceMs);
+  }, [fetchData, debounceMs]);
 
   const calculate = useCallback(async () => {
     try {
