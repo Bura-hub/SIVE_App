@@ -971,7 +971,10 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
               </div>
             </div>
             
-            {/* Botón de ejecutar tareas con diseño profesional */}
+            {/* Botón de ejecutar tareas: SOLO admin. El pipeline automático hace lo mismo
+                cada hora, así que para usuarios normales es redundante (y 'Última ejecución'
+                solo refleja este disparo manual, no las corridas automáticas). */}
+            {isSuperuser && (
             <div className="flex flex-col items-end space-y-2">
               <button
                 onClick={executeAllTasks}
@@ -1032,6 +1035,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                 </p>
               </div>
             </div>
+            )}
           </div>
         </div>
       </header>
