@@ -39,7 +39,7 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
     try {
       seq = ++requestSeqRef.current;
       if (!f || !f.institutionId) return;  // no tocar UI si no hay institución
-      if (clearOnFetch) { setData(initialData); setError(null); }  // blank durante carga
+      if (clearOnFetch) { setData(null); setError(null); }  // blank durante carga
       setLoading(true);
       setError(null);
 
@@ -69,7 +69,8 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
     } finally {
       if (seq === requestSeqRef.current) setLoading(false);
     }
-  }, [authToken, indicatorsEndpoint, clearOnFetch, initialData]);
+  }, [authToken, indicatorsEndpoint, clearOnFetch]);  // initialData NO va aquí: es un
+  // objeto literal recreado cada render (rompería la estabilidad de fetchData -> loop).
 
   const handleFiltersChange = useCallback((newFilters) => {
     setFilters(newFilters);
