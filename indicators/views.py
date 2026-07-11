@@ -47,6 +47,7 @@ from indicators.services.date_ranges import (  # noqa: E402
 )
 from indicators.services.formatting import auto_energy_unit, format_energy_value  # noqa: E402
 from indicators.services.kpi import calculate_kpi_metrics, summarize_inverter_status  # noqa: E402
+from indicators.services.queries import apply_device_filter  # noqa: E402
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
@@ -762,11 +763,7 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(institution_id=institution_id)
 
         if device_id:
-            # Aceptar tanto el id entero local como el scada_id (UUID/string)
-            if str(device_id).isdigit():
-                queryset = queryset.filter(device_id=int(device_id))
-            else:
-                queryset = queryset.filter(device__scada_id=device_id)
+            queryset = apply_device_filter(queryset, device_id)
 
         if time_range:
             queryset = queryset.filter(time_range=time_range)
@@ -870,11 +867,7 @@ class InverterIndicatorsView(APIView):
                 queryset = queryset.filter(institution_id=institution_id)
 
             if device_id:
-                # Aceptar tanto el id entero local como el scada_id (UUID/string)
-                if str(device_id).isdigit():
-                    queryset = queryset.filter(device_id=int(device_id))
-                else:
-                    queryset = queryset.filter(device__scada_id=device_id)
+                queryset = apply_device_filter(queryset, device_id)
 
             if time_range:
                 queryset = queryset.filter(time_range=time_range)
@@ -966,11 +959,7 @@ class InverterChartDataView(APIView):
             )
 
             if device_id:
-                # Aceptar tanto el id entero local como el scada_id (UUID/string)
-                if str(device_id).isdigit():
-                    queryset = queryset.filter(device_id=int(device_id))
-                else:
-                    queryset = queryset.filter(device__scada_id=device_id)
+                queryset = apply_device_filter(queryset, device_id)
 
             # Ordenar por fecha descendente y nombre del dispositivo
             queryset = queryset.order_by('-date', 'device__name')

@@ -21,6 +21,8 @@ from indicators.tasks import colombia_day_range
 from indicators.views import (
     ChartDataView,
     InverterChartDataView,
+    InverterIndicatorsView,
+    WeatherStationIndicatorsView,
     resolve_indicators_date_range,
     INDICATORS_DEFAULT_RANGE_DAYS,
 )
@@ -170,6 +172,51 @@ class InverterChartDataValidationTests(TestCase):
 
     def test_valido_da_200(self):
         self.assertEqual(self._get({'institution_id': '1'}).status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=['testserver'])
+class InverterIndicatorsViewTests(TestCase):
+    """Contrato de InverterIndicatorsView (exige institution_id; usa apply_device_filter)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='tii', password='x')
+        self.factory = APIRequestFactory()
+
+    def _get(self, params):
+        req = self.factory.get('/api/inverter-indicators/', params)
+        force_authenticate(req, user=self.user)
+        return InverterIndicatorsView.as_view()(req)
+
+    def test_falta_institution_da_400(self):
+        self.assertEqual(self._get({}).status_code, 400)
+
+    def test_valido_da_200(self):
+        self.assertEqual(self._get({'institution_id': '1'}).status_code, 200)
+
+    def test_device_id_entero_y_scada_id(self):
+        # Ambas ramas de apply_device_filter (dígito -> device_id; texto -> scada_id).
+        self.assertEqual(self._get({'institution_id': '1', 'device_id': '5'}).status_code, 200)
+        self.assertEqual(self._get({'institution_id': '1', 'device_id': 'abc-uuid'}).status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=['testserver'])
+class WeatherIndicatorsViewTests(TestCase):
+    """Contrato de WeatherStationIndicatorsView (NO exige institución; valida time_range)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='twi', password='x')
+        self.factory = APIRequestFactory()
+
+    def _get(self, params):
+        req = self.factory.get('/api/weather-station-indicators/', params)
+        force_authenticate(req, user=self.user)
+        return WeatherStationIndicatorsView.as_view()(req)
+
+    def test_time_range_invalido_da_400(self):
+        self.assertEqual(self._get({'time_range': 'bogus'}).status_code, 400)
+
+    def test_sin_params_da_200(self):
+        self.assertEqual(self._get({}).status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=['testserver'])
