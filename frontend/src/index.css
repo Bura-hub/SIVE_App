@@ -793,3 +793,255 @@ code {
 @media (prefers-reduced-motion:reduce){
   .hc-hero *, .hc-strip *, .hc-inst *{ animation:none !important; transition:none !important; }
 }
+
+/* ================================================================
+   Menú de usuario flotante (esquina superior derecha)
+   Dirección C — vidrio esmerilado sobre el header de color.
+   El chip es vidrio elevado; el panel desplegado es superficie
+   sólida y nítida para máxima legibilidad. Modo claro y oscuro.
+   Portado fielmente desde el mockup aprobado final-widget-C.html.
+   ================================================================ */
+:root{
+  --u-font:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+
+  /* Superficie del panel (dropdown sólido) */
+  --u-panel:      #ffffff;
+  --u-panel-sub:  #f6f8fc;
+  --u-ink:        #0f172a;
+  --u-ink-2:      #334155;
+  --u-muted:      #64748b;
+  --u-hair:       #e6e9f2;
+  --u-hair-strong:#d7dce7;
+
+  --u-online:  #10b981;   /* verde "en línea" — único indicador circular de color */
+  --u-admin:   #7c3aed;   /* morado rol administrador (pastilla, no punto) */
+  --u-admin-bg:#f3efff;
+  --u-admin-br:#e4d9fb;
+  --u-solar:   #f5b942;   /* acento solar (energía) — uso disciplinado */
+  --u-danger:  #dc2626;
+  --u-danger-wash:#fef2f2;
+
+  --u-r-sm:8px; --u-r-md:12px; --u-r-lg:16px; --u-r-pill:999px;
+
+  /* Vidrio del chip (sobre color) */
+  --u-glass:      linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,.15));
+  --u-glass-hover:linear-gradient(180deg,rgba(255,255,255,.38),rgba(255,255,255,.20));
+  --u-glass-open: linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,.24));
+  --u-glass-br:   rgba(255,255,255,.48);
+  --u-glass-br-open:rgba(255,255,255,.62);
+  --u-chip-shadow:
+    0 12px 26px -10px rgba(9,15,40,.55),
+    0 4px 10px -3px rgba(9,15,40,.42),
+    inset 0 1px 0 rgba(255,255,255,.60),
+    inset 0 -1px 0 rgba(9,15,40,.14);
+  --u-chip-shadow-hover:
+    0 16px 34px -10px rgba(9,15,40,.60),
+    0 6px 14px -4px rgba(9,15,40,.46),
+    inset 0 1px 0 rgba(255,255,255,.66),
+    inset 0 -1px 0 rgba(9,15,40,.14);
+  --u-menu-shadow:
+    0 2px 4px rgba(15,23,42,.10),
+    0 12px 28px -8px rgba(15,23,42,.20),
+    0 30px 60px -20px rgba(15,23,42,.32);
+
+  --u-ring:#2563eb;
+  --u-glass-ink:#ffffff;
+  --u-glass-ink-soft:rgba(255,255,255,.82);
+}
+
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --u-panel:#151b24; --u-panel-sub:#1b222c;
+    --u-ink:#f1f5f9; --u-ink-2:#cbd5e1; --u-muted:#94a3b8;
+    --u-hair:#28303c; --u-hair-strong:#3a4351;
+    --u-online:#34d399; --u-admin:#c4b5fd; --u-admin-bg:#241d3b; --u-admin-br:#3c2f63;
+    --u-solar:#f7c766; --u-danger:#f87171; --u-danger-wash:#2a1618;
+    --u-ring:#60a5fa;
+    --u-glass:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.06));
+    --u-glass-hover:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.10));
+    --u-glass-open:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.12));
+    --u-glass-br:rgba(255,255,255,.28);
+    --u-glass-br-open:rgba(255,255,255,.42);
+    --u-chip-shadow:0 14px 30px -10px rgba(0,0,0,.6),0 5px 12px -3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(0,0,0,.3);
+    --u-chip-shadow-hover:0 18px 38px -10px rgba(0,0,0,.66),0 7px 16px -4px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.34),inset 0 -1px 0 rgba(0,0,0,.3);
+    --u-menu-shadow:0 2px 6px rgba(0,0,0,.55),0 16px 34px -8px rgba(0,0,0,.6),0 36px 66px -20px rgba(0,0,0,.72);
+  }
+}
+:root[data-theme="dark"]{
+  --u-panel:#151b24; --u-panel-sub:#1b222c;
+  --u-ink:#f1f5f9; --u-ink-2:#cbd5e1; --u-muted:#94a3b8;
+  --u-hair:#28303c; --u-hair-strong:#3a4351;
+  --u-online:#34d399; --u-admin:#c4b5fd; --u-admin-bg:#241d3b; --u-admin-br:#3c2f63;
+  --u-solar:#f7c766; --u-danger:#f87171; --u-danger-wash:#2a1618;
+  --u-ring:#60a5fa;
+  --u-glass:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.06));
+  --u-glass-hover:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.10));
+  --u-glass-open:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.12));
+  --u-glass-br:rgba(255,255,255,.28);
+  --u-glass-br-open:rgba(255,255,255,.42);
+  --u-chip-shadow:0 14px 30px -10px rgba(0,0,0,.6),0 5px 12px -3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(0,0,0,.3);
+  --u-chip-shadow-hover:0 18px 38px -10px rgba(0,0,0,.66),0 7px 16px -4px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.34),inset 0 -1px 0 rgba(0,0,0,.3);
+  --u-menu-shadow:0 2px 6px rgba(0,0,0,.55),0 16px 34px -8px rgba(0,0,0,.6),0 36px 66px -20px rgba(0,0,0,.72);
+}
+:root[data-theme="light"]{
+  --u-panel:#ffffff; --u-panel-sub:#f6f8fc; --u-ink:#0f172a; --u-ink-2:#334155;
+  --u-muted:#64748b; --u-hair:#e6e9f2; --u-hair-strong:#d7dce7;
+  --u-online:#10b981; --u-admin:#7c3aed; --u-admin-bg:#f3efff; --u-admin-br:#e4d9fb;
+  --u-solar:#f5b942; --u-danger:#dc2626; --u-danger-wash:#fef2f2;
+  --u-ring:#2563eb;
+}
+
+/* ---- Raíz flotante: fija arriba-derecha, sobre los headers de color ---- */
+.u-float{ position:fixed; top:1rem; right:1.5rem; z-index:50; font-family:var(--u-font); }
+
+/* ============ WIDGET · chip de VIDRIO colapsado ============ */
+.u-chip{
+  all:unset; box-sizing:border-box; cursor:pointer;
+  display:inline-flex; align-items:center; gap:10px;
+  max-width:236px;
+  height:48px; padding:6px 12px 6px 6px;
+  border-radius:var(--u-r-pill);
+  color:var(--u-glass-ink);
+  background:var(--u-glass);
+  border:1px solid var(--u-glass-br);
+  box-shadow:var(--u-chip-shadow);
+  -webkit-backdrop-filter:blur(16px) saturate(1.4); backdrop-filter:blur(16px) saturate(1.4);
+  font-family:inherit;
+  transition:box-shadow .18s ease, transform .18s ease, background .2s ease, border-color .2s ease;
+}
+.u-chip:hover{ transform:translateY(-1px); background:var(--u-glass-hover);
+  border-color:var(--u-glass-br-open); box-shadow:var(--u-chip-shadow-hover); }
+.u-chip:active{ transform:translateY(0); }
+.u-chip:focus-visible{ outline:none; box-shadow:var(--u-chip-shadow), 0 0 0 3px rgba(125,211,252,.9); }
+.u-chip[aria-expanded="true"]{ background:var(--u-glass-open); border-color:var(--u-glass-br-open); box-shadow:var(--u-chip-shadow-hover); }
+
+/* Avatar: gradiente de marca (azul→índigo). Punto verde = ÚNICO indicador
+   circular de color -> presencia "en línea". */
+.u-ava{
+  position:relative; flex:none; width:36px; height:36px; border-radius:50%;
+  display:grid; place-items:center; overflow:visible;
+  background:linear-gradient(155deg,#3b82f6,#4338ca 70%,#3730a3);
+  color:#fff; font-size:14px; font-weight:700; letter-spacing:.01em;
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5), 0 2px 5px rgba(9,15,40,.28);
+}
+.u-ava__img{ width:100%; height:100%; border-radius:50%; object-fit:cover; }
+.u-ava__dot{
+  position:absolute; right:-1px; bottom:-1px; width:11px; height:11px; border-radius:50%;
+  background:var(--u-online); box-shadow:0 0 0 2.5px var(--u-glass-ring, rgba(255,255,255,.9));
+}
+
+.u-idn{ display:flex; flex-direction:column; align-items:flex-start; gap:3px; line-height:1.05; min-width:0; }
+.u-idn__name{ font-size:14px; font-weight:600; color:var(--u-glass-ink); letter-spacing:-.005em;
+  text-shadow:0 1px 2px rgba(9,15,40,.4);
+  max-width:118px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* Rol en el chip: etiqueta frosted (NO punto de color). Escudo = admin. */
+.u-chiprole{
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--u-glass-ink-soft);
+  background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.26);
+  border-radius:var(--u-r-sm); padding:1px 6px 1px 5px; line-height:1.4;
+}
+.u-chiprole svg{ width:10px; height:10px; flex:none; }
+
+.u-chev{ flex:none; margin-left:2px; color:var(--u-glass-ink-soft);
+  transition:transform .2s ease; }
+.u-chip[aria-expanded="true"] .u-chev{ transform:rotate(180deg); }
+
+.u-sr{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+/* ============ WIDGET · dropdown SÓLIDO (rompe el vidrio a propósito) ============ */
+.u-menu{
+  position:absolute; top:calc(100% + 10px); right:0;
+  width:264px; max-width:calc(100vw - 32px);
+  background:var(--u-panel);
+  border:1px solid var(--u-hair);
+  border-radius:var(--u-r-lg);
+  box-shadow:var(--u-menu-shadow);
+  overflow:hidden; transform-origin:top right;
+}
+.u-menu[hidden]{ display:none; }
+/* Caret que puentea el chip de vidrio con el panel sólido */
+.u-menu::after{
+  content:""; position:absolute; top:-6px; right:22px; width:12px; height:12px;
+  background:var(--u-panel); border-left:1px solid var(--u-hair); border-top:1px solid var(--u-hair);
+  transform:rotate(45deg); border-top-left-radius:3px;
+}
+
+.u-menu__head{
+  position:relative;
+  display:flex; align-items:center; gap:12px;
+  padding:15px 15px 13px;
+  background:var(--u-panel-sub);
+  border-bottom:1px solid var(--u-hair);
+}
+.u-menu__head::before{
+  content:""; position:absolute; left:0; top:0; height:100%; width:3px;
+  background:linear-gradient(180deg, var(--u-solar), color-mix(in srgb, var(--u-solar) 55%, transparent));
+}
+.u-menu__head .u-ava{ width:42px; height:42px; font-size:16px; }
+.u-menu__head .u-ava__dot{ width:12px; height:12px; box-shadow:0 0 0 2.5px var(--u-panel-sub); }
+.u-menu__id{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+.u-menu__name{ font-size:14.5px; font-weight:600; color:var(--u-ink); letter-spacing:-.005em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.u-menu__role{
+  display:inline-flex; align-items:center; gap:4px; align-self:flex-start; margin-top:3px;
+  font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--u-admin); background:var(--u-admin-bg); border:1px solid var(--u-admin-br);
+  border-radius:var(--u-r-sm); padding:1px 6px 1px 5px; line-height:1.35;
+}
+.u-menu__role svg{ width:10px; height:10px; flex:none; }
+
+.u-list{ list-style:none; margin:0; padding:6px; display:flex; flex-direction:column; gap:1px; }
+.u-item{
+  all:unset; box-sizing:border-box; cursor:pointer;
+  display:flex; align-items:center; gap:11px; width:100%;
+  padding:9px 10px; border-radius:var(--u-r-sm);
+  font-family:inherit; font-size:13.5px; font-weight:500; color:var(--u-ink-2);
+  transition:background .13s ease, color .13s ease;
+}
+.u-item svg{ flex:none; color:var(--u-muted); transition:color .13s ease; }
+.u-item .u-lbl{ flex:1; }
+.u-item .u-go{ color:var(--u-hair-strong); opacity:0; transform:translateX(-3px);
+  transition:opacity .13s ease, transform .13s ease; }
+.u-item:hover, .u-item:focus-visible{ background:var(--u-panel-sub); color:var(--u-ink); outline:none; }
+.u-item:hover svg, .u-item:focus-visible svg{ color:var(--u-ink-2); }
+.u-item:hover .u-go, .u-item:focus-visible .u-go{ opacity:1; transform:translateX(0); color:var(--u-muted); }
+.u-item:focus-visible{ box-shadow:inset 0 0 0 1.5px var(--u-ring); }
+
+.u-sep{ height:1px; margin:6px 8px; background:var(--u-hair); border:0; }
+
+.u-item--danger{ color:var(--u-danger); }
+.u-item--danger svg{ color:var(--u-danger); }
+.u-item--danger:hover, .u-item--danger:focus-visible{ background:var(--u-danger-wash); color:var(--u-danger); }
+.u-item--danger:hover svg, .u-item--danger:focus-visible svg{ color:var(--u-danger); }
+.u-item--danger:focus-visible{ box-shadow:inset 0 0 0 1.5px var(--u-danger); }
+
+/* Pie institucional: identidad de producto, informativa (sin datos inventados) */
+.u-menu__foot{
+  padding:9px 15px 11px; display:flex; align-items:center; gap:7px;
+  background:var(--u-panel-sub); border-top:1px solid var(--u-hair);
+  font-size:10.5px; letter-spacing:.03em; color:var(--u-muted);
+}
+.u-menu__foot b{ font-weight:600; color:var(--u-ink-2); }
+.u-menu__foot .u-dot-sep{ width:3px; height:3px; border-radius:50%; background:var(--u-hair-strong); flex:none; }
+
+/* Colapso responsive: al pasar a solo-avatar, el chip ocupa menos y el badge
+   de estado del header nunca queda tapado. */
+@media (max-width:560px){
+  .u-float{ top:.75rem; right:1rem; }
+  .u-chip .u-idn, .u-chip .u-chev{ display:none; }
+  .u-chip{ padding:6px; max-width:none; }
+  .u-menu{ width:min(264px, calc(100vw - 28px)); }
+}
+
+/* Animación de apertura, respetuosa con reduce-motion */
+@media (prefers-reduced-motion:no-preference){
+  .u-menu.is-anim{ animation:u-pop .16s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes u-pop{ from{opacity:0; transform:translateY(-6px) scale(.98);} to{opacity:1; transform:none;} }
+}
+@media (prefers-reduced-motion:reduce){
+  .u-chip, .u-menu, .u-item, .u-chev, .u-go{ transition:none !important; animation:none !important; }
+  .u-chip:hover{ transform:none; }
+}

@@ -646,7 +646,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
     <div className="min-h-screen bg-gray-100">
       <header className="bg-gradient-to-r from-blue-700 to-purple-800 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
         <div className="px-4 lg:px-8 py-8 lg:py-12">
-          <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
+          <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4 pr-16 lg:pr-64">
             <div className="p-3 bg-white/20 rounded-xl self-start lg:self-auto">
               <IconFileDown className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
             </div>

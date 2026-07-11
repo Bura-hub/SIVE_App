@@ -2,6 +2,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import LoginPage from './components/LoginPage'; // Eager: la pantalla de login debe cargar de inmediato
 import Sidebar from './components/Sidebar'; // Componente de barra lateral
+import UserMenu from './components/UserMenu'; // Menú de usuario flotante (esquina superior derecha)
 import ErrorBoundary from './components/ErrorBoundary'; // Límite de error global de pantallas
 
 // Code-splitting: cada pantalla se carga bajo demanda en su propio chunk
@@ -139,8 +140,13 @@ function App() {
   // Para el resto de vistas, muestra la barra lateral, el contenido y la animación si aplica
   return (
     <div className="flex min-h-screen bg-gray-100 w-full font-inter">
-      <Sidebar
+      {/* Menú de usuario flotante: fijo arriba-derecha, por encima de los headers */}
+      <UserMenu
         username={username}
+        isSuperuser={isSuperuser}
+        onLogout={handleLogoutWithAnimation}
+      />
+      <Sidebar
         isSuperuser={isSuperuser}
         isSidebarMinimized={isSidebarMinimized}
         setIsSidebarMinimized={(minimized) => {
@@ -148,7 +154,6 @@ function App() {
           localStorage.setItem('isSidebarMinimized', JSON.stringify(minimized)); // Persistir el estado
         }}
         navigateTo={navigateTo}
-        onLogout={handleLogoutWithAnimation}
         currentPage={currentPage}
       />
       {/* Contenedor principal de la página */}
