@@ -314,9 +314,13 @@ function LoginPage({ onLoginSuccess }) {
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                // No logging por seguridad
-                throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
+                let errorData = {};
+                try { errorData = await response.json(); } catch (_) { /* respuesta no-JSON (p.ej. proxy/HTML) */ }
+                const serverMsg = errorData.error || errorData.message || errorData.detail;
+                const err = new Error(serverMsg || `HTTP ${response.status}`);
+                err.status = response.status;   // para ramificar el mensaje en el catch
+                err.serverMsg = serverMsg;
+                throw err;
             }
 
             const data = await response.json();
@@ -346,25 +350,32 @@ function LoginPage({ onLoginSuccess }) {
         } catch (error) {
             // No logging por seguridad
             
-            // Manejar errores específicos del nuevo sistema de autenticación
-            let errorMessage = 'Error de red. Inténtalo de nuevo más tarde.';
-            let shouldIncrementAttempts = true;
-            
-            if (error.message.includes('Cuenta bloqueada')) {
+            // Mensaje claro según el tipo de fallo. error.status existe solo si hubo respuesta
+            // HTTP; si no, fue un fallo de red real (sin conexión / servidor caído / CORS).
+            const status = error.status;
+            const serverMsg = error.serverMsg || '';
+            let errorMessage;
+            let shouldIncrementAttempts = false;
+
+            if (status === undefined) {
+                errorMessage = 'No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.';
+            } else if (status === 401 || status === 400 || serverMsg.includes('Credenciales inválidas') || serverMsg.includes('Datos de entrada inválidos')) {
+                errorMessage = 'Usuario o contraseña incorrectos.';
+                shouldIncrementAttempts = true;
+            } else if (status === 423 || serverMsg.includes('bloqueada')) {
                 errorMessage = 'Tu cuenta está temporalmente bloqueada. Intenta más tarde.';
-                shouldIncrementAttempts = false; // No incrementar si la cuenta ya está bloqueada
-            } else if (error.message.includes('Cambio de contraseña requerido')) {
+            } else if (serverMsg.includes('Cambio de contraseña')) {
                 errorMessage = 'Debes cambiar tu contraseña antes de continuar.';
-                shouldIncrementAttempts = false; // No incrementar si requiere cambio de contraseña
-            } else if (error.message.includes('Credenciales inválidas') || error.message.includes('Usuario o contraseña incorrectos')) {
-                errorMessage = 'Usuario o contraseña incorrectos.';
-                shouldIncrementAttempts = true;
-            } else if (error.message.includes('Datos de entrada inválidos')) {
-                errorMessage = 'Usuario o contraseña incorrectos.';
-                shouldIncrementAttempts = true;
-            } else if (error.message.includes('Usuario inactivo')) {
+            } else if (serverMsg.includes('inactivo') || serverMsg.includes('desactivada')) {
                 errorMessage = 'Tu cuenta ha sido desactivada. Contacta al administrador.';
-                shouldIncrementAttempts = false;
+            } else if (status === 403) {
+                errorMessage = 'Acceso denegado. Si tienes abierta la sesión del panel de administración, ciérrala (o usa una ventana de incógnito) y vuelve a intentar.';
+            } else if (status === 429) {
+                errorMessage = 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+            } else if (status >= 500) {
+                errorMessage = 'Error del servidor. Inténtalo de nuevo más tarde.';
+            } else {
+                errorMessage = serverMsg || `Error ${status}. Inténtalo de nuevo.`;
             }
             
             // Incrementar intentos fallidos si corresponde
