@@ -18,6 +18,11 @@ import {
 } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 
+// Formateadores es-ES reutilizados: crear un Intl.NumberFormat por punto/tick era
+// un coste notable en cada frame de hover. Se instancian una sola vez a nivel de módulo.
+const NF2 = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NF1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
+
 // Registro CENTRAL de Chart.js (Ola 5). ChartCard es el único componente que dibuja
 // gráficos, así que registrar aquí garantiza que escalas/elementos existan entres por la
 // pantalla que entres. Antes cada pantalla lo registraba por su cuenta; con el
@@ -240,7 +245,7 @@ export function ChartCard({
       },
       tooltip: {
         enabled: true,
-        mode: 'index',
+        mode: 'nearest',
         intersect: false,
         backgroundColor: 'rgba(0, 0, 0, 0.85)',
         titleColor: '#ffffff',
@@ -257,10 +262,7 @@ export function ChartCard({
               label += ': ';
             }
             if (context.parsed.y !== null) {
-              label += new Intl.NumberFormat('es-ES', { 
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2
-              }).format(context.parsed.y);
+              label += NF2.format(context.parsed.y);
             }
             return label;
           },
@@ -328,9 +330,7 @@ export function ChartCard({
             weight: '500'
           },
           callback: function(value) {
-            return new Intl.NumberFormat('es-ES', {
-              maximumFractionDigits: 1
-            }).format(value);
+            return NF1.format(value);
           }
         },
         border: {
