@@ -16,6 +16,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from core.health_views import health_check
 from indicators.services.formatting import auto_energy_unit, format_energy_value
+from indicators.services.kpi import calculate_kpi_metrics
 from indicators.tasks import colombia_day_range
 from indicators.views import (
     ChartDataView,
@@ -72,6 +73,27 @@ class EnergyFormattingTests(TestCase):
         self.assertEqual(format_energy_value(1_500, "W"), ("1.50", "kW"))
         self.assertEqual(format_energy_value(23.456, "°C"), ("23.5", "°C"))
         self.assertEqual(format_energy_value(80.0, "%RH"), ("80.0", "%"))
+
+
+class KpiMetricsTests(TestCase):
+    """services/kpi.py: calculate_kpi_metrics (extraído de ConsumptionSummaryView, Ola 5)."""
+
+    def test_consumo_con_aumento(self):
+        r = calculate_kpi_metrics(1500, 1000, "Consumo total", "kWh")
+        self.assertEqual(r['value'], "1.50")
+        self.assertEqual(r['unit'], "MWh")
+        self.assertEqual(r['status'], "positivo")  # +50%
+        self.assertIn("50.00%", r['change'])
+
+    def test_balance_superavit_y_deficit(self):
+        self.assertEqual(
+            calculate_kpi_metrics(100, 50, "Balance", "kWh", is_balance=True)['description'], "Superávit")
+        self.assertEqual(
+            calculate_kpi_metrics(-100, 50, "Balance", "kWh", is_balance=True)['description'], "Déficit")
+
+    def test_humedad_optima(self):
+        r = calculate_kpi_metrics(50, 50, "Humedad", "%RH", is_humidity=True)
+        self.assertEqual(r['status'], "optimo")
 
 
 class ColombiaDayRangeTests(TestCase):

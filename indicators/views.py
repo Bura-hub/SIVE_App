@@ -46,6 +46,7 @@ from indicators.services.date_ranges import (  # noqa: E402
     resolve_indicators_date_range,
 )
 from indicators.services.formatting import auto_energy_unit, format_energy_value  # noqa: E402
+from indicators.services.kpi import calculate_kpi_metrics  # noqa: E402
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
@@ -196,117 +197,7 @@ class ConsumptionSummaryView(APIView):
                 inverter_status_text = "error"
                 inverter_description_text = "Error interno"
 
-            # format_energy_value: importado de services/formatting.py (Ola 5).
-            def calculate_kpi_metrics(current_value, previous_value, title, base_unit_name, is_balance=False, is_average_power=False, is_temperature=False, is_humidity=False, is_wind_speed=False, is_irradiance=False):
-                formatted_value, unit = format_energy_value(current_value, base_unit_name)
-                change_percentage = 0.0
-                status_text = "normal"
-                description_text = ""
-
-                if previous_value != 0:
-                    change_percentage = ((current_value - previous_value) / previous_value) * 100
-                elif current_value != 0:
-                    change_percentage = 100.0 if current_value > 0 else -100.0
-
-                if is_balance:
-                    if current_value > 0:
-                        description_text = "Superávit"
-                        status_text = "positivo"
-                    elif current_value < 0:
-                        description_text = "Déficit"
-                        status_text = "negativo"
-                    else:
-                        description_text = "Equilibrio"
-                        status_text = "normal"
-                elif is_average_power:
-                    if current_value > 0:
-                        description_text = "Generando"
-                        status_text = "estable"
-                    else:
-                        description_text = "Sin generación"
-                        status_text = "normal" 
-                    
-                    if change_percentage > 0:
-                        description_text += f" (+{change_percentage:.2f}%)"
-                    elif change_percentage < 0:
-                        description_text += f" ({change_percentage:.2f}%)"
-                elif is_temperature: 
-                    description_text = "Rango normal"
-                    status_text = "normal" 
-                    
-                    if change_percentage > 0:
-                        description_text += f" (+{change_percentage:.1f}%)" 
-                    elif change_percentage < 0:
-                        description_text += f" ({change_percentage:.1f}%)"
-                elif is_humidity: 
-                    if 40 <= current_value <= 60: 
-                        description_text = "Óptimo"
-                        status_text = "optimo"
-                    elif current_value > 60:
-                        description_text = "Alta"
-                        status_text = "critico" 
-                    else:
-                        description_text = "Baja"
-                        status_text = "critico" 
-
-                    if change_percentage > 0:
-                        description_text += f" (+{change_percentage:.1f}%)"
-                    elif change_percentage < 0:
-                        description_text += f" ({change_percentage:.1f}%)"
-                elif is_wind_speed:
-                    if current_value < 10:
-                        description_text = "Bajo"
-                        status_text = "normal"
-                    elif 10 <= current_value <= 30:
-                        description_text = "Moderado"
-                        status_text = "moderado"
-                    else:
-                        description_text = "Alto"
-                        status_text = "critico"
-
-                    if change_percentage > 0:
-                        description_text += f" (+{change_percentage:.1f}%)"
-                    elif change_percentage < 0:
-                        description_text += f" ({change_percentage:.1f}%)"
-                elif is_irradiance:
-                    if current_value < 200:
-                        description_text = "Baja"
-                        status_text = "normal"
-                    elif 200 <= current_value <= 800:
-                        description_text = "Moderada"
-                        status_text = "moderado"
-                    else:
-                        description_text = "Alta"
-                        status_text = "optimo"
-
-                    if change_percentage > 0:
-                        description_text += f" (+{change_percentage:.1f}%)"
-                    elif change_percentage < 0:
-                        description_text += f" ({change_percentage:.1f}%)"
-                    
-                else: # Para consumo y generación
-                    if change_percentage > 0:
-                        status_text = "positivo"
-                    elif change_percentage < 0:
-                        status_text = "negativo"
-                    else:
-                        status_text = "normal"
-                    
-                    description_text = f"{'+' if change_percentage >= 0 else ''}{change_percentage:.2f}% vs mes pasado"
-
-                change_text = f"{'+' if change_percentage >= 0 else ''}{change_percentage:.2f}% vs mes pasado"
-                
-                return {
-                    "title": title,
-                    "value": formatted_value,
-                    "unit": unit,
-                    "change": change_text,
-                    "description": description_text,
-                    "status": status_text,
-                    "previousMonthValue": previous_value,
-                    "previousMonthUnit": base_unit_name
-                }
-
+            # calculate_kpi_metrics: importado de services/kpi.py (Ola 5).
             # KPI de Consumo Total (NETO)
             consumption_kpi = calculate_kpi_metrics(
                 total_consumption_current_month,
