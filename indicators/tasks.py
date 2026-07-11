@@ -1143,8 +1143,16 @@ def generate_report(self, institution_id, category, devices, report_type, time_r
         # Generar archivo en el formato especificado
         logger.info(f"Generando archivo en formato: {format}")
         
+        report_context = {
+            'institution_name': institution_name,
+            'category': category,
+            'devices': devices,
+            'time_range': time_range,
+            'start_date': start_date,
+            'end_date': end_date,
+        }
         file_path, file_size, record_count = generate_report_file(
-            report_data, report_type, format, self.request.id
+            report_data, report_type, format, self.request.id, context=report_context
         )
         
         logger.info(f"Archivo generado: {file_path}, tamaño: {file_size}, registros: {record_count}")
@@ -1473,48 +1481,51 @@ def generate_weather_station_report(institution_id, devices, report_type, time_r
     return report_data
 
 
-def generate_report_file(report_data, report_type, format, task_id):
+def generate_report_file(report_data, report_type, format, task_id, context=None):
     """
-    Genera el archivo del reporte en el formato especificado
+    Genera el archivo del reporte en el formato especificado.
+
+    `context` lleva los metadatos (institución, categoría, dispositivos, rango, time_range)
+    para la marca/ficha/pie de los informes; NO cambia los datos ni el contrato de salida.
     """
     from django.conf import settings
-    
+    from indicators.reports import branding
+    from indicators.services.date_ranges import get_colombia_now
+
     # Crear directorio para reportes si no existe
     reports_dir = os.path.join(settings.MEDIA_ROOT, 'reports')
     os.makedirs(reports_dir, exist_ok=True)
-    
-    # Generar nombre del archivo
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    # Enriquecer el contexto con tipo de reporte y resumen ejecutivo calculado.
+    context = dict(context or {})
+    context['report_type'] = report_type
+    context['summary'] = branding.compute_summary(report_data)
+
+    # Nombre del archivo con hora de Colombia (antes datetime.now() del servidor).
+    timestamp = get_colombia_now().strftime('%Y%m%d_%H%M%S')
     filename = f"reporte_{report_type.replace(' ', '_')}_{timestamp}_{task_id[:8]}"
-    
+
     if format == 'CSV':
         file_path = os.path.join(reports_dir, f"{filename}.csv")
         file_size, record_count = generate_csv_file(report_data, file_path)
-        
+
     elif format == 'Excel':
         file_path = os.path.join(reports_dir, f"{filename}.xlsx")
-        file_size, record_count = generate_excel_file(report_data, file_path)
-        
+        file_size, record_count = generate_excel_file(report_data, file_path, report_type, context)
+
     elif format == 'PDF':
         file_path = os.path.join(reports_dir, f"{filename}.pdf")
         # Determinar si es un reporte ejecutivo basado en el tipo
         if 'executive' in report_type.lower() or 'ejecutivo' in report_type.lower():
-            # Extraer información adicional si está disponible
-            institution_name = ""
-            period_info = ""
-            if hasattr(report_data, 'get') and isinstance(report_data, dict):
-                institution_name = report_data.get('institution_name', '')
-                period_info = report_data.get('period_info', '')
-            
             file_size, record_count = generate_executive_pdf_file(
-                report_data, file_path, report_type, institution_name, period_info
+                report_data, file_path, report_type, context
             )
         else:
-            file_size, record_count = generate_pdf_file(report_data, file_path, report_type)
-        
+            file_size, record_count = generate_pdf_file(report_data, file_path, report_type, context)
+
     else:
         raise ValueError(f"Formato no soportado: {format}")
-    
+
     return file_path, file_size, record_count
 
 
@@ -1525,7 +1536,7 @@ def generate_csv_file(report_data, file_path):
     
     if not report_data:
         # Crear archivo vacío
-        with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+        with open(file_path, 'w', newline='', encoding='utf-8-sig') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(['No hay datos disponibles para el período seleccionado'])
         return "0 KB", 0
@@ -1545,72 +1556,167 @@ def generate_csv_file(report_data, file_path):
     return file_size_str, len(report_data)
 
 
-def generate_excel_file(report_data, file_path):
+def generate_excel_file(report_data, file_path, report_type="", context=None):
     """
-    Genera archivo Excel
+    Genera un archivo Excel profesional: banda de título con logo, hoja de resumen ejecutivo,
+    cabecera congelada, autofiltro, formato numérico por columna, filas zebra y autoancho.
     """
     try:
         import openpyxl
-        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
     except ImportError:
         # Fallback a CSV si no hay openpyxl
         logger.warning("openpyxl no disponible, generando CSV en su lugar")
         return generate_csv_file(report_data, file_path.replace('.xlsx', '.csv'))
-    
+
+    from indicators.reports import branding
+    from indicators.services.date_ranges import get_colombia_now
+
     if not report_data:
-        # Crear archivo vacío
         wb = openpyxl.Workbook()
         ws = wb.active
         ws['A1'] = 'No hay datos disponibles para el período seleccionado'
         wb.save(file_path)
         return "0 KB", 0
-    
-    # Crear workbook y worksheet
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Reporte"
-    
-    # Obtener columnas del primer registro
+
+    context = context or {}
     columns = list(report_data[0].keys())
-    
-    # Escribir encabezados
-    for col, header in enumerate(columns, 1):
-        cell = ws.cell(row=1, column=col, value=header)
-        cell.font = Font(bold=True)
-        cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
-        cell.alignment = Alignment(horizontal="center")
-    
-    # Escribir datos
-    for row, data_row in enumerate(report_data, 2):
-        for col, header in enumerate(columns, 1):
-            ws.cell(row=row, column=col, value=data_row.get(header, ''))
-    
-    # Ajustar ancho de columnas
-    for column in ws.columns:
-        max_length = 0
-        column_letter = column[0].column_letter
-        for cell in column:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        adjusted_width = min(max_length + 2, 50)
-        ws.column_dimensions[column_letter].width = adjusted_width
-    
+    n = len(columns)
+
+    thin = Side(style="thin", color=branding.GRID)
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    header_fill = PatternFill("solid", fgColor=branding.DARK)
+    zebra_fill = PatternFill("solid", fgColor=branding.ZEBRA)
+    title_font = Font(bold=True, size=16, color=branding.ACCENT)
+
+    wb = openpyxl.Workbook()
+    wb.properties.creator = "SIVE — Universidad de Nariño"
+    wb.properties.company = "Universidad de Nariño"
+    wb.properties.title = f"Reporte: {report_type}"
+
+    # --- Hoja de Resumen Ejecutivo (primera) ---
+    summary = context.get('summary') or {}
+    metrics = summary.get('metrics') or []
+    if metrics:
+        rs = wb.active
+        rs.title = "Resumen Ejecutivo"
+        rs["A1"] = "MTE · SIVE — Resumen Ejecutivo"
+        rs["A1"].font = title_font
+        rs["A2"] = f"Reporte: {report_type}  ·  Institución: {context.get('institution_name', '—')}"
+        rs["A3"] = (f"Rango: {context.get('start_date', '')} a {context.get('end_date', '')}  ·  "
+                    f"Registros: {summary.get('record_count', 0)}  ·  "
+                    f"Generado: {get_colombia_now():%d/%m/%Y %H:%M} (hora Colombia)")
+        agg_es = {"sum": "Total", "mean": "Promedio", "max": "Máximo", "min": "Mínimo"}
+        head_row = 5
+        for c, h in enumerate(["Indicador", "Valor", "Unidad", "Agregado"], 1):
+            cell = rs.cell(row=head_row, column=c, value=h)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor=branding.PRIMARY)
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = border
+        for i, m in enumerate(metrics):
+            r = head_row + 1 + i
+            rs.cell(row=r, column=1, value=m["label"]).border = border
+            vcell = rs.cell(row=r, column=2, value=round(m["value"], 2))
+            vcell.number_format = '#,##0.00'
+            vcell.alignment = Alignment(horizontal="right")
+            vcell.border = border
+            rs.cell(row=r, column=3, value=m["unit"]).border = border
+            rs.cell(row=r, column=4, value=agg_es.get(m["agg"], m["agg"])).border = border
+            if i % 2:
+                for c in range(1, 5):
+                    rs.cell(row=r, column=c).fill = zebra_fill
+        rs.column_dimensions["A"].width = 34
+        rs.column_dimensions["B"].width = 16
+        rs.column_dimensions["C"].width = 10
+        rs.column_dimensions["D"].width = 12
+        rs.freeze_panes = "A6"
+        ws = wb.create_sheet("Datos")
+    else:
+        ws = wb.active
+        ws.title = "Datos"
+
+    # --- Hoja de Datos ---
+    # Banda de título + logo (filas 1-3), cabecera en fila 5, datos desde fila 6.
+    ws.merge_cells(start_row=1, start_column=2, end_row=1, end_column=max(2, n))
+    ws.cell(row=1, column=2, value="MTE · SIVE — Universidad de Nariño").font = title_font
+    ws.cell(row=2, column=2, value=f"Reporte: {report_type}").font = Font(bold=True, size=11, color=branding.DARK)
+    ws.cell(row=3, column=2, value=(f"Rango: {context.get('start_date', '')} a {context.get('end_date', '')}  ·  "
+                                    f"Registros: {len(report_data)}  ·  "
+                                    f"Generado: {get_colombia_now():%d/%m/%Y %H:%M}")).font = Font(size=9, color=branding.DARK)
+    try:
+        logo_path = branding.resolve_logo(branding.LOGO_MTE)
+        if logo_path:
+            from openpyxl.drawing.image import Image as XLImage
+            img = XLImage(logo_path)
+            img.height = 54
+            img.width = int(54 * (img.width / img.height)) if img.height else 118
+            ws.add_image(img, "A1")
+            ws.row_dimensions[1].height = 22
+    except Exception as exc:  # noqa: BLE001 - el logo es opcional
+        logger.warning(f"No se pudo incrustar el logo en Excel: {exc}")
+
+    HEADER_ROW = 5
+    DATA_START = HEADER_ROW + 1
+
+    # Detectar columnas numéricas (mayoría de valores parseables) para formatear.
+    numeric_cols = set()
+    for col in columns:
+        vals = [branding.to_number(r.get(col)) for r in report_data[:20]]
+        parsed = [v for v in vals if v is not None]
+        if parsed and len(parsed) >= max(1, len(vals) // 2):
+            numeric_cols.add(col)
+
+    for c, col in enumerate(columns, 1):
+        header = branding.pretty_header(col) if col in numeric_cols else col.replace('_', ' ').capitalize()
+        cell = ws.cell(row=HEADER_ROW, column=c, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = border
+
+    for i, data_row in enumerate(report_data):
+        r = DATA_START + i
+        for c, col in enumerate(columns, 1):
+            raw = data_row.get(col, '')
+            if col in numeric_cols:
+                num = branding.to_number(raw)
+                cell = ws.cell(row=r, column=c, value=round(num, 4) if num is not None else None)
+                cell.number_format = '#,##0.00'
+                cell.alignment = Alignment(horizontal="right")
+            else:
+                cell = ws.cell(row=r, column=c, value=raw)
+                cell.alignment = Alignment(horizontal="left")
+            cell.border = border
+            if i % 2:
+                cell.fill = zebra_fill
+
+    # Congelar cabecera, autofiltro y títulos de impresión.
+    ws.freeze_panes = ws.cell(row=DATA_START, column=1).coordinate
+    last_row = DATA_START + len(report_data) - 1
+    ws.auto_filter.ref = f"A{HEADER_ROW}:{get_column_letter(n)}{last_row}"
+    ws.print_title_rows = f"{HEADER_ROW}:{HEADER_ROW}"
+
+    # Autoancho robusto por índice de columna.
+    for c, col in enumerate(columns, 1):
+        header_len = len(branding.pretty_header(col))
+        max_len = max([header_len] + [len(str(r.get(col, ''))) for r in report_data[:200]])
+        ws.column_dimensions[get_column_letter(c)].width = min(max_len + 3, 42)
+
+    wb.active = 0
     wb.save(file_path)
-    
-    # Calcular tamaño del archivo
+
     file_size = os.path.getsize(file_path)
-    file_size_str = format_file_size(file_size)
-    
-    return file_size_str, len(report_data)
+    return format_file_size(file_size), len(report_data)
 
 
-def generate_pdf_file(report_data, file_path, report_type):
+def generate_pdf_file(report_data, file_path, report_type, context=None):
     """
-    Genera archivo PDF con formato mejorado y más detalle
+    Genera archivo PDF profesional: banda con logos MTE+SIVE, ficha de parámetros, resumen
+    ejecutivo real, tablas pulidas y encabezado/pie con paginación.
     """
+    context = context or {}
     try:
         from reportlab.lib.pagesizes import letter, A4
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
@@ -1629,10 +1735,14 @@ def generate_pdf_file(report_data, file_path, report_type):
         logger.warning(f"Librerías no disponibles: {e}, generando CSV en su lugar")
         return generate_csv_file(report_data, file_path.replace('.pdf', '.csv'))
     
-    # Crear documento PDF
-    doc = SimpleDocTemplate(file_path, pagesize=A4, 
-                          rightMargin=2*cm, leftMargin=2*cm, 
-                          topMargin=2*cm, bottomMargin=2*cm)
+    from indicators.reports import branding
+    from indicators.services.date_ranges import get_colombia_now
+
+    # Crear documento PDF (topMargin holgado para la banda de logos de la 1ª página)
+    doc = SimpleDocTemplate(file_path, pagesize=A4,
+                          rightMargin=2*cm, leftMargin=2*cm,
+                          topMargin=3.5*cm, bottomMargin=2*cm)
+    on_first_page, on_later_pages = branding.make_header_footer(context)
     story = []
     
     # Estilos mejorados
@@ -1689,48 +1799,35 @@ def generate_pdf_file(report_data, file_path, report_type):
     
     # Encabezado del reporte
     story.append(Paragraph(f"REPORTE DETALLADO: {report_type.upper()}", title_style))
-    story.append(Spacer(1, 20))
-    
-    # Información del reporte
-    current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    story.append(Paragraph(f"<b>Fecha de generación:</b> {current_time}", normal_style))
-    story.append(Paragraph(f"<b>Total de registros:</b> {len(report_data)}", normal_style))
-    story.append(Spacer(1, 20))
-    
+    story.append(Spacer(1, 6))
+
+    # Ficha de parámetros (institución, categoría, dispositivos, rango, agregación, generado)
+    story.append(branding.build_param_table(context))
+    story.append(Spacer(1, 18))
+
     if not report_data:
         story.append(Paragraph("No hay datos disponibles para el período seleccionado", highlight_style))
-        doc.build(story)
-        
-        # Calcular tamaño del archivo
+        doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
         file_size = os.path.getsize(file_path)
-        file_size_str = format_file_size(file_size)
-        
-        return file_size_str, 0
-    
-    # Resumen ejecutivo
-    story.append(Paragraph("RESUMEN EJECUTIVO", subtitle_style))
-    story.append(Paragraph("Este reporte presenta un análisis detallado de los datos recopilados durante el período especificado, incluyendo métricas clave, tendencias y análisis estadísticos relevantes.", normal_style))
-    story.append(Spacer(1, 20))
-    
-    # Análisis estadístico básico
-    if len(report_data) > 0:
-        story.append(Paragraph("ANÁLISIS ESTADÍSTICO", subtitle_style))
-        
-        # Obtener columnas numéricas para análisis
-        numeric_columns = []
-        for col in report_data[0].keys():
-            try:
-                # Intentar convertir a número
-                sample_value = report_data[0][col]
-                if isinstance(sample_value, (int, float)) or (isinstance(sample_value, str) and sample_value.replace('.', '').replace('-', '').isdigit()):
-                    numeric_columns.append(col)
-            except:
-                continue
-        
+        return format_file_size(file_size), 0
+
+    # Resumen ejecutivo real (totales/promedios por indicador desde el valor crudo)
+    summary_table = branding.build_summary_table(context.get('summary'))
+    if summary_table is not None:
+        story.append(Paragraph("RESUMEN EJECUTIVO", subtitle_style))
+        story.append(summary_table)
+        story.append(Spacer(1, 20))
+
+    # Columnas numéricas (para gráficos) detectadas por parseo real
+    numeric_columns = [c for c in report_data[0].keys()
+                       if c not in ('name', 'date') and branding.to_number(report_data[0].get(c)) is not None]
+
+    # Análisis estadístico básico (desactivado: sustituido por el RESUMEN EJECUTIVO real)
+    if False:
         if numeric_columns:
             # Crear tabla de estadísticas
             stats_data = [['Métrica', 'Valor']]
-            
+
             for col in numeric_columns[:5]:  # Limitar a 5 columnas para no sobrecargar
                 try:
                     values = []
@@ -1740,14 +1837,14 @@ def generate_pdf_file(report_data, file_path, report_type):
                             val = float(val) if val.replace('.', '').replace('-', '').isdigit() else 0
                         if isinstance(val, (int, float)):
                             values.append(val)
-                    
+
                     if values:
                         stats_data.append([f'Promedio {col}', f'{np.mean(values):.2f}'])
                         stats_data.append([f'Máximo {col}', f'{np.max(values):.2f}'])
                         stats_data.append([f'Mínimo {col}', f'{np.min(values):.2f}'])
                 except:
                     continue
-            
+
             if len(stats_data) > 1:
                 stats_table = Table(stats_data, colWidths=[4*cm, 3*cm])
                 stats_table.setStyle(TableStyle([
@@ -1851,59 +1948,86 @@ def generate_pdf_file(report_data, file_path, report_type):
         story.append(Spacer(1, 10))
         columns = columns[:8]
     
-    # Crear tabla de datos con formato mejorado
-    table_data = [columns]  # Encabezados
-    
-    # Agregar datos (limitar filas para no sobrecargar el PDF)
-    max_rows = min(50, len(report_data))  # Máximo 50 filas
-    for i, data_row in enumerate(report_data[:max_rows]):
+    # Detectar columnas numéricas para alinear a la derecha y totalizar.
+    numeric_set = {c for c in columns
+                   if c not in ('name', 'date') and branding.to_number(report_data[0].get(c)) is not None}
+    col_index = {c: i for i, c in enumerate(columns)}
+
+    # Cabeceras legibles (con unidad en las numéricas)
+    header_row = [branding.pretty_header(c) if c in numeric_set else c.replace('_', ' ').capitalize()
+                  for c in columns]
+    table_data = [header_row]
+
+    max_rows = min(60, len(report_data))
+    for data_row in report_data[:max_rows]:
         row = []
         for col in columns:
             value = data_row.get(col, '')
-            # Truncar valores muy largos
-            if isinstance(value, str) and len(value) > 30:
-                value = value[:27] + '...'
+            if isinstance(value, str) and len(value) > 40:
+                value = value[:37] + '...'
             row.append(str(value))
         table_data.append(row)
-    
+
     if len(report_data) > max_rows:
-        story.append(Paragraph(f"<i>Nota: Se muestran las primeras {max_rows} filas de {len(report_data)} totales.</i>", normal_style))
+        story.append(Paragraph(f"<i>Nota: Se muestran las primeras {max_rows} filas de {len(report_data)} totales (el resumen ejecutivo cubre el total).</i>", normal_style))
         story.append(Spacer(1, 10))
-    
-    # Crear tabla con estilo mejorado
-    table = Table(table_data, colWidths=[2.5*cm] * len(columns))
-    table.setStyle(TableStyle([
+
+    # Fila de TOTAL/agregado desde el resumen (solo columnas de suma).
+    summary_by_label = {}
+    for m in (context.get('summary') or {}).get('metrics', []):
+        summary_by_label[m['label']] = m
+    total_row = [''] * len(columns)
+    total_row[0] = 'TOTAL'
+    has_total = False
+    for col in columns:
+        if col in numeric_set:
+            label, unit, agg = branding._column_meta(col)
+            m = summary_by_label.get(label)
+            if m and agg == 'sum':
+                total_row[col_index[col]] = branding.fmt_value(m['value'], unit)
+                has_total = True
+    if has_total:
+        table_data.append(total_row)
+
+    # Anchos: reparte el ancho útil (~17cm) entre columnas
+    usable = 17.0
+    col_w = max(1.6, usable / len(columns))
+    table = Table(table_data, colWidths=[col_w * cm] * len(columns), repeatRows=1)
+    style = [
         # Encabezados
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f2937')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#' + branding.DARK)),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('TOPPADDING', (0, 0), (-1, 0), 12),
-        
+        ('FONTSIZE', (0, 0), (-1, 0), 8.5),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
         # Datos
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9fafb')),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d1d5db')),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#' + branding.GRID)),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f9fafb'), colors.white]),
-        ('TOPPADDING', (0, 1), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-    ]))
-    
+        ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#' + branding.ZEBRA)]),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ]
+    # Números a la derecha por columna
+    for col in numeric_set:
+        ci = col_index[col]
+        style.append(('ALIGN', (ci, 1), (ci, -1), 'RIGHT'))
+    # Estilo de la fila TOTAL
+    if has_total:
+        style += [
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#' + branding.TOTALS)),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('LINEABOVE', (0, -1), (-1, -1), 1, colors.HexColor('#' + branding.PRIMARY)),
+        ]
+    table.setStyle(TableStyle(style))
+
     story.append(table)
-    story.append(Spacer(1, 20))
-    
-    # Pie de página con información adicional
-    story.append(Paragraph("INFORMACIÓN ADICIONAL", subtitle_style))
-    story.append(Paragraph("• Este reporte fue generado automáticamente por el sistema MTE - SIVE", normal_style))
-    story.append(Paragraph("• Los datos están sujetos a validación y pueden ser actualizados", normal_style))
-    story.append(Paragraph("• Para consultas adicionales, contacte al administrador del sistema", normal_style))
-    
-    # Construir el PDF
-    doc.build(story)
+
+    # Construir el PDF con encabezado/pie y paginación
+    doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
     
     # Calcular tamaño del archivo
     file_size = os.path.getsize(file_path)
@@ -1912,7 +2036,7 @@ def generate_pdf_file(report_data, file_path, report_type):
     return file_size_str, len(report_data)
 
 
-def generate_executive_pdf_file(report_data, file_path, report_type, institution_name="", period_info=""):
+def generate_executive_pdf_file(report_data, file_path, report_type, context=None):
     """
     Genera un PDF ejecutivo con formato profesional y resumido
     """
@@ -1931,12 +2055,20 @@ def generate_executive_pdf_file(report_data, file_path, report_type, institution
         import numpy as np
     except ImportError as e:
         logger.warning(f"Librerías no disponibles: {e}, usando función básica")
-        return generate_pdf_file(report_data, file_path, report_type)
-    
-    # Crear documento PDF
-    doc = SimpleDocTemplate(file_path, pagesize=A4, 
-                          rightMargin=1.5*cm, leftMargin=1.5*cm, 
-                          topMargin=1.5*cm, bottomMargin=1.5*cm)
+        return generate_pdf_file(report_data, file_path, report_type, context)
+
+    from indicators.reports import branding
+    from indicators.services.date_ranges import get_colombia_now
+
+    context = context or {}
+    institution_name = context.get('institution_name', '')
+    period_info = branding.period_label(context)
+
+    # Crear documento PDF (topMargin holgado para la banda de logos)
+    doc = SimpleDocTemplate(file_path, pagesize=A4,
+                          rightMargin=1.5*cm, leftMargin=1.5*cm,
+                          topMargin=3.5*cm, bottomMargin=2*cm)
+    on_first_page, on_later_pages = branding.make_header_footer(context)
     story = []
     
     # Estilos ejecutivos
@@ -1996,29 +2128,23 @@ def generate_executive_pdf_file(report_data, file_path, report_type, institution
     story.append(Paragraph("SISTEMA DE MONITOREO INTEGRAL", executive_title_style))
     story.append(Spacer(1, 15))
     
-    # Información del reporte ejecutivo
+    # Información del reporte ejecutivo (ficha de parámetros)
     story.append(Paragraph(f"<b>REPORTE EJECUTIVO:</b> {report_type.upper()}", executive_subtitle_style))
-    if institution_name:
-        story.append(Paragraph(f"<b>Institución:</b> {institution_name}", executive_text_style))
-    if period_info:
-        story.append(Paragraph(f"<b>Período:</b> {period_info}", executive_text_style))
-    
-    current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    story.append(Paragraph(f"<b>Generado:</b> {current_time}", executive_text_style))
-    story.append(Paragraph(f"<b>Total de registros:</b> {len(report_data)}", executive_text_style))
-    story.append(Spacer(1, 20))
-    
+    story.append(branding.build_param_table(context))
+    story.append(Spacer(1, 18))
+
     if not report_data:
         story.append(Paragraph("No hay datos disponibles para el período seleccionado", metric_style))
-        doc.build(story)
+        doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
         file_size = os.path.getsize(file_path)
-        file_size_str = format_file_size(file_size)
-        return file_size_str, 0
-    
-    # Resumen ejecutivo
-    story.append(Paragraph("RESUMEN EJECUTIVO", executive_subtitle_style))
-    story.append(Paragraph("Este reporte presenta un análisis ejecutivo de los datos recopilados, destacando las métricas clave y tendencias más relevantes para la toma de decisiones estratégicas.", executive_text_style))
-    story.append(Spacer(1, 15))
+        return format_file_size(file_size), 0
+
+    # Resumen ejecutivo real (totales/promedios por indicador)
+    _summary_table = branding.build_summary_table(context.get('summary'))
+    if _summary_table is not None:
+        story.append(Paragraph("RESUMEN EJECUTIVO", executive_subtitle_style))
+        story.append(_summary_table)
+        story.append(Spacer(1, 15))
     
     # KPIs principales
     if len(report_data) > 0:
@@ -2156,14 +2282,8 @@ def generate_executive_pdf_file(report_data, file_path, report_type, institution
     story.append(Paragraph("• Se recomienda continuar el monitoreo para validar tendencias", executive_text_style))
     story.append(Spacer(1, 20))
     
-    # Pie de página ejecutivo
-    story.append(Paragraph("INFORMACIÓN DEL SISTEMA", executive_subtitle_style))
-    story.append(Paragraph("• Sistema MTE - SIVE - Monitoreo Integral de Energía", executive_text_style))
-    story.append(Paragraph("• Reporte generado automáticamente para análisis ejecutivo", executive_text_style))
-    story.append(Paragraph("• Contacto: administrador@mtesive.com", executive_text_style))
-    
-    # Construir el PDF
-    doc.build(story)
+    # Construir el PDF con encabezado/pie y paginación
+    doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
     
     # Calcular tamaño del archivo
     file_size = os.path.getsize(file_path)
