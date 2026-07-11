@@ -308,7 +308,7 @@ const ExternalEnergyData = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header con banner profesional */}
-      <header className="bg-gradient-to-r from-blue-700 to-indigo-800 shadow-lg -mx-4 -mt-4">
+      <header className="bg-gradient-to-r from-blue-700 to-indigo-800 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
         <div className="px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">

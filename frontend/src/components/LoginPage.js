@@ -23,10 +23,6 @@ function LoginPage({ onLoginSuccess }) {
     const [failedAttempts, setFailedAttempts] = useState(0);
     const [isBlocked, setIsBlocked] = useState(false);
     const [blockUntil, setBlockUntil] = useState(null);
-    const [showCaptcha, setShowCaptcha] = useState(false);
-    const [captchaValue, setCaptchaValue] = useState('');
-    const [generatedCaptcha, setGeneratedCaptcha] = useState('');
-    
     // Estados para el modal de registro
     const [showRegisterModal, setShowRegisterModal] = useState(false);
     const [registerData, setRegisterData] = useState({
@@ -71,28 +67,6 @@ function LoginPage({ onLoginSuccess }) {
             }
         }
     }, []);
-    
-    // Generar captcha cuando se necesite
-    useEffect(() => {
-        if (showCaptcha) {
-            generateCaptcha();
-        }
-    }, [showCaptcha]);
-    
-    // Función para generar captcha simple
-    const generateCaptcha = () => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let result = '';
-        for (let i = 0; i < 6; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        setGeneratedCaptcha(result);
-    };
-    
-    // Función para verificar si debe mostrar captcha
-    const shouldShowCaptcha = () => {
-        return failedAttempts >= 3;
-    };
     
     // Función para bloquear temporalmente
     const blockTemporarily = () => {
@@ -289,14 +263,6 @@ function LoginPage({ onLoginSuccess }) {
             return;
         }
         
-        // Verificar captcha si es necesario
-        if (showCaptcha && captchaValue !== generatedCaptcha) {
-            setMessage({ text: 'Código de verificación incorrecto', type: 'error' });
-            setCaptchaValue('');
-            generateCaptcha();
-            return;
-        }
-        
         setMessage({ text: '', type: '' });
         setLoading(true);
         setShowTransition(true);
@@ -332,8 +298,6 @@ function LoginPage({ onLoginSuccess }) {
             setFailedAttempts(0);
             setIsBlocked(false);
             setBlockUntil(null);
-            setShowCaptcha(false);
-            setCaptchaValue('');
             localStorage.removeItem('loginFailedAttempts');
             localStorage.removeItem('loginBlockUntil');
             
@@ -383,12 +347,7 @@ function LoginPage({ onLoginSuccess }) {
                 const newFailedAttempts = failedAttempts + 1;
                 setFailedAttempts(newFailedAttempts);
                 localStorage.setItem('loginFailedAttempts', newFailedAttempts.toString());
-                
-                // Mostrar captcha después de 3 intentos
-                if (newFailedAttempts >= 3 && !showCaptcha) {
-                    setShowCaptcha(true);
-                }
-                
+
                 // Bloquear después de 5 intentos
                 if (newFailedAttempts >= 5) {
                     blockTemporarily();
@@ -502,48 +461,6 @@ function LoginPage({ onLoginSuccess }) {
                         </div>
                     </div>
 
-                    {/* Campo de captcha (se muestra después de 3 intentos fallidos) */}
-                    {showCaptcha && (
-                        <div className="input-group">
-                            <label htmlFor="captcha" className="input-label">
-                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                Código de Verificación
-                            </label>
-                            <div className="captcha-container bg-gray-50 rounded-xl p-4 border border-gray-200">
-                                <div className="captcha-display flex items-center justify-between mb-3">
-                                    <div className="bg-white px-4 py-2 rounded-lg border-2 border-dashed border-gray-300">
-                                        <span className="captcha-text text-2xl font-mono font-bold text-gray-800 tracking-widest select-none">
-                                            {generatedCaptcha}
-                                        </span>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={generateCaptcha}
-                                        className="captcha-refresh p-2 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors duration-150"
-                                        title="Generar nuevo código"
-                                    >
-                                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                        </svg>
-                                    </button>
-                                </div>
-                                <input
-                                    type="text"
-                                    id="captcha"
-                                    name="captcha"
-                                    placeholder="Ingresa el código de arriba"
-                                    className="enhanced-input text-center text-lg font-mono tracking-widest"
-                                    value={captchaValue}
-                                    onChange={(e) => setCaptchaValue(e.target.value.toUpperCase())}
-                                    maxLength={6}
-                                    required
-                                />
-                            </div>
-                        </div>
-                    )}
-
                     {/* Botón de login mejorado */}
                     <button 
                         type="submit" 
@@ -584,11 +501,6 @@ function LoginPage({ onLoginSuccess }) {
                                     Intentos fallidos: {failedAttempts}/5
                                 </span>
                             </div>
-                            {failedAttempts >= 3 && (
-                                <span className="text-red-600 font-medium bg-red-100 px-3 py-1 rounded-full text-sm">
-                                    Captcha requerido
-                                </span>
-                            )}
                             {failedAttempts >= 5 && (
                                 <span className="text-red-600 font-medium bg-red-100 px-3 py-1 rounded-full text-sm">
                                     Cuenta bloqueada
