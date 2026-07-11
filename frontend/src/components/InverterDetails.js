@@ -1,5 +1,5 @@
 // Importaciones necesarias de React y componentes personalizados
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KpiCard } from "./KPI/KpiCard";
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
@@ -445,6 +445,117 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   // Verificar que inverterData existe antes de usar
   const hasData = inverterData && inverterData.results && inverterData.results.length > 0;
 
+  // Filas en orden cronológico ascendente, calculadas una sola vez por cambio de datos.
+  const invRows = useMemo(
+    () => (inverterData?.results ? inverterData.results.slice().reverse() : []),
+    [inverterData]
+  );
+
+  // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
+  // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
+  const generationChartData = useMemo(() => ({
+    labels: invRows.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')),
+    datasets: [
+      {
+        label: 'Energía Total Generada (kWh)',
+        data: invRows.map(item => item.total_generated_energy_kwh || 0),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#10B981',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+      },
+      {
+        label: 'Potencia Máxima (kW)',
+        data: invRows.map(item => (item.max_power_w || 0) / 1000),
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 4,
+        borderDash: [8, 4],
+        pointBackgroundColor: '#8B5CF6',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+      }
+    ]
+  }), [invRows]);
+
+  const powerFactorChartData = useMemo(() => ({
+    labels: invRows.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')),
+    datasets: [
+      {
+        label: 'Factor de Potencia Promedio',
+        data: invRows.map(item => item.avg_power_factor_pct || 0),
+        borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#3B82F6',
+      }
+    ]
+  }), [invRows]);
+
+  const unbalanceChartData = useMemo(() => ({
+    labels: invRows.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')),
+    datasets: [
+      {
+        label: 'Desbalance de Voltaje (%)',
+        data: invRows.map(item => item.max_voltage_unbalance_pct || item.voltage_unbalance_pct || item.unbalance_voltage || item.voltage_unbalance || 0),
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#F59E0B',
+      },
+      {
+        label: 'Desbalance de Corriente (%)',
+        data: invRows.map(item => item.max_current_unbalance_pct || item.current_unbalance_pct || item.unbalance_current || item.current_unbalance || 0),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#10B981',
+      },
+      {
+        label: 'Frecuencia Promedio (Hz)',
+        data: invRows.map(item => item.avg_frequency_hz || item.frequency_hz || item.frequency || item.freq || 0),
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 3,
+        borderDash: [6, 3],
+        pointBackgroundColor: '#8B5CF6',
+      }
+    ]
+  }), [invRows]);
+
+  const temperatureChartData = useMemo(() => ({
+    labels: invRows.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')),
+    datasets: [
+      {
+        label: 'Temperatura Promedio (°C)',
+        data: invRows.map(item => item.avg_temperature_c || 0),
+        borderColor: '#EF4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#EF4444',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        yAxisID: 'y'
+      }
+    ]
+  }), [invRows]);
+
   // Estados de carga y error (suavizados)
   if (loading) {
     return (
@@ -875,44 +986,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         title="Análisis de Generación Fotovoltaica"
                         description="Energía generada, eficiencia y rendimiento del sistema en el tiempo"
                         type="line"
-                        data={{
-                          labels: inverterData.results.slice().reverse().map(item => {
-                            // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                            const rawDate = item.date;
-                            // Crear fecha en zona horaria local para evitar desfase UTC
-                            const localDate = new Date(rawDate + 'T00:00:00');
-                            const formattedDate = localDate.toLocaleDateString('es-ES');
-                            
-                            return formattedDate;
-                          }),
-                          datasets: [
-                            {
-                              label: 'Energía Total Generada (kWh)',
-                              data: inverterData.results.slice().reverse().map(item => item.total_generated_energy_kwh || 0),
-                              borderColor: '#10B981',
-                              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                              fill: true,
-                              tension: 0.4,
-                              pointRadius: 4,
-                              pointBackgroundColor: '#10B981',
-                              pointBorderColor: '#ffffff',
-                              pointBorderWidth: 2,
-                            },
-                            {
-                              label: 'Potencia Máxima (kW)',
-                              data: inverterData.results.slice().reverse().map(item => (item.max_power_w || 0) / 1000),
-                              borderColor: '#8B5CF6',
-                              backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                              fill: false,
-                              tension: 0.4,
-                              pointRadius: 4,
-                              borderDash: [8, 4],
-                              pointBackgroundColor: '#8B5CF6',
-                              pointBorderColor: '#ffffff',
-                              pointBorderWidth: 2,
-                            }
-                          ]
-                        }}
+                        data={generationChartData}
                         options={{
                           ...CHART_OPTIONS,
                           plugins: {
@@ -951,29 +1025,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         title="Factor de Potencia"
                         description="Factor de potencia promedio entregado por los inversores"
                         type="line"
-                        data={{
-                          labels: inverterData.results.slice().reverse().map(item => {
-                            // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                            const rawDate = item.date;
-                            // Crear fecha en zona horaria local para evitar desfase UTC
-                            const localDate = new Date(rawDate + 'T00:00:00');
-                            const formattedDate = localDate.toLocaleDateString('es-ES');
-                            
-                            return formattedDate;
-                          }),
-                          datasets: [
-                            {
-                              label: 'Factor de Potencia Promedio',
-                              data: inverterData.results.slice().reverse().map(item => item.avg_power_factor_pct || 0),
-                              borderColor: '#3B82F6',
-                              backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                              fill: true,
-                              tension: 0.4,
-                              pointRadius: 3,
-                              pointBackgroundColor: '#3B82F6',
-                            }
-                          ]
-                        }}
+                        data={powerFactorChartData}
                         options={{
                           ...CHART_OPTIONS,
                           plugins: {
@@ -995,50 +1047,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         title="Desbalance de Fases y Estabilidad"
                         description="Análisis de desbalance y frecuencia del sistema"
                         type="line"
-                        data={{
-                          labels: inverterData.results.slice().reverse().map(item => {
-                            // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                            const rawDate = item.date;
-                            // Crear fecha en zona horaria local para evitar desfase UTC
-                            const localDate = new Date(rawDate + 'T00:00:00');
-                            const formattedDate = localDate.toLocaleDateString('es-ES');
-                            
-                            return formattedDate;
-                          }),
-                          datasets: [
-                            {
-                              label: 'Desbalance de Voltaje (%)',
-                              data: inverterData.results.slice().reverse().map(item => item.max_voltage_unbalance_pct || item.voltage_unbalance_pct || item.unbalance_voltage || item.voltage_unbalance || 0),
-                              borderColor: '#F59E0B',
-                              backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                              fill: true,
-                              tension: 0.4,
-                              pointRadius: 3,
-                              pointBackgroundColor: '#F59E0B',
-                            },
-                            {
-                              label: 'Desbalance de Corriente (%)',
-                              data: inverterData.results.slice().reverse().map(item => item.max_current_unbalance_pct || item.current_unbalance_pct || item.unbalance_current || item.current_unbalance || 0),
-                              borderColor: '#10B981',
-                              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                              fill: true,
-                              tension: 0.4,
-                              pointRadius: 3,
-                              pointBackgroundColor: '#10B981',
-                            },
-                            {
-                              label: 'Frecuencia Promedio (Hz)',
-                              data: inverterData.results.slice().reverse().map(item => item.avg_frequency_hz || item.frequency_hz || item.frequency || item.freq || 0),
-                              borderColor: '#8B5CF6',
-                              backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                              fill: false,
-                              tension: 0.4,
-                              pointRadius: 3,
-                              borderDash: [6, 3],
-                              pointBackgroundColor: '#8B5CF6',
-                            }
-                          ]
-                        }}
+                        data={unbalanceChartData}
                         options={{
                           ...CHART_OPTIONS,
                           plugins: {
@@ -1062,32 +1071,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         title="Análisis de Temperatura y Eficiencia"
                         description="Relación entre temperatura del inversor y eficiencia del sistema"
                         type="line"
-                        data={{
-                          labels: inverterData.results.slice().reverse().map(item => {
-                            // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                            const rawDate = item.date;
-                            // Crear fecha en zona horaria local para evitar desfase UTC
-                            const localDate = new Date(rawDate + 'T00:00:00');
-                            const formattedDate = localDate.toLocaleDateString('es-ES');
-                            
-                            return formattedDate;
-                          }),
-                          datasets: [
-                            {
-                              label: 'Temperatura Promedio (°C)',
-                              data: inverterData.results.slice().reverse().map(item => item.avg_temperature_c || 0),
-                              borderColor: '#EF4444',
-                              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                              fill: true,
-                              tension: 0.4,
-                              pointRadius: 4,
-                              pointBackgroundColor: '#EF4444',
-                              pointBorderColor: '#ffffff',
-                              pointBorderWidth: 2,
-                              yAxisID: 'y'
-                            }
-                          ]
-                        }}
+                        data={temperatureChartData}
                         options={{
                           ...CHART_OPTIONS,
                           plugins: {

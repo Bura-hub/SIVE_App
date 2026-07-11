@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { KpiCard } from "./KPI/KpiCard";
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
@@ -154,6 +154,102 @@ const ExternalEnergyData = () => {
     const savings = (generated * price) / (consumed * price) * 100;
     return Math.min(savings, 100);
   };
+
+  // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
+  // de chart.update()) en cada render (p.ej. al cambiar de sección o abrir un modal).
+  // Esta pantalla no invierte los datos (no usa .slice().reverse()), así que se memoiza
+  // directamente sobre la fuente (priceHistory / energyData) sin invertir.
+  const pricesChartData = useMemo(() => ({
+    labels: priceHistory.map(item => item.date),
+    datasets: [{
+      label: 'Precio COP/kWh',
+      data: priceHistory.map(item => item.price),
+      borderColor: 'rgb(59, 130, 246)',
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      tension: 0.4,
+      borderWidth: 3,
+      pointBackgroundColor: 'rgb(59, 130, 246)',
+      pointBorderColor: '#ffffff',
+      pointBorderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6
+    }]
+  }), [priceHistory]);
+
+  const generationChartData = useMemo(() => ({
+    labels: energyData?.generation?.generation_history?.map(item => item.date) || [],
+    datasets: [{
+      label: 'Generación (MW)',
+      data: energyData?.generation?.generation_history?.map(item => item.value) || [],
+      borderColor: 'rgb(234, 179, 8)',
+      backgroundColor: 'rgba(234, 179, 8, 0.1)',
+      tension: 0.4,
+      borderWidth: 3,
+      pointBackgroundColor: 'rgb(234, 179, 8)',
+      pointBorderColor: '#ffffff',
+      pointBorderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6
+    }]
+  }), [energyData]);
+
+  const demandChartData = useMemo(() => ({
+    labels: energyData?.demand?.demand_history?.map(item => item.date) || [],
+    datasets: [{
+      label: 'Demanda (MW)',
+      data: energyData?.demand?.demand_history?.map(item => item.value) || [],
+      borderColor: 'rgb(249, 115, 22)',
+      backgroundColor: 'rgba(249, 115, 22, 0.1)',
+      tension: 0.4,
+      borderWidth: 3,
+      pointBackgroundColor: 'rgb(249, 115, 22)',
+      pointBorderColor: '#ffffff',
+      pointBorderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6
+    }]
+  }), [energyData]);
+
+  const emissionsChartData = useMemo(() => ({
+    labels: energyData?.emissions?.emissions_history?.map(item => item.date) || [],
+    datasets: [{
+      label: 'Factor de Emisión (gCO₂e/kWh)',
+      data: energyData?.emissions?.emissions_history?.map(item => item.value) || [],
+      borderColor: 'rgb(16, 185, 129)',
+      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+      tension: 0.4,
+      borderWidth: 3,
+      pointBackgroundColor: 'rgb(16, 185, 129)',
+      pointBorderColor: '#ffffff',
+      pointBorderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6
+    }]
+  }), [energyData]);
+
+  const tradeChartData = useMemo(() => ({
+    labels: energyData?.exports?.exports_history?.map(item => item.date) || [],
+    datasets: [
+      {
+        label: 'Exportaciones (MWh)',
+        data: energyData?.exports?.exports_history?.map(item => item.value) || [],
+        borderColor: 'rgb(59, 130, 246)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4
+      },
+      {
+        label: 'Importaciones (MWh)',
+        data: energyData?.imports?.imports_history?.map(item => item.value) || [],
+        borderColor: 'rgb(249, 115, 22)',
+        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4
+      }
+    ]
+  }), [energyData]);
 
   if (loading) {
     return (
@@ -472,22 +568,7 @@ const ExternalEnergyData = () => {
                 <ChartCard
                   title=""
                   type="line"
-                  data={{
-                    labels: priceHistory.map(item => item.date),
-                    datasets: [{
-                      label: 'Precio COP/kWh',
-                      data: priceHistory.map(item => item.price),
-                      borderColor: 'rgb(59, 130, 246)',
-                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                      tension: 0.4,
-                      borderWidth: 3,
-                      pointBackgroundColor: 'rgb(59, 130, 246)',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                      pointRadius: 4,
-                      pointHoverRadius: 6
-                    }]
-                  }}
+                  data={pricesChartData}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
@@ -583,22 +664,7 @@ const ExternalEnergyData = () => {
                 <ChartCard
                     title=""
                     type="line"
-                  data={{
-                      labels: energyData.generation.generation_history?.map(item => item.date) || [],
-                    datasets: [{
-                        label: 'Generación (MW)',
-                        data: energyData.generation.generation_history?.map(item => item.value) || [],
-                        borderColor: 'rgb(234, 179, 8)',
-                        backgroundColor: 'rgba(234, 179, 8, 0.1)',
-                        tension: 0.4,
-                        borderWidth: 3,
-                        pointBackgroundColor: 'rgb(234, 179, 8)',
-                        pointBorderColor: '#ffffff',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    }]
-                  }}
+                  data={generationChartData}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
@@ -646,22 +712,7 @@ const ExternalEnergyData = () => {
                 <ChartCard
                     title=""
                     type="line"
-                  data={{
-                      labels: energyData.demand.demand_history?.map(item => item.date) || [],
-                    datasets: [{
-                        label: 'Demanda (MW)',
-                        data: energyData.demand.demand_history?.map(item => item.value) || [],
-                        borderColor: 'rgb(249, 115, 22)',
-                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                        tension: 0.4,
-                      borderWidth: 3,
-                        pointBackgroundColor: 'rgb(249, 115, 22)',
-                        pointBorderColor: '#ffffff',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    }]
-                  }}
+                  data={demandChartData}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
@@ -714,22 +765,7 @@ const ExternalEnergyData = () => {
                 <ChartCard
                     title=""
                   type="line"
-                  data={{
-                      labels: energyData.emissions.emissions_history?.map(item => item.date) || [],
-                    datasets: [{
-                        label: 'Factor de Emisión (gCO₂e/kWh)',
-                        data: energyData.emissions.emissions_history?.map(item => item.value) || [],
-                        borderColor: 'rgb(16, 185, 129)',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                      tension: 0.4,
-                      borderWidth: 3,
-                        pointBackgroundColor: 'rgb(16, 185, 129)',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    }]
-                  }}
+                  data={emissionsChartData}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
@@ -768,29 +804,7 @@ const ExternalEnergyData = () => {
                 <ChartCard
                   title=""
                   type="line"
-                  data={{
-                    labels: energyData.exports.exports_history?.map(item => item.date) || [],
-                    datasets: [
-                      {
-                        label: 'Exportaciones (MWh)',
-                        data: energyData.exports.exports_history?.map(item => item.value) || [],
-                        borderColor: 'rgb(59, 130, 246)',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
-                      },
-                      {
-                        label: 'Importaciones (MWh)',
-                        data: energyData.imports.imports_history?.map(item => item.value) || [],
-                        borderColor: 'rgb(249, 115, 22)',
-                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
-                      }
-                    ]
-                  }}
+                  data={tradeChartData}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,

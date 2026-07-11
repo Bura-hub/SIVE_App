@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KpiCard } from "./KPI/KpiCard";
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
@@ -223,6 +223,160 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentItems = meterData?.results?.slice(startIndex, endIndex) || [];
+
+  // Filas en orden cronológico ascendente, calculadas una sola vez por cambio de datos.
+  const meterRows = useMemo(
+    () => (meterData?.results ? meterData.results.slice().reverse() : []),
+    [meterData]
+  );
+
+  // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
+  // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
+  const energyChartData = useMemo(() => ({
+    labels: meterRows.map(item => {
+      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
+      const rawDate = item.date;
+      // Crear fecha en zona horaria local para evitar desfase UTC
+      const localDate = new Date(rawDate + 'T00:00:00');
+      const formattedDate = localDate.toLocaleDateString('es-ES');
+
+      console.log('🔍 PROCESAMIENTO DE FECHA EN CHART PRINCIPAL:');
+      console.log('  Fecha raw:', rawDate);
+      console.log('  Fecha local:', localDate);
+      console.log('  Fecha formateada:', formattedDate);
+
+      return formattedDate;
+    }),
+    datasets: [
+      {
+        label: 'Energía Importada (kWh)',
+        data: meterRows.map(item => item.imported_energy_kwh || 0),
+        borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#3B82F6',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+      },
+      {
+        label: 'Energía Exportada (kWh)',
+        data: meterRows.map(item => item.exported_energy_kwh || 0),
+        borderColor: '#EF4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#EF4444',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+      },
+      {
+        label: 'Consumo Neto (kWh)',
+        data: meterRows.map(item => item.net_energy_consumption_kwh || 0),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 4,
+        borderDash: [8, 4],
+        pointBackgroundColor: '#10B981',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+      }
+    ],
+  }), [meterRows]);
+
+  const qualityIndicatorsChartData = useMemo(() => ({
+    labels: meterRows.map(item => {
+      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
+      const rawDate = item.date;
+      // Crear fecha en zona horaria local para evitar desfase UTC
+      const localDate = new Date(rawDate + 'T00:00:00');
+      const formattedDate = localDate.toLocaleDateString('es-ES');
+
+      return formattedDate;
+    }),
+    datasets: [
+      {
+        label: 'Demanda Pico (kW)',
+        data: meterRows.map(item => item.peak_demand_kw || 0),
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#F59E0B',
+      },
+      {
+        label: 'Demanda Promedio (kW)',
+        data: meterRows.map(item => item.avg_demand_kw || 0),
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#8B5CF6',
+      },
+      {
+        label: 'Factor de Carga (%)',
+        data: meterRows.map(item => item.load_factor_pct || 0),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 3,
+        borderDash: [6, 3],
+        pointBackgroundColor: '#10B981',
+      }
+    ]
+  }), [meterRows]);
+
+  const energyQualityChartData = useMemo(() => ({
+    labels: meterRows.map(item => {
+      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
+      const rawDate = item.date;
+      // Crear fecha en zona horaria local para evitar desfase UTC
+      const localDate = new Date(rawDate + 'T00:00:00');
+      const formattedDate = localDate.toLocaleDateString('es-ES');
+
+      return formattedDate;
+    }),
+    datasets: [
+      {
+        label: 'Desequilibrio de Voltaje (%)',
+        data: meterRows.map(item => item.max_voltage_unbalance_pct || 0),
+        borderColor: '#EF4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#EF4444',
+      },
+      {
+        label: 'Desequilibrio de Corriente (%)',
+        data: meterRows.map(item => item.max_current_unbalance_pct || 0),
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#F59E0B',
+      },
+      {
+        label: 'THD de Voltaje (%)',
+        data: meterRows.map(item => item.max_voltage_thd_pct || 0),
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 3,
+        borderDash: [6, 3],
+        pointBackgroundColor: '#8B5CF6',
+      },
+    ]
+  }), [meterRows]);
 
   // Cargar datos iniciales al montar el componente
   useEffect(() => {
@@ -710,61 +864,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                       title="Análisis de Energía"
                       description="Consumo, exportación y balance energético en el tiempo"
                     type="line"
-                    data={{
-                        labels: meterData.results.slice().reverse().map(item => {
-                          // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                          const rawDate = item.date;
-                          // Crear fecha en zona horaria local para evitar desfase UTC
-                          const localDate = new Date(rawDate + 'T00:00:00');
-                          const formattedDate = localDate.toLocaleDateString('es-ES');
-                          
-                          console.log('🔍 PROCESAMIENTO DE FECHA EN CHART PRINCIPAL:');
-                          console.log('  Fecha raw:', rawDate);
-                          console.log('  Fecha local:', localDate);
-                          console.log('  Fecha formateada:', formattedDate);
-                          
-                          return formattedDate;
-                        }),
-                      datasets: [
-                        {
-                            label: 'Energía Importada (kWh)',
-                            data: meterData.results.slice().reverse().map(item => item.imported_energy_kwh || 0),
-                          borderColor: '#3B82F6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                          fill: true,
-                          tension: 0.4,
-                            pointRadius: 4,
-                          pointBackgroundColor: '#3B82F6',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 2,
-                        },
-                        {
-                            label: 'Energía Exportada (kWh)',
-                            data: meterData.results.slice().reverse().map(item => item.exported_energy_kwh || 0),
-                          borderColor: '#EF4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#EF4444',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 2,
-                          },
-                          {
-                            label: 'Consumo Neto (kWh)',
-                            data: meterData.results.slice().reverse().map(item => item.net_energy_consumption_kwh || 0),
-                            borderColor: '#10B981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                          fill: false,
-                          tension: 0.4,
-                            pointRadius: 4,
-                            borderDash: [8, 4],
-                            pointBackgroundColor: '#10B981',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 2,
-                        }
-                      ],
-                    }}
+                    data={energyChartData}
                       options={{
                         ...CHART_OPTIONS,
                         plugins: {
@@ -803,50 +903,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                       title="Indicadores de Calidad Eléctrica"
                       description="Demanda, factor de carga y eficiencia del sistema"
                     type="line"
-                    data={{
-                        labels: meterData.results.slice().reverse().map(item => {
-                          // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                          const rawDate = item.date;
-                          // Crear fecha en zona horaria local para evitar desfase UTC
-                          const localDate = new Date(rawDate + 'T00:00:00');
-                          const formattedDate = localDate.toLocaleDateString('es-ES');
-                          
-                          return formattedDate;
-                        }),
-                      datasets: [
-                        {
-                            label: 'Demanda Pico (kW)',
-                            data: meterData.results.slice().reverse().map(item => item.peak_demand_kw || 0),
-                            borderColor: '#F59E0B',
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                          fill: true,
-                          tension: 0.4,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#F59E0B',
-                          },
-                          {
-                            label: 'Demanda Promedio (kW)',
-                            data: meterData.results.slice().reverse().map(item => item.avg_demand_kw || 0),
-                            borderColor: '#8B5CF6',
-                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                          fill: true,
-                          tension: 0.4,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#8B5CF6',
-                          },
-                          {
-                            label: 'Factor de Carga (%)',
-                            data: meterData.results.slice().reverse().map(item => item.load_factor_pct || 0),
-                            borderColor: '#10B981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                          fill: false,
-                          tension: 0.4,
-                            pointRadius: 3,
-                            borderDash: [6, 3],
-                            pointBackgroundColor: '#10B981',
-                          }
-                        ]
-                      }}
+                    data={qualityIndicatorsChartData}
                       options={{
                         ...CHART_OPTIONS,
                         plugins: {
@@ -868,50 +925,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                       title="Calidad de Energía"
                       description="Desequilibrios y distorsiones armónicas"
                       type="line"
-                      data={{
-                        labels: meterData.results.slice().reverse().map(item => {
-                          // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                          const rawDate = item.date;
-                          // Crear fecha en zona horaria local para evitar desfase UTC
-                          const localDate = new Date(rawDate + 'T00:00:00');
-                          const formattedDate = localDate.toLocaleDateString('es-ES');
-                          
-                          return formattedDate;
-                        }),
-                        datasets: [
-                          {
-                            label: 'Desequilibrio de Voltaje (%)',
-                            data: meterData.results.slice().reverse().map(item => item.max_voltage_unbalance_pct || 0),
-                            borderColor: '#EF4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#EF4444',
-                          },
-                          {
-                            label: 'Desequilibrio de Corriente (%)',
-                            data: meterData.results.slice().reverse().map(item => item.max_current_unbalance_pct || 0),
-                            borderColor: '#F59E0B',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#F59E0B',
-                          },
-                          {
-                            label: 'THD de Voltaje (%)',
-                            data: meterData.results.slice().reverse().map(item => item.max_voltage_thd_pct || 0),
-                            borderColor: '#8B5CF6',
-                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                            fill: false,
-                            tension: 0.4,
-                            pointRadius: 3,
-                            borderDash: [6, 3],
-                            pointBackgroundColor: '#8B5CF6',
-                            },
-                        ]
-                      }}
+                      data={energyQualityChartData}
                       options={{
                         ...CHART_OPTIONS,
                         plugins: {

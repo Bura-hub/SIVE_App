@@ -1,5 +1,5 @@
 // Importaciones necesarias de React y componentes personalizados
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import WeatherStationFilters from './WeatherStationFilters';
@@ -477,6 +477,194 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     }
   }, [showKpiInfo, isOpening]);
 
+  // Filas en orden cronológico ascendente, calculadas una sola vez por cambio de datos.
+  const weatherRows = useMemo(
+    () => (weatherData?.results ? weatherData.results.slice().reverse() : []),
+    [weatherData]
+  );
+
+  // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
+  // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
+  const irradianceChartData = useMemo(() => ({
+    labels: weatherRows.map(item => {
+      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
+      const rawDate = item.date;
+      // Crear fecha en zona horaria local para evitar desfase UTC
+      const localDate = new Date(rawDate + 'T00:00:00');
+      const formattedDate = localDate.toLocaleDateString('es-ES');
+
+      return formattedDate;
+    }),
+    datasets: [
+      {
+        label: 'Irradiancia Acumulada (kWh/m²)',
+        data: weatherRows.map(item => item.daily_irradiance_kwh_m2 || 0),
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#F59E0B',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+      },
+      {
+        label: 'Horas Solares Pico (HSP)',
+        data: weatherRows.map(item => item.daily_hsp_hours || 0),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 4,
+        borderDash: [8, 4],
+        pointBackgroundColor: '#10B981',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+      }
+    ],
+  }), [weatherRows]);
+
+  const ambientConditionsChartData = useMemo(() => ({
+    labels: weatherRows.map(item => {
+      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
+      const rawDate = item.date;
+      // Crear fecha en zona horaria local para evitar desfase UTC
+      const localDate = new Date(rawDate + 'T00:00:00');
+      const formattedDate = localDate.toLocaleDateString('es-ES');
+
+      return formattedDate;
+    }),
+    datasets: [
+      {
+        label: 'Temperatura Promedio (°C)',
+        data: weatherRows.map(item => item.avg_temperature_c || 0),
+        borderColor: '#EF4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#EF4444',
+      },
+      {
+        label: 'Humedad Relativa (%)',
+        data: weatherRows.map(item => item.avg_humidity_pct || 0),
+        borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#3B82F6',
+      }
+    ]
+  }), [weatherRows]);
+
+  const windConditionsChartData = useMemo(() => ({
+    labels: weatherRows.map(item => {
+      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
+      const rawDate = item.date;
+      // Crear fecha en zona horaria local para evitar desfase UTC
+      const localDate = new Date(rawDate + 'T00:00:00');
+      const formattedDate = localDate.toLocaleDateString('es-ES');
+
+      return formattedDate;
+    }),
+    datasets: [
+      {
+        label: 'Velocidad del Viento (km/h)',
+        data: weatherRows.map(item => item.avg_wind_speed_kmh || 0),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#10B981',
+      },
+      {
+        label: 'Precipitación Acumulada (cm/día)',
+        data: weatherRows.map(item => item.daily_precipitation_cm || 0),
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 3,
+        borderDash: [6, 3],
+        pointBackgroundColor: '#8B5CF6',
+      }
+    ]
+  }), [weatherRows]);
+
+  // Rosa de los vientos: agrupa el bundle labels/slow/mid/fast/total/fills que alimenta
+  // tanto el `data` (memoizado) como los callbacks del tooltip en `options` (sin tocar
+  // su contenido, solo se referencia esta misma fuente ya calculada).
+  const windRoseBundle = useMemo(() => {
+    const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const slow = calculateWindRoseData(weatherRows, 0, 5);
+    const mid = calculateWindRoseData(weatherRows, 5, 10);
+    const fast = calculateWindRoseData(weatherRows, 10, Infinity);
+    const total = labels.map((_, i) => (slow[i] || 0) + (mid[i] || 0) + (fast[i] || 0));
+    // Rueda de color tipo brújula (un color por sector), con relleno translúcido.
+    const DIR_COLORS = ['#2563eb', '#0891b2', '#059669', '#65a30d', '#d97706', '#ea580c', '#dc2626', '#7c3aed'];
+    const fills = DIR_COLORS.map(c => c + 'cc'); // ~80% opacidad
+    const chartData = {
+      labels,
+      datasets: [
+        {
+          label: 'Lecturas de viento',
+          data: total,
+          backgroundColor: fills,
+          borderColor: '#ffffff',
+          borderWidth: 1.5,
+        },
+      ],
+    };
+    return { labels, slow, mid, fast, total, chartData };
+  }, [weatherRows]);
+
+  const pvTheoreticalPowerChartData = useMemo(() => ({
+    labels: weatherRows.map(item => {
+      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
+      const rawDate = item.date;
+      // Crear fecha en zona horaria local para evitar desfase UTC
+      const localDate = new Date(rawDate + 'T00:00:00');
+      const formattedDate = localDate.toLocaleDateString('es-ES');
+
+      return formattedDate;
+    }),
+    datasets: [
+      {
+        label: 'Potencia Teórica (W)',
+        data: weatherRows.map(item =>
+          calculateTheoreticalPVPower(
+            item?.daily_irradiance_kwh_m2 || 0,
+            item?.avg_temperature_c || 25
+          )
+        ),
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#8B5CF6',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+      },
+      {
+        label: 'Irradiancia (kWh/m²)',
+        data: weatherRows.map(item => item?.daily_irradiance_kwh_m2 || 0),
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245, 158, 11, 0.05)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 3,
+        borderDash: [6, 3],
+        pointBackgroundColor: '#F59E0B',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 1,
+        yAxisID: 'y1'
+      }
+    ],
+  }), [weatherRows]);
+
   // Si está cargando, muestra un spinner o mensaje
   if (loading) {
     return (
@@ -886,44 +1074,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 title="Análisis de Irradiancia Solar"
                 description="Irradiancia acumulada y horas solares pico en el tiempo"
                   type="line"
-                data={{
-                  labels: weatherData.results.slice().reverse().map(item => {
-                    // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                    const rawDate = item.date;
-                    // Crear fecha en zona horaria local para evitar desfase UTC
-                    const localDate = new Date(rawDate + 'T00:00:00');
-                    const formattedDate = localDate.toLocaleDateString('es-ES');
-                    
-                    return formattedDate;
-                  }),
-                  datasets: [
-                    {
-                      label: 'Irradiancia Acumulada (kWh/m²)',
-                      data: weatherData.results.slice().reverse().map(item => item.daily_irradiance_kwh_m2 || 0),
-                      borderColor: '#F59E0B',
-                      backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                      fill: true,
-                      tension: 0.4,
-                      pointRadius: 4,
-                      pointBackgroundColor: '#F59E0B',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                    },
-                    {
-                      label: 'Horas Solares Pico (HSP)',
-                      data: weatherData.results.slice().reverse().map(item => item.daily_hsp_hours || 0),
-                      borderColor: '#10B981',
-                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                      fill: false,
-                      tension: 0.4,
-                      pointRadius: 4,
-                      borderDash: [8, 4],
-                      pointBackgroundColor: '#10B981',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                    }
-                  ],
-                }}
+                data={irradianceChartData}
                 options={{
                   ...CHART_OPTIONS,
                   plugins: {
@@ -962,39 +1113,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 title="Condiciones Ambientales"
                 description="Temperatura y humedad relativa del ambiente"
                 type="line"
-                data={{
-                  labels: weatherData.results.slice().reverse().map(item => {
-                    // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                    const rawDate = item.date;
-                    // Crear fecha en zona horaria local para evitar desfase UTC
-                    const localDate = new Date(rawDate + 'T00:00:00');
-                    const formattedDate = localDate.toLocaleDateString('es-ES');
-                    
-                    return formattedDate;
-                  }),
-                  datasets: [
-                    {
-                      label: 'Temperatura Promedio (°C)',
-                      data: weatherData.results.slice().reverse().map(item => item.avg_temperature_c || 0),
-                      borderColor: '#EF4444',
-                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                      fill: true,
-                      tension: 0.4,
-                      pointRadius: 3,
-                      pointBackgroundColor: '#EF4444',
-                    },
-                    {
-                      label: 'Humedad Relativa (%)',
-                      data: weatherData.results.slice().reverse().map(item => item.avg_humidity_pct || 0),
-                      borderColor: '#3B82F6',
-                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                      fill: true,
-                      tension: 0.4,
-                      pointRadius: 3,
-                      pointBackgroundColor: '#3B82F6',
-                    }
-                  ]
-                }}
+                data={ambientConditionsChartData}
                 options={{
                   ...CHART_OPTIONS,
                   plugins: {
@@ -1016,40 +1135,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 title="Condiciones del Viento"
                 description="Velocidad del viento y precipitación"
                   type="line"
-                data={{
-                  labels: weatherData.results.slice().reverse().map(item => {
-                    // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                    const rawDate = item.date;
-                    // Crear fecha en zona horaria local para evitar desfase UTC
-                    const localDate = new Date(rawDate + 'T00:00:00');
-                    const formattedDate = localDate.toLocaleDateString('es-ES');
-                    
-                    return formattedDate;
-                  }),
-                  datasets: [
-                    {
-                      label: 'Velocidad del Viento (km/h)',
-                      data: weatherData.results.slice().reverse().map(item => item.avg_wind_speed_kmh || 0),
-                      borderColor: '#10B981',
-                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                      fill: true,
-                      tension: 0.4,
-                      pointRadius: 3,
-                      pointBackgroundColor: '#10B981',
-                    },
-                    {
-                      label: 'Precipitación Acumulada (cm/día)',
-                      data: weatherData.results.slice().reverse().map(item => item.daily_precipitation_cm || 0),
-                      borderColor: '#8B5CF6',
-                      backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                      fill: false,
-                      tension: 0.4,
-                      pointRadius: 3,
-                      borderDash: [6, 3],
-                      pointBackgroundColor: '#8B5CF6',
-                    }
-                  ]
-                }}
+                data={windConditionsChartData}
                 options={{
                   ...CHART_OPTIONS,
                   plugins: {
@@ -1079,31 +1165,13 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 // Rosa de los vientos: UN pétalo por dirección cardinal (frecuencia total de
                 // lecturas del rango). El desglose por banda de velocidad (0-5/5-10/10+ km/h,
                 // asignada por la velocidad media de cada día) se muestra en el tooltip.
-                const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-                const slow = calculateWindRoseData(weatherData.results, 0, 5);
-                const mid = calculateWindRoseData(weatherData.results, 5, 10);
-                const fast = calculateWindRoseData(weatherData.results, 10, Infinity);
-                const total = labels.map((_, i) => (slow[i] || 0) + (mid[i] || 0) + (fast[i] || 0));
-                // Rueda de color tipo brújula (un color por sector), con relleno translúcido.
-                const DIR_COLORS = ['#2563eb', '#0891b2', '#059669', '#65a30d', '#d97706', '#ea580c', '#dc2626', '#7c3aed'];
-                const fills = DIR_COLORS.map(c => c + 'cc'); // ~80% opacidad
+                const { labels, slow, mid, fast, total, chartData } = windRoseBundle;
                 return (
                   <ChartCard
                     title="Rosa de los Vientos"
                     description="Frecuencia del viento por dirección en el rango. El detalle por banda de velocidad aparece al pasar el cursor."
                     type="polarArea"
-                    data={{
-                      labels,
-                      datasets: [
-                        {
-                          label: 'Lecturas de viento',
-                          data: total,
-                          backgroundColor: fills,
-                          borderColor: '#ffffff',
-                          borderWidth: 1.5,
-                        },
-                      ],
-                    }}
+                    data={chartData}
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
@@ -1153,50 +1221,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 title="Potencia Fotovoltaica Teórica"
                 description="Potencia teórica generada basada en irradiancia solar y condiciones ambientales"
                 type="line"
-                data={{
-                  labels: weatherData?.results ? weatherData.results.slice().reverse().map(item => {
-                    // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-                    const rawDate = item.date;
-                    // Crear fecha en zona horaria local para evitar desfase UTC
-                    const localDate = new Date(rawDate + 'T00:00:00');
-                    const formattedDate = localDate.toLocaleDateString('es-ES');
-                    
-                    return formattedDate;
-                  }) : [],
-                  datasets: [
-                    {
-                      label: 'Potencia Teórica (W)',
-                      data: weatherData?.results ? weatherData.results.slice().reverse().map(item => 
-                        calculateTheoreticalPVPower(
-                          item?.daily_irradiance_kwh_m2 || 0,
-                          item?.avg_temperature_c || 25
-                        )
-                      ) : [],
-                      borderColor: '#8B5CF6',
-                      backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                      fill: true,
-                      tension: 0.4,
-                      pointRadius: 4,
-                      pointBackgroundColor: '#8B5CF6',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 2,
-                    },
-                    {
-                      label: 'Irradiancia (kWh/m²)',
-                      data: weatherData?.results ? weatherData.results.slice().reverse().map(item => item?.daily_irradiance_kwh_m2 || 0) : [],
-                      borderColor: '#F59E0B',
-                      backgroundColor: 'rgba(245, 158, 11, 0.05)',
-                      fill: false,
-                      tension: 0.4,
-                      pointRadius: 3,
-                      borderDash: [6, 3],
-                      pointBackgroundColor: '#F59E0B',
-                      pointBorderColor: '#ffffff',
-                      pointBorderWidth: 1,
-                      yAxisID: 'y1'
-                    }
-                  ],
-                }}
+                data={pvTheoreticalPowerChartData}
                 options={{
                   ...CHART_OPTIONS,
                   plugins: {
