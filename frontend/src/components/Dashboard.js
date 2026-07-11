@@ -1016,24 +1016,6 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                   </div>
                 )}
               </button>
-              
-              {/* Información adicional */}
-              <div className="text-right">
-                <p className="text-xs text-blue-200 font-medium">
-                  {taskExecuting ? "Sincronizando datos..." : "Última ejecución: "}
-                  {!taskExecuting && (
-                    <span className="text-blue-100">
-                      {taskStates.deviceSync?.timestamp 
-                        ? new Date(taskStates.deviceSync.timestamp).toLocaleTimeString('es-ES', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })
-                        : "Nunca"
-                      }
-                    </span>
-                  )}
-                </p>
-              </div>
             </div>
             )}
           </div>
