@@ -35,7 +35,7 @@ Transformar datos complejos en información accionable, proporcionando a analist
 - **Detalles de Inversores**: Métricas y tendencias de la generación de energía solar
 - **Detalles del Clima**: Datos meteorológicos relevantes para el análisis energético
 - **Datos Externos de Energía**: Análisis de precios, ahorros y mercado energético
-- **Exportación de Reportes**: Generación y descarga de reportes en formato CSV
+- **Exportación de Reportes**: Generación y descarga de reportes en PDF, Excel y CSV
 
 ### ⚡ Integración SCADA y Procesamiento
 - **Integración con API SCADA**: Conexión segura a través de proxy Django para datos en tiempo real
@@ -45,25 +45,29 @@ Transformar datos complejos en información accionable, proporcionando a analist
 
 ## 🏗️ Arquitectura del Proyecto
 
-### Backend (Django 5.2.4)
-- **Django 5.2.4**: Framework web principal
-- **Django REST Framework**: Construcción de APIs RESTful
+### Backend (Django 5.2)
+- **Django 5.2 + Django REST Framework**: APIs RESTful (auth por token `Token <key>`)
 - **PostgreSQL 17**: Base de datos principal
 - **Redis**: Broker para Celery y caché
-- **Celery**: Procesamiento asíncrono de tareas
-- **Celery Beat**: Programación de tareas periódicas
+- **Celery + Celery Beat**: Procesamiento asíncrono y tareas periódicas (scheduler en BD)
+- **Capa `services/`**: la lógica de cálculo de indicadores vive en funciones puras
+  (`indicators/services/`), separada de tasks/vistas (vistas "finas")
+- **drf-spectacular**: OpenAPI en `/schema/`, Swagger en `/docs/`, Redoc en `/redocs/`
+  (accesibles solo a admin vía sesión de `/admin/`)
 
-### Frontend (React 19.1.0)
-- **React 19.1.0**: Biblioteca de interfaz de usuario
-- **Chart.js 4.5.0**: Visualización de datos y gráficos
-- **Tailwind CSS 3.4.17**: Framework de CSS utilitario
-- **React Router**: Navegación entre componentes
+### Frontend (React 19 + Vite)
+- **React 19**: Biblioteca de interfaz de usuario (JSX servido desde archivos `.js`)
+- **Vite 5**: Bundler y dev server (`npm start`); **Vitest** para tests (`npm test`)
+- **Chart.js** (`react-chartjs-2`, `chartjs-plugin-zoom`): gráficos, incluida la rosa de vientos polar
+- **Tailwind CSS**: framework de CSS utilitario
+- Navegación por **estado** (sin router de URL); la URL base de la API se inyecta en
+  build-time vía `VITE_API_URL`
 
 ### Infraestructura
-- **Docker**: Containerización completa de la aplicación
-- **PostgreSQL**: Base de datos con persistencia
-- **Redis**: Cache y broker de mensajes
-- **Acceso Directo**: Sin proxy reverso - acceso directo a puertos
+- **Docker**: containerización completa (`docker-compose.prod.yml`)
+- **PostgreSQL** (persistencia) y **Redis** (cache/broker)
+- **Producción tras Apache**: publicado como subruta **`/sive/`** del dominio
+  `mte.udenar.edu.co`, reutilizando su certificado Let's Encrypt (ver sección de despliegue)
 
 ## 🛠️ Requisitos del Sistema
 
@@ -129,13 +133,67 @@ docker-compose -f docker-compose.prod.yml ps
 - **Backend**: http://localhost:${BACKEND_PORT:-3504}
 - **Admin**: http://localhost:${BACKEND_PORT:-3504}/admin
 
-### Producción:
-- **Frontend**: http://TU_IP:${FRONTEND_PORT:-3503}
-- **Backend**: http://TU_IP:${BACKEND_PORT:-3504}
-- **Admin**: http://TU_IP:${BACKEND_PORT:-3504}/admin
-- **API**: http://TU_IP:${BACKEND_PORT:-3504}/api/schema/swagger-ui/
+### Producción (bajo Apache, subruta `/sive/`):
+- **Aplicación**: https://mte.udenar.edu.co/sive/
+- **Admin**: https://mte.udenar.edu.co/sive/admin/
+- **API**: https://mte.udenar.edu.co/sive/api/
+- **Docs API** (solo admin, tras iniciar sesión en `/sive/admin/`): Swagger `/sive/docs/`,
+  Redoc `/sive/redocs/`, esquema OpenAPI `/sive/schema/`
 
-**Nota**: Reemplaza `TU_IP` con la IP específica de tu servidor (ej: 192.168.1.100)
+> Los contenedores escuchan solo en `127.0.0.1:3503` (frontend) y `127.0.0.1:3504`
+> (backend); **no** se exponen a Internet — solo Apache los alcanza. Ver
+> [Despliegue en producción bajo `/sive/`](#-despliegue-en-producción-bajo-sive).
+
+## 🌐 Despliegue en producción bajo `/sive/`
+
+SIVE se publica como **subruta `/sive/`** de `mte.udenar.edu.co`, reutilizando el Apache y
+el certificado Let's Encrypt existentes, sin abrir puertos nuevos.
+
+```
+Navegador ──HTTPS──> Apache (:443, cert de mte.udenar.edu.co)
+   /sive/api,/auth,/admin,... ├─(quita /sive)──> 127.0.0.1:3504  backend  (gunicorn)
+   /sive/django-static        ├────────────────> 127.0.0.1:3504  (WhiteNoise)
+   /sive/ (resto)             └────────────────> 127.0.0.1:3503  frontend (nginx)
+```
+
+- El **frontend** navega por estado (sin router de URL) y carga assets de forma relativa bajo `/sive/`.
+- El **backend** corre con `FORCE_SCRIPT_NAME=/sive`, así admin, DRF, Swagger y redirecciones generan URLs con `/sive`.
+- API y frontend comparten **el mismo origen** → sin CORS ni contenido mixto.
+
+**Variables clave del `.env`:**
+```env
+DEBUG=False
+ALLOWED_HOSTS=localhost,127.0.0.1,mte.udenar.edu.co
+CORS_ALLOWED_ORIGINS=https://mte.udenar.edu.co
+CSRF_TRUSTED_ORIGINS=https://mte.udenar.edu.co
+VITE_API_URL=https://mte.udenar.edu.co/sive     # se incrusta en el bundle en build-time
+FORCE_SCRIPT_NAME=/sive
+STATIC_URL=/sive/django-static/
+USE_X_FORWARDED_HOST=True
+BEHIND_TLS_PROXY=True
+SECURE_HSTS_SECONDS=0        # dominio compartido; HSTS lo gestiona Apache
+```
+
+**Reconstruir tras cambiar `VITE_API_URL`** (se hornea en build-time):
+```bash
+docker compose -f docker-compose.prod.yml build backend frontend
+docker compose -f docker-compose.prod.yml up -d
+```
+
+**Apache** (lo aplica el administrador; requiere `proxy`, `proxy_http`, `headers`): insertar el
+bloque de [`deploy/apache-sive.conf`](deploy/apache-sive.conf) dentro del `<VirtualHost *:443>`
+existente, luego `sudo apache2ctl configtest && sudo systemctl reload apache2`.
+
+**Verificación:**
+```bash
+curl -sk  https://mte.udenar.edu.co/sive/health/   # -> 200
+curl -sk  https://mte.udenar.edu.co/sive/api/      # -> 401 (requiere auth)
+curl -skI https://mte.udenar.edu.co/sive/          # -> 200 (index del frontend)
+```
+
+> Nota: los estáticos de admin/DRF se sirven con WhiteNoise; Apache quita el prefijo `/sive` y
+> WhiteNoise sirve en `/django-static/`. La ruta crítica (frontend + API JSON) no depende de
+> estáticos de Django.
 
 ## 📊 Indicadores Clave de Rendimiento (KPIs)
 
@@ -174,11 +232,12 @@ El sistema ejecuta automáticamente:
 - **[Indicadores](indicators/indicators.md)**: Metodología de cálculo de KPIs
 
 ### Módulos Especializados
-- **[Datos Externos de Energía](external_energy/README.md)**: Integración con APIs externas
+- **[Datos Externos de Energía](external_energy/README.md)**: Integración con APIs externas (XM)
 - **[Inicio Rápido - Datos Externos](external_energy/quick_start.md)**: Configuración rápida
 
-### Índice de Documentación
-- **[DOCS_INDEX.md](DOCS_INDEX.md)**: Índice completo de toda la documentación
+### Referencia técnica
+- **[Análisis Backend/Frontend](BACKEND_FRONTEND_ANALYSIS.md)**: troubleshooting y fallas comunes de despliegue
+- **Convenciones completas**: `.cursor/rules/*.mdc` y `CLAUDE.md`
 
 ## 🛠️ Comandos de Gestión Útiles
 
@@ -300,4 +359,4 @@ Este proyecto está bajo la licencia MIT. Ver el archivo `LICENSE` para más det
 
 ---
 
-**Última Actualización**: Enero 2025  
+**Última Actualización**: Julio 2026 (migración a Vite, capa `services/`, refactor de pantallas de detalle con `useDeviceDetail`, saneamiento de KPIs y despliegue bajo `/sive/`).
