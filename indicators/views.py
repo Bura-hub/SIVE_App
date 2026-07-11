@@ -11,7 +11,8 @@ from datetime import datetime, timedelta, timezone, date
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_headers
-import uuid 
+from django.core.cache import cache
+import uuid
 import requests
 import calendar
 import pytz
@@ -50,10 +51,14 @@ from indicators.services.kpi import calculate_kpi_metrics, summarize_inverter_st
 from indicators.services.queries import apply_device_filter  # noqa: E402
 from indicators.serializers import DashboardChartPointSerializer  # noqa: E402
 
-@method_decorator(cache_page(60 * 5), name='dispatch')
-@method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ConsumptionSummaryView(APIView):
     permission_classes = [IsAuthenticated]
+
+    # Caché GLOBAL (no por token): la respuesta es data de flota idéntica para todos los
+    # usuarios autenticados. Se consulta dentro de get(), DESPUÉS de que DRF autentique,
+    # para no exponer datos a anónimos (a diferencia de cache_page a nivel dispatch).
+    CACHE_KEY = 'dashboard:summary:v1'
+    CACHE_TTL = 60 * 5
 
     def get_scada_token(self):
         try:
@@ -93,6 +98,10 @@ class ConsumptionSummaryView(APIView):
         
         Obtiene el resumen de consumo, generación y balance energético mensual.
         """
+        cached = cache.get(self.CACHE_KEY)
+        if cached is not None:
+            return Response(cached)
+
         token = self.get_scada_token()
         if isinstance(token, Response):
             return token
@@ -298,6 +307,7 @@ class ConsumptionSummaryView(APIView):
                 "hasData": has_data,
                 "scadaConnection": {"connected": scada_connected, "message": scada_message},
             }
+            cache.set(self.CACHE_KEY, kpi_data, self.CACHE_TTL)
             return Response(kpi_data)
 
         except Exception as e:
