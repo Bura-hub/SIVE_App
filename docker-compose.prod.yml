@@ -109,7 +109,7 @@ services:
       - BEHIND_TLS_PROXY=${BEHIND_TLS_PROXY:-False}
       - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
-      - ./media:/app/media
+      - media_data_prod:/app/media
       - ./logs:/app/logs
     depends_on:
       db:
@@ -170,7 +170,7 @@ services:
       - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
       - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
-      - ./media:/app/media
+      - media_data_prod:/app/media
       - ./logs:/app/logs
     depends_on:
       db:
@@ -226,7 +226,7 @@ services:
       - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
       - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
-      - ./media:/app/media
+      - media_data_prod:/app/media
       - ./logs:/app/logs
       - ./celerybeat-schedule:/app/celerybeat-schedule
     depends_on:
@@ -308,6 +308,12 @@ volumes:
   postgres_data_prod:
     driver: local
   redis_data_prod:
+    driver: local
+  # Volumen con nombre para media (reportes, imágenes de perfil): compartido por backend/
+  # celery de forma consistente sin importar desde qué carpeta se invoque compose. Antes
+  # era el bind relativo ./media, cuyo host-path cambiaba según el directorio de invocación
+  # -> el celery que ESCRIBE y el backend que LEE apuntaban a dirs distintos (404 al descargar).
+  media_data_prod:
     driver: local
 
 # ================================
