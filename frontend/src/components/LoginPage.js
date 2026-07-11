@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import siveLogo from './sive-logo.svg';
-import background from './bg.png';
+import background from './bg.webp';
 import TransitionOverlay from './TransitionOverlay';
 import { fetchWithAuth, handleApiResponse } from '../utils/apiConfig';
 import { buildApiUrl, getEndpoint } from '../config';
@@ -406,7 +406,7 @@ function LoginPage({ onLoginSuccess }) {
     return (
         <div 
             className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat p-4 font-inter relative overflow-hidden"
-            style={{ backgroundImage: `url(${background})` }}
+            style={{ backgroundColor: '#0f172a', backgroundImage: `url(${background})` }}
         >
             {/* Partículas flotantes animadas */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
