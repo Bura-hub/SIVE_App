@@ -18,11 +18,16 @@ const InverterFilters = ({ onFiltersChange, authToken }) => {
     };
   };
   
+  // Suma N días a una fecha en formato 'YYYY-MM-DD' y devuelve el mismo formato.
+  const addDaysToDateString = (dateString, days) => {
+    const date = new Date(`${dateString}T00:00:00`);
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split('T')[0];
+  };
+
   const defaultDates = getDefaultDates();
   const [startDate, setStartDate] = useState(defaultDates.startDate);
   const [endDate, setEndDate] = useState(defaultDates.endDate);
-  // Día único para la vista horaria (Opción B): independiente del rango daily/monthly.
-  const [selectedDay, setSelectedDay] = useState(defaultDates.endDate);
 
   const [institutions, setInstitutions] = useState([]);
   const [devices, setDevices] = useState([]);
@@ -53,18 +58,15 @@ const InverterFilters = ({ onFiltersChange, authToken }) => {
 
   // Notificar cambios en los filtros
   useEffect(() => {
-    // Vista horaria: un único día (startDate = endDate = día elegido).
-    const effectiveStartDate = timeRange === 'hourly' ? selectedDay : startDate;
-    const effectiveEndDate = timeRange === 'hourly' ? selectedDay : endDate;
-    console.log('Filters changed:', { timeRange, selectedInstitution, selectedDevice, startDate: effectiveStartDate, endDate: effectiveEndDate });
+    console.log('Filters changed:', { timeRange, selectedInstitution, selectedDevice, startDate, endDate });
     onFiltersChange({
       timeRange,
       institutionId: selectedInstitution,
       deviceId: selectedDevice,
-      startDate: effectiveStartDate,
-      endDate: effectiveEndDate
+      startDate,
+      endDate
     });
-  }, [timeRange, selectedInstitution, selectedDevice, startDate, endDate, selectedDay, onFiltersChange]);
+  }, [timeRange, selectedInstitution, selectedDevice, startDate, endDate, onFiltersChange]);
 
   // Vista horaria: fuerza un único dispositivo (auto-selecciona el primero si no hay ninguno).
   useEffect(() => {
@@ -189,46 +191,33 @@ const InverterFilters = ({ onFiltersChange, authToken }) => {
         </select>
       </div>
 
-      {timeRange === 'hourly' ? (
-        /* Vista horaria: un único selector de día (reemplaza Inicio/Fin) */
-        <div className="flex flex-col">
-          <label className="text-sm font-medium text-gray-700 mb-1">Día</label>
-          <input aria-label="Día"
-            type="date"
-            value={selectedDay}
-            onChange={(e) => setSelectedDay(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-          />
-        </div>
-      ) : (
-        <>
-          {/* Filtro de fecha de inicio */}
-          <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-            <input aria-label="Fecha de Inicio"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
-          </div>
+      {/* Filtro de fecha de inicio */}
+      <div className="flex flex-col">
+        <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+        <input aria-label="Fecha de Inicio"
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+        />
+      </div>
 
-          {/* Filtro de fecha de fin */}
-          <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Fin</label>
-            <input aria-label="Fecha de Fin"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
-          </div>
-        </>
-      )}
+      {/* Filtro de fecha de fin */}
+      <div className="flex flex-col">
+        <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Fin</label>
+        <input aria-label="Fecha de Fin"
+          type="date"
+          value={endDate}
+          min={timeRange === 'hourly' ? startDate : undefined}
+          max={timeRange === 'hourly' && startDate ? addDaysToDateString(startDate, 6) : undefined}
+          onChange={(e) => setEndDate(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+        />
+      </div>
 
       {timeRange === 'hourly' && (
         <p className="text-xs text-red-700 basis-full">
-          Vista horaria: seleccione un dispositivo y un día.
+          Vista horaria: seleccione un dispositivo y un rango de máximo 7 días.
         </p>
       )}
 
