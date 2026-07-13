@@ -49,6 +49,10 @@ scada_devices_full.json
 # Documentos internos de auditoría/planeación (solo local, no versionar)
 AUDITORIA_SIVE/
 
+# Documentación LaTeX final (SIVE) y material fuente temporal — solo local
+recursos_adicionales/SIVE_docs_final/
+recursos_adicionales/*.zip
+
 # Config de despliegue específica del servidor (local)
 deploy/mte-sive-ssl-vhost.conf
 
