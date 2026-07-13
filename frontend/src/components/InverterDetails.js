@@ -84,6 +84,20 @@ const CHART_OPTIONS = {
   transitions: { zoom: { animation: { duration: 300, easing: 'easeInOutQuart' } } }
 };
 
+// Vista horaria (Opción B): formatea el campo `hour` (datetime ISO, inicio de hora) como
+// HH:mm en zona horaria de Bogotá, consistente con el resto de la vista horaria.
+const formatHourLabel = (isoHour) => {
+  if (!isoHour) return '';
+  const d = new Date(isoHour);
+  if (isNaN(d.getTime())) return isoHour;
+  return d.toLocaleTimeString('es-CO', {
+    timeZone: 'America/Bogota',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+
 // Componente de encabezado de sección
 const SectionHeader = ({ title, icon, infoText }) => (
   <div className="flex items-center justify-between mb-6">
@@ -454,11 +468,21 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
   // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
   const generationChartData = useMemo(() => ({
-    labels: invRows.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')),
+    labels: invRows.map(item => (
+      filters.timeRange === 'hourly'
+        ? formatHourLabel(item.hour)
+        : new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')
+    )),
     datasets: [
       {
         label: 'Energía Total Generada (kWh)',
-        data: invRows.map(item => item.total_generated_energy_kwh || 0),
+        // Vista horaria (Opción B): HourlyInverterIndicators no tiene total_generated_energy_kwh,
+        // el equivalente es energy_ac_kwh (energía AC de la hora).
+        data: invRows.map(item => (
+          filters.timeRange === 'hourly'
+            ? (item.energy_ac_kwh || 0)
+            : (item.total_generated_energy_kwh || 0)
+        )),
         borderColor: '#10B981',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         fill: true,
@@ -482,10 +506,14 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         pointBorderWidth: 2,
       }
     ]
-  }), [invRows]);
+  }), [invRows, filters.timeRange]);
 
   const powerFactorChartData = useMemo(() => ({
-    labels: invRows.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')),
+    labels: invRows.map(item => (
+      filters.timeRange === 'hourly'
+        ? formatHourLabel(item.hour)
+        : new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')
+    )),
     datasets: [
       {
         label: 'Factor de Potencia Promedio',
@@ -498,10 +526,14 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         pointBackgroundColor: '#3B82F6',
       }
     ]
-  }), [invRows]);
+  }), [invRows, filters.timeRange]);
 
   const unbalanceChartData = useMemo(() => ({
-    labels: invRows.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')),
+    labels: invRows.map(item => (
+      filters.timeRange === 'hourly'
+        ? formatHourLabel(item.hour)
+        : new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')
+    )),
     datasets: [
       {
         label: 'Desbalance de Voltaje (%)',
@@ -535,26 +567,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         pointBackgroundColor: '#8B5CF6',
       }
     ]
-  }), [invRows]);
-
-  const temperatureChartData = useMemo(() => ({
-    labels: invRows.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')),
-    datasets: [
-      {
-        label: 'Temperatura Promedio (°C)',
-        data: invRows.map(item => item.avg_temperature_c || 0),
-        borderColor: '#EF4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 4,
-        pointBackgroundColor: '#EF4444',
-        pointBorderColor: '#ffffff',
-        pointBorderWidth: 2,
-        yAxisID: 'y'
-      }
-    ]
-  }), [invRows]);
+  }), [invRows, filters.timeRange]);
 
   // Estados de carga y error (suavizados)
   if (loading) {
@@ -1064,68 +1077,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                         fullscreenHeight="700px"
                       />
                     </div>
-
-                    {/* Gráfico de temperatura vs eficiencia */}
-                    <div className="w-full">
-                      <ChartCard
-                        title="Análisis de Temperatura y Eficiencia"
-                        description="Relación entre temperatura del inversor y eficiencia del sistema"
-                        type="line"
-                        data={temperatureChartData}
-                        options={{
-                          ...CHART_OPTIONS,
-                          plugins: {
-                            ...CHART_OPTIONS.plugins,
-                            title: { display: false },
-                            legend: {
-                              ...CHART_OPTIONS.plugins.legend,
-                              position: 'top',
-                              align: 'start',
-                              labels: {
-                                ...CHART_OPTIONS.plugins.legend.labels,
-                                usePointStyle: true,
-                                padding: 20,
-                                font: { size: 13, weight: '600' }
-                              }
-                            }
-                          },
-                          scales: {
-                            x: {
-                              ...CHART_OPTIONS.scales.x,
-                              grid: { display: true, color: 'rgba(0, 0, 0, 0.03)', drawBorder: false },
-                              ticks: { color: '#6B7280', font: { size: 11, weight: '500' }, maxRotation: 45, minRotation: 0 },
-                              border: { display: false }
-                            },
-                            y: {
-                              type: 'linear',
-                              display: true,
-                              position: 'left',
-                              grid: { color: 'rgba(0, 0, 0, 0.03)', drawBorder: false },
-                              ticks: {
-                                color: '#6B7280',
-                                font: { size: 11, weight: '500' },
-                                callback: (value) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(value)
-                              },
-                              border: { display: false }
-                            },
-                            y1: {
-                              type: 'linear',
-                              display: true,
-                              position: 'right',
-                              grid: { drawOnChartArea: false },
-                              ticks: {
-                                color: '#6B7280',
-                                font: { size: 11, weight: '500' },
-                                callback: (value) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(value)
-                              },
-                              border: { display: false }
-                            }
-                          }
-                        }}
-                        height="400px"
-                        fullscreenHeight="800px"
-                      />
-                    </div>
                   </div>
                 </>
                 )}
@@ -1203,8 +1154,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                           { label: 'Inversor', width: 'w-24 lg:w-28 xl:w-36' },
                           { label: 'Energía Generada (kWh)', width: 'w-32 lg:w-36 xl:w-40' },
                           { label: 'Potencia Máx (kW)', width: 'w-28 lg:w-32 xl:w-36' },
-                          { label: 'Factor de Potencia', width: 'w-24 lg:w-28 xl:w-32' },
-                          { label: 'Temperatura (°C)', width: 'w-24 lg:w-28 xl:w-32' }
+                          { label: 'Factor de Potencia', width: 'w-24 lg:w-28 xl:w-32' }
                         ].map((header) => (
                           <th key={header.label} className={`${header.width} px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-5 text-left text-xs font-bold text-red-700 uppercase tracking-wider border-b border-red-100`}>
                             {header.label}
@@ -1258,16 +1208,11 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                                 }`}></div>
                               </div>
                             </td>
-                            <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
-                              <div className="text-xs lg:text-sm font-semibold text-orange-700">
-                                {(item.avg_temperature_c || 0).toFixed(1)}
-                              </div>
-                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="6" className="px-4 lg:px-6 py-8 lg:py-12 text-center">
+                          <td colSpan="5" className="px-4 lg:px-6 py-8 lg:py-12 text-center">
                             <div className="flex flex-col items-center">
                               <svg className="w-10 h-10 lg:w-12 lg:h-12 text-gray-400 mb-3 lg:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

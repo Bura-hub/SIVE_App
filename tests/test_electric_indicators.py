@@ -1,7 +1,12 @@
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 from datetime import datetime, timedelta, time
 from indicators.models import ElectricMeterIndicators
+from indicators.services.meter_calc import (
+    METER_FIELDS,
+    MIN_CURRENT_A_FOR_UNBALANCE,
+    compute_meter_indicators,
+)
 from indicators.tasks import calculate_electric_meter_indicators
 from scada_proxy.models import Device, Institution, DeviceCategory
 
@@ -227,6 +232,73 @@ class ElectricMeterIndicatorsTestCase(TestCase):
         
         # Verificar que se puede obtener el display del rango de tiempo
         self.assertEqual(indicators.get_time_range_display(), 'Mensual')
+
+def _meter_row(**overrides):
+    """Fila mínima válida para `compute_meter_indicators` (todas las columnas de
+    METER_FIELDS presentes, en None salvo lo que se sobreescriba)."""
+    row = {field: None for field in METER_FIELDS}
+    row.update(overrides)
+    return row
+
+
+class MeterCurrentUnbalanceGateTests(SimpleTestCase):
+    """Tests del gate de carga mínima + tope defensivo del desbalance/THD/TDD de
+    corriente (corrección de la fórmula NEMA que se disparaba sin sentido físico a
+    carga ~0, ver MIN_CURRENT_A_FOR_UNBALANCE en indicators/services/meter_calc.py)."""
+
+    def test_desbalance_con_carga_real_se_calcula_normalmente(self):
+        # avg = 10 A (>= umbral), max_deviation = 2 A -> 20% de desbalance real.
+        rows = [_meter_row(currentPhaseA=8.0, currentPhaseB=10.0, currentPhaseC=12.0)]
+        result = compute_meter_indicators(rows)
+        self.assertAlmostEqual(result['max_current_unbalance_pct'], 20.0)
+
+    def test_carga_casi_nula_con_fase_en_cero_queda_excluida(self):
+        # avg = 0.2 A (< MIN_CURRENT_A_FOR_UNBALANCE): sin el gate, esta muestra
+        # daría max_deviation(0.4)/avg(0.2)*100 = 200%, el artefacto reportado.
+        self.assertLess(0.2, MIN_CURRENT_A_FOR_UNBALANCE)
+        rows = [_meter_row(currentPhaseA=0.0, currentPhaseB=0.0, currentPhaseC=0.6)]
+        result = compute_meter_indicators(rows)
+        # Única muestra del día excluida por el gate -> sin datos válidos -> 0.
+        self.assertEqual(result['max_current_unbalance_pct'], 0)
+
+    def test_desbalance_extremo_con_carga_real_se_acota_a_100(self):
+        # avg = 10.1667 A (>= umbral, carga real), pero max_deviation/avg ~ 195%:
+        # el tope defensivo debe acotarlo a 100%, análogo al clamp de load_factor_pct.
+        rows = [_meter_row(currentPhaseA=0.0, currentPhaseB=0.5, currentPhaseC=30.0)]
+        result = compute_meter_indicators(rows)
+        self.assertGreaterEqual((0.0 + 0.5 + 30.0) / 3, MIN_CURRENT_A_FOR_UNBALANCE)
+        self.assertEqual(result['max_current_unbalance_pct'], 100.0)
+
+    def test_thd_de_corriente_con_carga_nula_se_excluye(self):
+        rows = [_meter_row(
+            currentPhaseA=0.0, currentPhaseB=0.0, currentPhaseC=0.0,
+            currentTHDPhaseA=250.0, currentTHDPhaseB=250.0, currentTHDPhaseC=250.0,
+            currentTDDPhaseA=250.0, currentTDDPhaseB=250.0, currentTDDPhaseC=250.0,
+        )]
+        result = compute_meter_indicators(rows)
+        self.assertEqual(result['max_current_thd_pct'], 0)
+        self.assertEqual(result['max_current_tdd_pct'], 0)
+
+    def test_thd_de_corriente_con_carga_real_se_incluye(self):
+        rows = [_meter_row(
+            currentPhaseA=10.0, currentPhaseB=10.0, currentPhaseC=10.0,
+            currentTHDPhaseA=3.0, currentTHDPhaseB=2.5, currentTHDPhaseC=2.8,
+            currentTDDPhaseA=2.1, currentTDDPhaseB=2.0, currentTDDPhaseC=1.9,
+        )]
+        result = compute_meter_indicators(rows)
+        self.assertEqual(result['max_current_thd_pct'], 3.0)
+        self.assertEqual(result['max_current_tdd_pct'], 2.1)
+
+    def test_desbalance_de_voltaje_no_se_altera_por_el_gate(self):
+        # El gate/cap es exclusivo de corriente; el voltaje conserva su fórmula original.
+        rows = [_meter_row(
+            currentPhaseA=0.0, currentPhaseB=0.0, currentPhaseC=0.0,
+            voltagePhaseA=210.0, voltagePhaseB=220.0, voltagePhaseC=230.0,
+        )]
+        result = compute_meter_indicators(rows)
+        self.assertAlmostEqual(result['max_voltage_unbalance_pct'], (10 / 220) * 100)
+        self.assertEqual(result['max_current_unbalance_pct'], 0)
+
 
 if __name__ == '__main__':
     import pytest  # import perezoso: solo requerido para ejecución standalone

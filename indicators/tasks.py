@@ -24,7 +24,10 @@ from .models import (
     InverterChartData,
     WeatherStationIndicators,
     WeatherStationChartData,
-    GeneratedReport
+    GeneratedReport,
+    HourlyMeterIndicators,
+    HourlyInverterIndicators,
+    HourlyWeatherIndicators,
 )
 
 from core.task_locks import single_instance
@@ -41,6 +44,7 @@ from indicators.services.sanitize import (  # noqa: E402,F401
 from indicators.services.date_ranges import (  # noqa: E402,F401
     COLOMBIA_TZ,
     colombia_day_range,
+    colombia_hour_range,
     get_colombia_date,
     get_colombia_now,
 )
@@ -922,10 +926,18 @@ def calculate_monthly_weather_indicators(station, measurements, start_date, end_
     return total_processed
 
 
-# Cálculo meteorológico por día/mes: extraído a services/weather_calc.py (Ola 5).
+# Cálculo meteorológico por día/mes/hora: extraído a services/weather_calc.py (Ola 5).
+# BUG corregido (vista horaria, Etapa 2): `calculate_single_day_weather_chart_data` se
+# invocaba más abajo (calculate_daily_weather_indicators / _calculate_daily_weather_station_data)
+# pero NUNCA estuvo importada; el NameError quedaba enmascarado por el `except Exception`
+# amplio de esas funciones, así que los datos de gráfica diaria de weather (arreglos
+# `hourly_*` de WeatherStationChartData) fallaban en silencio. Se añade aquí junto con
+# `calculate_single_hour_weather_indicators`, que usa el rollup horario nuevo.
 from indicators.services.weather_calc import (  # noqa: E402,F401
     calculate_single_day_weather_indicators,
     calculate_single_month_weather_indicators,
+    calculate_single_day_weather_chart_data,
+    calculate_single_hour_weather_indicators,
 )
 
 
@@ -1053,6 +1065,259 @@ def _calculate_monthly_weather_station_data(station, start_date, end_date):
         current_date = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1)
 
     return records_created, records_updated
+
+# =========================
+# ROLLUP HORARIO (vista horaria, Opción B)
+# =========================
+# Tablas dedicadas de grano horario (HourlyMeterIndicators/HourlyInverterIndicators/
+# HourlyWeatherIndicators, ver indicators/models.py). NO tocan `time_range` de las
+# tablas diarias/mensuales existentes; el KPI oficial diario sigue siendo
+# ElectricMeterIndicators/InverterIndicators/WeatherStationIndicators sin cambios.
+# Este rollup es solo para graficar el detalle horario (endpoints time_range=hourly).
+
+
+def _calculate_hourly_meter_row(meter, hour_start):
+    """Calcula y guarda `HourlyMeterIndicators` de `meter` para la hora `hour_start`
+    (datetime aware Bogotá, inicio de hora exacto). Idempotente: `update_or_create`
+    por (device, hour) — correr dos veces sobre la misma hora no duplica filas, solo
+    actualiza `calculated_at`. Devuelve 'created'/'updated'/None (sin mediciones)."""
+    start_dt, end_dt = colombia_hour_range(hour_start)
+    measurements = MeterMeasurement.objects.filter(
+        device=meter, date__gte=start_dt, date__lt=end_dt
+    ).order_by('date')
+    count = measurements.count()
+    if count == 0:
+        return None
+
+    # Mismo cálculo puro que el diario (compute_meter_indicators), aplicado a la
+    # ventana de 1 hora: sus claves de salida coinciden 1:1 con los campos de
+    # HourlyMeterIndicators, sin necesidad de renombrar nada.
+    computed = compute_meter_indicators(
+        measurements.values(*METER_FIELDS).iterator(chunk_size=2000)
+    )
+
+    _, created = HourlyMeterIndicators.objects.update_or_create(
+        device=meter,
+        hour=start_dt,
+        defaults={
+            **computed,
+            'institution': meter.institution,
+            'measurement_count': count,
+        }
+    )
+    return 'created' if created else 'updated'
+
+
+def _calculate_hourly_inverter_row(inverter, hour_start):
+    """Calcula y guarda `HourlyInverterIndicators` de `inverter` para la hora
+    `hour_start`. Idempotente (ver `_calculate_hourly_meter_row`). Renombra las
+    claves *_daily_* de `compute_inverter_indicators` a los nombres horarios
+    (energy_ac_kwh/energy_dc_kwh) y EXCLUYE avg_irradiance_wm2/avg_temperature_c
+    (siempre 0 en inversor, ver diseño). `avg_power_w` no lo calcula la función pura
+    (solo max/min), así que se agrega aquí con un Avg directo sobre la ventana."""
+    start_dt, end_dt = colombia_hour_range(hour_start)
+    measurements = InverterMeasurement.objects.filter(
+        device=inverter, date__gte=start_dt, date__lt=end_dt
+    ).order_by('date')
+    count = measurements.count()
+    if count == 0:
+        return None
+
+    computed = compute_inverter_indicators(
+        measurements.values(*INVERTER_FIELDS).iterator(chunk_size=2000)
+    )
+    avg_power_w = measurements.aggregate(v=Avg('acPower'))['v'] or 0.0
+
+    _, created = HourlyInverterIndicators.objects.update_or_create(
+        device=inverter,
+        hour=start_dt,
+        defaults={
+            'energy_ac_kwh': computed['energy_ac_daily_kwh'],
+            'energy_dc_kwh': computed['energy_dc_daily_kwh'],
+            'dc_ac_efficiency_pct': computed['dc_ac_efficiency_pct'],
+            'performance_ratio_pct': computed['performance_ratio_pct'],
+            'reference_energy_kwh': computed['reference_energy_kwh'],
+            'avg_power_w': avg_power_w,
+            'max_power_w': computed['max_power_w'],
+            'min_power_w': computed['min_power_w'],
+            'avg_power_factor_pct': computed['avg_power_factor_pct'],
+            'avg_reactive_power_var': computed['avg_reactive_power_var'],
+            'avg_apparent_power_va': computed['avg_apparent_power_va'],
+            'avg_frequency_hz': computed['avg_frequency_hz'],
+            'frequency_stability_pct': computed['frequency_stability_pct'],
+            'max_voltage_unbalance_pct': computed['max_voltage_unbalance_pct'],
+            'max_current_unbalance_pct': computed['max_current_unbalance_pct'],
+            'anomaly_score': computed['anomaly_score'],
+            'anomaly_details': computed['anomaly_details'],
+            'institution': inverter.institution,
+            'measurement_count': count,
+        }
+    )
+    return 'created' if created else 'updated'
+
+
+def _calculate_hourly_weather_row(station, hour_start):
+    """Calcula y guarda `HourlyWeatherIndicators` de `station` para la hora
+    `hour_start`. Idempotente (ver `_calculate_hourly_meter_row`). Usa
+    `calculate_single_hour_weather_indicators`, cuyas claves de salida (incluido
+    `measurement_count`) coinciden 1:1 con los campos del modelo."""
+    start_dt, end_dt = colombia_hour_range(hour_start)
+    measurements = WeatherStationMeasurement.objects.filter(
+        device=station, date__gte=start_dt, date__lt=end_dt
+    ).order_by('date')
+    if not measurements.exists():
+        return None
+
+    measurements_list = list(measurements.values(
+        'date', 'irradiance', 'temperature', 'humidity',
+        'windSpeed', 'windDirection', 'precipitation',
+    ))
+    computed = calculate_single_hour_weather_indicators(measurements_list)
+
+    _, created = HourlyWeatherIndicators.objects.update_or_create(
+        device=station,
+        hour=start_dt,
+        defaults={
+            **computed,
+            'institution': station.institution,
+        }
+    )
+    return 'created' if created else 'updated'
+
+
+def _parse_hour_arg(value):
+    """Parsea un string ISO ('YYYY-MM-DDTHH:MM[:SS]' o con offset) a un datetime
+    aware truncado al INICIO de esa hora en Bogotá (reutiliza `colombia_hour_range`
+    para la localización/truncado, igual criterio que el resto del módulo)."""
+    dt = datetime.fromisoformat(value)
+    if django_timezone.is_naive(dt):
+        dt = COLOMBIA_TZ.localize(dt)
+    start_dt, _ = colombia_hour_range(dt)
+    return start_dt
+
+
+@shared_task(bind=True, retry_backoff=60, max_retries=3)
+def calculate_hourly_rollup(self, hours_back=4, end_hour_str=None, start_hour_str=None,
+                            institution_id=None, device_id=None):
+    """
+    Recalcula el rollup horario (HourlyMeterIndicators/HourlyInverterIndicators/
+    HourlyWeatherIndicators) de horas CERRADAS de Bogotá.
+
+    Modo normal (el que usa `run_post_ingest_pipeline` en scada_proxy/tasks.py, que
+    corre ~cada hora): recomputa las `hours_back` horas cerradas más recientes,
+    terminando en `end_hour_str` si se especifica, o en la última hora YA CERRADA
+    respecto a "ahora" en caso contrario (la hora en curso está incompleta y nunca se
+    recalcula por defecto, para no guardar un rollup parcial).
+
+    Modo rango explícito (el que usa el comando `backfill_hourly_rollup`): si se pasa
+    `start_hour_str`, se recalculan TODAS las horas cerradas en
+    [start_hour_str, end_hour_str] (ambos inclusive, un único string ISO cada uno),
+    ignorando `hours_back`.
+
+    `institution_id`/`device_id` (SCADA ID) opcionales para acotar el recálculo,
+    mismo patrón que `calculate_electrical_data`/`calculate_inverter_data`.
+
+    Por cada dispositivo activo (medidor/inversor/estación) y cada hora del rango,
+    aplica la función pura correspondiente sobre la ventana de `colombia_hour_range`
+    y hace `update_or_create(device, hour)`: idempotente, correr dos veces sobre la
+    misma hora no duplica filas.
+    """
+    logger.info("=== INICIANDO TAREA: calculate_hourly_rollup ===")
+    try:
+        now = get_colombia_now()
+
+        if end_hour_str:
+            end_hour = _parse_hour_arg(end_hour_str)
+        else:
+            # Última hora YA CERRADA respecto a "ahora" (ver docstring).
+            end_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
+
+        if start_hour_str:
+            start_hour = _parse_hour_arg(start_hour_str)
+        else:
+            start_hour = end_hour - timedelta(hours=max(hours_back, 1) - 1)
+
+        if start_hour > end_hour:
+            msg = f"Rango horario inválido: start_hour ({start_hour}) posterior a end_hour ({end_hour}); no se procesó nada."
+            logger.warning(msg)
+            return msg
+
+        hours = []
+        cursor = start_hour
+        while cursor <= end_hour:
+            hours.append(cursor)
+            cursor += timedelta(hours=1)
+
+        logger.info(f"Procesando {len(hours)} hora(s) cerrada(s), de {start_hour.isoformat()} a {end_hour.isoformat()}")
+
+        electric_meters = Device.objects.filter(category__name__iexact='electricMeter', is_active=True)
+        inverters = Device.objects.filter(category__name__iexact='inverter', is_active=True)
+        weather_stations = Device.objects.filter(category__name__iexact='weatherStation', is_active=True)
+
+        if institution_id:
+            electric_meters = electric_meters.filter(institution_id=institution_id)
+            inverters = inverters.filter(institution_id=institution_id)
+            weather_stations = weather_stations.filter(institution_id=institution_id)
+            logger.info(f"Filtrado por institución ID: {institution_id}")
+
+        if device_id:
+            electric_meters = electric_meters.filter(scada_id=device_id)
+            inverters = inverters.filter(scada_id=device_id)
+            weather_stations = weather_stations.filter(scada_id=device_id)
+            logger.info(f"Filtrado por dispositivo ID: {device_id}")
+
+        electric_meters = list(electric_meters)
+        inverters = list(inverters)
+        weather_stations = list(weather_stations)
+
+        logger.info(
+            f"Dispositivos a procesar: {len(electric_meters)} medidores, "
+            f"{len(inverters)} inversores, {len(weather_stations)} estaciones"
+        )
+
+        created = updated = skipped = 0
+
+        for hour_start in hours:
+            for meter in electric_meters:
+                result = _calculate_hourly_meter_row(meter, hour_start)
+                if result == 'created':
+                    created += 1
+                elif result == 'updated':
+                    updated += 1
+                else:
+                    skipped += 1
+
+            for inverter in inverters:
+                result = _calculate_hourly_inverter_row(inverter, hour_start)
+                if result == 'created':
+                    created += 1
+                elif result == 'updated':
+                    updated += 1
+                else:
+                    skipped += 1
+
+            for station in weather_stations:
+                result = _calculate_hourly_weather_row(station, hour_start)
+                if result == 'created':
+                    created += 1
+                elif result == 'updated':
+                    updated += 1
+                else:
+                    skipped += 1
+
+        summary = (
+            f"Rollup horario completado: {len(hours)} hora(s) procesada(s), "
+            f"{created} fila(s) creadas, {updated} actualizadas, {skipped} omitidas (sin mediciones)."
+        )
+        logger.info(summary)
+        logger.info("=== TAREA COMPLETADA: calculate_hourly_rollup ===")
+        return summary
+
+    except Exception as e:
+        logger.error("=== ERROR EN TAREA: calculate_hourly_rollup ===")
+        logger.error(f"Error calculando rollup horario: {e}", exc_info=True)
+        raise
+
 
 # =========================
 # TAREAS PARA GENERACIÓN DE REPORTE

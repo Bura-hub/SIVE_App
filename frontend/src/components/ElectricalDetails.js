@@ -83,6 +83,20 @@ const CHART_OPTIONS = {
   transitions: { zoom: { animation: { duration: 300, easing: 'easeInOutQuart' } } }
 };
 
+// Vista horaria (Opción B): formatea el campo `hour` (datetime ISO, inicio de hora) como
+// HH:mm en zona horaria de Bogotá, consistente con el resto de la vista horaria.
+const formatHourLabel = (isoHour) => {
+  if (!isoHour) return '';
+  const d = new Date(isoHour);
+  if (isNaN(d.getTime())) return isoHour;
+  return d.toLocaleTimeString('es-CO', {
+    timeZone: 'America/Bogota',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+
 // Componente de encabezado de sección
 const SectionHeader = ({ title, icon, infoText }) => (
   <div className="flex items-center justify-between mb-6">
@@ -234,6 +248,10 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
   const energyChartData = useMemo(() => ({
     labels: meterRows.map(item => {
+      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
+      if (filters.timeRange === 'hourly') {
+        return formatHourLabel(item.hour);
+      }
       // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
       const rawDate = item.date;
       // Crear fecha en zona horaria local para evitar desfase UTC
@@ -281,10 +299,14 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
         pointBorderWidth: 2,
       }
     ],
-  }), [meterRows]);
+  }), [meterRows, filters.timeRange]);
 
   const qualityIndicatorsChartData = useMemo(() => ({
     labels: meterRows.map(item => {
+      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
+      if (filters.timeRange === 'hourly') {
+        return formatHourLabel(item.hour);
+      }
       // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
       const rawDate = item.date;
       // Crear fecha en zona horaria local para evitar desfase UTC
@@ -326,10 +348,14 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
         pointBackgroundColor: '#10B981',
       }
     ]
-  }), [meterRows]);
+  }), [meterRows, filters.timeRange]);
 
   const energyQualityChartData = useMemo(() => ({
     labels: meterRows.map(item => {
+      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
+      if (filters.timeRange === 'hourly') {
+        return formatHourLabel(item.hour);
+      }
       // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
       const rawDate = item.date;
       // Crear fecha en zona horaria local para evitar desfase UTC
@@ -371,7 +397,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
         pointBackgroundColor: '#8B5CF6',
       },
     ]
-  }), [meterRows]);
+  }), [meterRows, filters.timeRange]);
 
   // Cargar datos iniciales al montar el componente
   useEffect(() => {

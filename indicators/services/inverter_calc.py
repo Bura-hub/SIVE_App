@@ -11,6 +11,14 @@ import statistics
 from indicators.energy import SAMPLE_INTERVAL_HOURS
 from indicators.services.rows import _row_get
 
+# Umbral mínimo de corriente promedio (A) para evaluar desbalance de corriente de
+# inyección. Por debajo de este umbral la carga/inyección es despreciable (equivalente a
+# standby/vacío) y la fórmula NEMA de desbalance (max_desviación/promedio×100) se dispara
+# sin sentido físico porque el denominador tiende a 0: con una fase en 0.0 A el resultado
+# llega a ~200%. Mismo problema y mismo umbral que en indicators/services/meter_calc.py
+# (MIN_CURRENT_A_FOR_UNBALANCE). Ajustable si el equipo de campo define otro valor.
+MIN_CURRENT_A_FOR_UNBALANCE = 1.0
+
 # Columnas v2 que consume el cálculo del inversor.
 INVERTER_FIELDS = (
     'acPower', 'dcPower', 'reactivePower', 'apparentPower',
@@ -166,10 +174,22 @@ def compute_inverter_indicators(rows):
         current_unbalances = []
         for c_phases in current_phases:
             c_avg = sum(c_phases) / 3
+            # GATE de carga mínima: por debajo de MIN_CURRENT_A_FOR_UNBALANCE la
+            # inyección es despreciable y el denominador (c_avg) casi 0 dispara la
+            # fórmula NEMA sin sentido físico (hasta 200% con una fase en 0.0 A). Se
+            # excluye la muestra del cálculo del máximo diario en vez de solo evitar
+            # la división por 0.
+            if c_avg < MIN_CURRENT_A_FOR_UNBALANCE:
+                continue
             max_deviation = max(abs(c - c_avg) for c in c_phases)
-            unbalance_pct = (max_deviation / c_avg) * 100 if c_avg > 0 else 0
+            unbalance_pct = (max_deviation / c_avg) * 100
             current_unbalances.append(unbalance_pct)
-        max_current_unbalance_pct = max(current_unbalances) if current_unbalances else 0
+        # Tope defensivo (mismo estilo que el clamp de dc_ac_efficiency_pct, ver 4.1):
+        # incluso tras el gate, se acota a 100% en profundidad ante datos anómalos no
+        # contemplados. Si todas las muestras del día quedaron excluidas por el gate
+        # (inyección nula todo el día), no hay `current_unbalances` y el valor diario
+        # queda en 0 (consistente con "sin datos").
+        max_current_unbalance_pct = min(max(current_unbalances), 100.0) if current_unbalances else 0
 
     # 4.7. Análisis de Anomalías Operativas
     anomaly_score = 0

@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
 from core.permissions import IsSuperUser
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiRequest, OpenApiResponse
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiRequest, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 import logging
 from datetime import datetime, timedelta, timezone, date
@@ -19,7 +19,11 @@ import calendar
 import pytz
 
 # Importa los modelos de indicadores
-from .models import MonthlyConsumptionKPI, DailyChartData, ElectricMeterIndicators, InverterIndicators, InverterChartData, WeatherStationIndicators, WeatherStationChartData
+from .models import (
+    MonthlyConsumptionKPI, DailyChartData, ElectricMeterIndicators, InverterIndicators,
+    InverterChartData, WeatherStationIndicators, WeatherStationChartData,
+    HourlyMeterIndicators, HourlyInverterIndicators, HourlyWeatherIndicators,
+)
 # Importa el cliente SCADA y los modelos DeviceCategory, Measurement, Device de scada_proxy
 from scada_proxy.scada_client import ScadaConnectorClient
 from scada_proxy.views import check_scada_connection
@@ -30,7 +34,7 @@ from .tasks import calculate_monthly_consumption_kpi, calculate_and_save_daily_d
 # Importaciones adicionales para los nuevos modelos - CORREGIDAS
 from django.db.models import Q, Sum, Avg, Max, F, FloatField, Count, Min
 from django.db.models.functions import Cast
-from .serializers import MonthlyConsumptionKPISerializer, DailyChartDataSerializer, ElectricMeterCalculationRequestSerializer, ElectricMeterCalculationResponseSerializer, ElectricMeterIndicatorsSerializer, InverterIndicatorsSerializer, InverterChartDataSerializer, InverterCalculationRequestSerializer, InverterCalculationResponseSerializer, WeatherStationIndicatorsSerializer, WeatherStationChartDataSerializer, WeatherStationCalculationRequestSerializer, WeatherStationCalculationResponseSerializer
+from .serializers import MonthlyConsumptionKPISerializer, DailyChartDataSerializer, ElectricMeterCalculationRequestSerializer, ElectricMeterCalculationResponseSerializer, ElectricMeterIndicatorsSerializer, InverterIndicatorsSerializer, InverterChartDataSerializer, InverterCalculationRequestSerializer, InverterCalculationResponseSerializer, WeatherStationIndicatorsSerializer, WeatherStationChartDataSerializer, WeatherStationCalculationRequestSerializer, WeatherStationCalculationResponseSerializer, HourlyMeterIndicatorsSerializer, HourlyInverterIndicatorsSerializer, HourlyWeatherIndicatorsSerializer
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -46,6 +50,8 @@ from indicators.services.date_ranges import (  # noqa: E402
     get_colombia_date,
     get_colombia_now,
     resolve_indicators_date_range,
+    resolve_indicators_hourly_range,
+    colombia_day_range,
 )
 from indicators.services.formatting import auto_energy_unit, format_energy_value  # noqa: E402
 from indicators.services.kpi import calculate_kpi_metrics, summarize_inverter_status  # noqa: E402
@@ -732,7 +738,21 @@ class ElectricMetersListView(APIView):
 
 
 # indicators/views.py
-@extend_schema(tags=["Indicadores"])
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Indicadores"],
+        description="Lista los indicadores eléctricos de medidores con opciones de filtrado.",
+        parameters=[
+            OpenApiParameter("institution_id", int, OpenApiParameter.QUERY, description="ID de la institución"),
+            OpenApiParameter("device_id", str, OpenApiParameter.QUERY, description="ID del medidor específico (obligatorio si time_range='hourly')"),
+            OpenApiParameter("time_range", str, OpenApiParameter.QUERY, description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 7 días/168 horas vía 'date' o 'start_date'/'end_date')"),
+            OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD). Sin rango: últimos 31 días (daily/monthly) o 7 días (hourly)"),
+            OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD). Rango máximo: 366 días (daily/monthly) o 7 días (hourly)"),
+            OpenApiParameter("date", str, OpenApiParameter.QUERY, description="Día único (YYYY-MM-DD). Solo aplica con time_range='hourly'; alternativa a start_date/end_date"),
+        ],
+        responses={200: ElectricMeterIndicatorsSerializer(many=True)}
+    ),
+)
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
@@ -747,14 +767,46 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
     # defecto, máximo 366) en lugar de por páginas.
     pagination_class = None
 
-    def get_queryset(self):
-        # select_related evita el N+1 sobre device/institution al serializar.
-        queryset = ElectricMeterIndicators.objects.select_related('device', 'institution').all()
+    def _is_hourly(self):
+        return self.request.query_params.get('time_range') == 'hourly'
 
-        # Filtros
+    def get_serializer_class(self):
+        if self.request is not None and self._is_hourly():
+            return HourlyMeterIndicatorsSerializer
+        return ElectricMeterIndicatorsSerializer
+
+    def get_queryset(self):
         institution_id = self.request.query_params.get('institution_id')
         device_id = self.request.query_params.get('device_id')
         time_range = self.request.query_params.get('time_range', 'daily')
+
+        if time_range == 'hourly':
+            # Vista horaria (Opción B): tabla dedicada HourlyMeterIndicators.
+            # select_related evita el N+1 sobre device/institution al serializar.
+            queryset = HourlyMeterIndicators.objects.select_related('device', 'institution').all()
+
+            if institution_id:
+                queryset = queryset.filter(institution_id=institution_id)
+
+            if device_id:
+                queryset = apply_device_filter(queryset, device_id)
+
+            if self.action == 'list':
+                start_date, end_date, error = resolve_indicators_hourly_range(
+                    self.request.query_params.get('date'),
+                    self.request.query_params.get('start_date'),
+                    self.request.query_params.get('end_date'),
+                )
+                if error is None:
+                    start_dt, end_dt = colombia_day_range(start_date, end_date)
+                    queryset = queryset.filter(hour__gte=start_dt, hour__lt=end_dt)
+
+            return queryset.order_by('-hour', 'device__name')
+
+        # Comportamiento existente (daily/monthly), sin cambios.
+        # select_related evita el N+1 sobre device/institution al serializar.
+        queryset = ElectricMeterIndicators.objects.select_related('device', 'institution').all()
+
         start_date_str = self.request.query_params.get('start_date')
         end_date_str = self.request.query_params.get('end_date')
 
@@ -780,6 +832,38 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Lista los indicadores eléctricos con opciones de filtrado.
         """
+        if self._is_hourly():
+            # Contrato vista horaria (Opción B): device_id es obligatorio y el rango
+            # se resuelve/acota con resolve_indicators_hourly_range (tope 7 días/168h).
+            device_id = request.query_params.get('device_id')
+            if not device_id:
+                return Response(
+                    {'detail': "device_id es obligatorio para la vista horaria (time_range=hourly)."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            _, _, error = resolve_indicators_hourly_range(
+                request.query_params.get('date'),
+                request.query_params.get('start_date'),
+                request.query_params.get('end_date'),
+            )
+            if error:
+                return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
+
+            queryset = self.get_queryset()
+            summary = {
+                'total_records': queryset.count(),
+                'institutions': list(queryset.values('institution__name').distinct()),
+                'devices': list(queryset.values('device__name').distinct()),
+                'hour_range': {
+                    'min_hour': queryset.aggregate(Min('hour'))['hour__min'],
+                    'max_hour': queryset.aggregate(Max('hour'))['hour__max']
+                }
+            }
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({'summary': summary, 'results': serializer.data})
+
+        # Comportamiento existente (daily/monthly), sin cambios.
         # Validar el rango de fechas antes de consultar (400 si es inválido o excesivo).
         _, _, error = resolve_indicators_date_range(
             request.query_params.get('start_date'),
@@ -819,10 +903,11 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
     description="Lista todos los indicadores de inversores con opciones de filtrado.",
     parameters=[
         OpenApiParameter("institution_id", int, OpenApiParameter.QUERY, description="ID de la institución"),
-        OpenApiParameter("device_id", str, OpenApiParameter.QUERY, description="ID del inversor específico"),
-        OpenApiParameter("time_range", str, OpenApiParameter.QUERY, description="Rango de tiempo: 'daily' o 'monthly'"),
-        OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD). Sin rango: últimos 31 días"),
-        OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD). Rango máximo: 366 días"),
+        OpenApiParameter("device_id", str, OpenApiParameter.QUERY, description="ID del inversor específico (obligatorio si time_range='hourly')"),
+        OpenApiParameter("time_range", str, OpenApiParameter.QUERY, description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 7 días/168 horas vía 'date' o 'start_date'/'end_date')"),
+        OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD). Sin rango: últimos 31 días (daily/monthly) o 7 días (hourly)"),
+        OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD). Rango máximo: 366 días (daily/monthly) o 7 días (hourly)"),
+        OpenApiParameter("date", str, OpenApiParameter.QUERY, description="Día único (YYYY-MM-DD). Solo aplica con time_range='hourly'; alternativa a start_date/end_date"),
     ],
     responses={200: InverterIndicatorsSerializer(many=True)}
 )
@@ -852,6 +937,47 @@ class InverterIndicatorsView(APIView):
                     "detail": "El parámetro 'institution_id' es requerido"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
+            if time_range == 'hourly':
+                # Vista horaria (Opción B): tabla dedicada HourlyInverterIndicators.
+                # Contrato: device_id obligatorio; rango resuelto/acotado (tope 7 días/168h).
+                if not device_id:
+                    return Response({
+                        "detail": "device_id es obligatorio para la vista horaria (time_range=hourly)."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                date_str = request.query_params.get('date')
+                start_date, end_date, error = resolve_indicators_hourly_range(date_str, start_date_str, end_date_str)
+                if error:
+                    return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+
+                start_dt, end_dt = colombia_day_range(start_date, end_date)
+
+                queryset = HourlyInverterIndicators.objects.select_related('device', 'institution').filter(
+                    institution_id=institution_id,
+                    hour__gte=start_dt,
+                    hour__lt=end_dt,
+                )
+                queryset = apply_device_filter(queryset, device_id)
+                queryset = queryset.order_by('-hour', 'device__name')
+
+                summary = {
+                    'total_records': queryset.count(),
+                    'institutions': list(queryset.values('institution__name').distinct()),
+                    'devices': list(queryset.values('device__name').distinct()),
+                    'hour_range': {
+                        'min_hour': queryset.aggregate(Min('hour'))['hour__min'],
+                        'max_hour': queryset.aggregate(Max('hour'))['hour__max']
+                    }
+                }
+
+                serializer = HourlyInverterIndicatorsSerializer(queryset, many=True)
+
+                return Response({
+                    'summary': summary,
+                    'results': serializer.data
+                }, status=status.HTTP_200_OK)
+
+            # Comportamiento existente (daily/monthly), sin cambios.
             # Rango de fechas efectivo: últimos 31 días por defecto, máximo 366 días.
             start_date, end_date, error = resolve_indicators_date_range(start_date_str, end_date_str)
             if error:
@@ -1194,16 +1320,18 @@ class WeatherStationIndicatorsView(APIView):
         summary="Obtener indicadores de estaciones meteorológicas",
         description="Obtiene los indicadores meteorológicos calculados para estaciones meteorológicas",
         parameters=[
-            OpenApiParameter(name='time_range', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, 
-                           description='Rango de tiempo: daily o monthly', required=False),
-            OpenApiParameter(name='institution_id', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY, 
+            OpenApiParameter(name='time_range', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                           description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 7 días/168 horas vía 'date' o 'start_date'/'end_date')", required=False),
+            OpenApiParameter(name='institution_id', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
                            description='ID de la institución', required=False),
-            OpenApiParameter(name='device_id', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, 
-                           description='ID específico de la estación meteorológica', required=False),
-            OpenApiParameter(name='start_date', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY, 
+            OpenApiParameter(name='device_id', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                           description="ID específico de la estación meteorológica (obligatorio si time_range='hourly')", required=False),
+            OpenApiParameter(name='start_date', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY,
                            description='Fecha de inicio (YYYY-MM-DD)', required=False),
-            OpenApiParameter(name='end_date', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY, 
+            OpenApiParameter(name='end_date', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY,
                            description='Fecha de fin (YYYY-MM-DD)', required=False),
+            OpenApiParameter(name='date', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY,
+                           description="Día único (YYYY-MM-DD). Solo aplica con time_range='hourly'; alternativa a start_date/end_date", required=False),
         ],
         responses={
             200: WeatherStationIndicatorsSerializer(many=True),
@@ -1215,7 +1343,7 @@ class WeatherStationIndicatorsView(APIView):
     def get(self, request, *args, **kwargs):
         """
         GET /api/weather-station-indicators/
-        
+
         Obtiene los indicadores meteorológicos calculados para estaciones meteorológicas.
         """
         try:
@@ -1227,13 +1355,61 @@ class WeatherStationIndicatorsView(APIView):
             end_date = request.query_params.get('end_date')
 
             # Validar parámetros
-            if time_range not in ['daily', 'monthly']:
+            if time_range not in ['daily', 'monthly', 'hourly']:
                 return Response(
-                    {"detail": "time_range debe ser 'daily' o 'monthly'"},
+                    {"detail": "time_range debe ser 'daily', 'monthly' u 'hourly'"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Construir filtros
+            if time_range == 'hourly':
+                # Vista horaria (Opción B): tabla dedicada HourlyWeatherIndicators.
+                # Contrato: device_id obligatorio; rango resuelto/acotado (tope 7 días/168h).
+                if not device_id:
+                    return Response(
+                        {"detail": "device_id es obligatorio para la vista horaria (time_range=hourly)."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                date_str = request.query_params.get('date')
+                resolved_start, resolved_end, error = resolve_indicators_hourly_range(date_str, start_date, end_date)
+                if error:
+                    return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+
+                start_dt, end_dt = colombia_day_range(resolved_start, resolved_end)
+
+                hourly_filters = Q(hour__gte=start_dt, hour__lt=end_dt)
+
+                if institution_id:
+                    try:
+                        institution_id = int(institution_id)
+                        hourly_filters &= Q(institution_id=institution_id)
+                    except ValueError:
+                        return Response(
+                            {"detail": "institution_id debe ser un número entero válido"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                hourly_qs = HourlyWeatherIndicators.objects.filter(hourly_filters).select_related(
+                    'device', 'institution'
+                )
+                hourly_qs = apply_device_filter(hourly_qs, device_id)
+                hourly_qs = hourly_qs.order_by('-hour')
+
+                serializer = HourlyWeatherIndicatorsSerializer(hourly_qs, many=True)
+
+                return Response({
+                    'count': hourly_qs.count(),
+                    'results': serializer.data,
+                    'time_range': time_range,
+                    'filters_applied': {
+                        'institution_id': institution_id,
+                        'device_id': device_id,
+                        'start_date': resolved_start.isoformat(),
+                        'end_date': resolved_end.isoformat()
+                    }
+                })
+
+            # Construir filtros (comportamiento existente daily/monthly, sin cambios)
             filters = Q(time_range=time_range)
             
             if institution_id:

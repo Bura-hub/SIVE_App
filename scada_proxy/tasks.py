@@ -419,14 +419,14 @@ def run_post_ingest_pipeline(self):
     from indicators.tasks import (
         calculate_monthly_consumption_kpi, calculate_and_save_daily_data,
         calculate_electrical_data, calculate_inverter_data,
-        calculate_weather_station_indicators,
+        calculate_weather_station_indicators, calculate_hourly_rollup,
     )
 
     today = get_colombia_now().date()
     today_str = today.isoformat()
     month_start_str = today.replace(day=1).isoformat()
 
-    logger.info("Fetch completo: encadenando cálculos (KPI → chart diario → indicadores por componente).")
+    logger.info("Fetch completo: encadenando cálculos (KPI → chart diario → indicadores por componente → rollup horario).")
     chain(
         calculate_monthly_consumption_kpi.si(),
         calculate_and_save_daily_data.si(today_str, today_str),
@@ -438,6 +438,9 @@ def run_post_ingest_pipeline(self):
         calculate_electrical_data.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
         calculate_inverter_data.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
         calculate_weather_station_indicators.si(time_range='monthly', start_date_str=month_start_str, end_date_str=today_str),
+        # Rollup horario (vista horaria, Opción B): recalcula las últimas 4 horas
+        # cerradas de Bogotá, último paso del pipeline (ver indicators/tasks.py).
+        calculate_hourly_rollup.si(hours_back=4),
     ).apply_async(link_error=log_pipeline_error.s())
     return 'pipeline de cálculos encolado'
 

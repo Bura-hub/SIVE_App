@@ -21,7 +21,9 @@ const InverterFilters = ({ onFiltersChange, authToken }) => {
   const defaultDates = getDefaultDates();
   const [startDate, setStartDate] = useState(defaultDates.startDate);
   const [endDate, setEndDate] = useState(defaultDates.endDate);
-  
+  // Día único para la vista horaria (Opción B): independiente del rango daily/monthly.
+  const [selectedDay, setSelectedDay] = useState(defaultDates.endDate);
+
   const [institutions, setInstitutions] = useState([]);
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -51,15 +53,25 @@ const InverterFilters = ({ onFiltersChange, authToken }) => {
 
   // Notificar cambios en los filtros
   useEffect(() => {
-    console.log('Filters changed:', { timeRange, selectedInstitution, selectedDevice, startDate, endDate });
+    // Vista horaria: un único día (startDate = endDate = día elegido).
+    const effectiveStartDate = timeRange === 'hourly' ? selectedDay : startDate;
+    const effectiveEndDate = timeRange === 'hourly' ? selectedDay : endDate;
+    console.log('Filters changed:', { timeRange, selectedInstitution, selectedDevice, startDate: effectiveStartDate, endDate: effectiveEndDate });
     onFiltersChange({
       timeRange,
       institutionId: selectedInstitution,
       deviceId: selectedDevice,
-      startDate,
-      endDate
+      startDate: effectiveStartDate,
+      endDate: effectiveEndDate
     });
-  }, [timeRange, selectedInstitution, selectedDevice, startDate, endDate, onFiltersChange]);
+  }, [timeRange, selectedInstitution, selectedDevice, startDate, endDate, selectedDay, onFiltersChange]);
+
+  // Vista horaria: fuerza un único dispositivo (auto-selecciona el primero si no hay ninguno).
+  useEffect(() => {
+    if (timeRange === 'hourly' && !selectedDevice && devices.length > 0) {
+      setSelectedDevice(devices[0].scada_id);
+    }
+  }, [timeRange, selectedDevice, devices]);
 
   const fetchInstitutions = async () => {
     try {
@@ -135,6 +147,7 @@ const InverterFilters = ({ onFiltersChange, authToken }) => {
         >
           <option value="daily">Diario</option>
           <option value="monthly">Mensual</option>
+          <option value="hourly">Horario</option>
         </select>
       </div>
 
@@ -167,7 +180,7 @@ const InverterFilters = ({ onFiltersChange, authToken }) => {
           disabled={!selectedInstitution || loading}
           className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
         >
-          <option value="">Todos los inversores</option>
+          {timeRange !== 'hourly' && <option value="">Todos los inversores</option>}
           {devices.map((device) => (
             <option key={device.scada_id} value={device.scada_id}>
               {device.name}
@@ -176,27 +189,48 @@ const InverterFilters = ({ onFiltersChange, authToken }) => {
         </select>
       </div>
 
-      {/* Filtro de fecha de inicio */}
-      <div className="flex flex-col">
-        <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-        <input aria-label="Fecha de Inicio"
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-        />
-      </div>
+      {timeRange === 'hourly' ? (
+        /* Vista horaria: un único selector de día (reemplaza Inicio/Fin) */
+        <div className="flex flex-col">
+          <label className="text-sm font-medium text-gray-700 mb-1">Día</label>
+          <input aria-label="Día"
+            type="date"
+            value={selectedDay}
+            onChange={(e) => setSelectedDay(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+        </div>
+      ) : (
+        <>
+          {/* Filtro de fecha de inicio */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+            <input aria-label="Fecha de Inicio"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+          </div>
 
-      {/* Filtro de fecha de fin */}
-      <div className="flex flex-col">
-        <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Fin</label>
-        <input aria-label="Fecha de Fin"
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-        />
-      </div>
+          {/* Filtro de fecha de fin */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Fin</label>
+            <input aria-label="Fecha de Fin"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+          </div>
+        </>
+      )}
+
+      {timeRange === 'hourly' && (
+        <p className="text-xs text-red-700 basis-full">
+          Vista horaria: seleccione un dispositivo y un día.
+        </p>
+      )}
 
       {devices.length === 0 && selectedInstitution && !loading && (
         <p className="text-xs text-orange-700 mt-1">

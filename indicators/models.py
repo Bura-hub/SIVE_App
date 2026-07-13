@@ -328,6 +328,177 @@ class WeatherStationChartData(models.Model):
         return f"{self.device.name} - {self.date}"
 
 
+class HourlyMeterIndicators(models.Model):
+    """
+    Indicadores eléctricos de medidor a grano HORARIO (vista horaria, Opción B).
+
+    Tabla dedicada (NO reutiliza `time_range` de `ElectricMeterIndicators`): cada fila
+    es una hora cerrada de Bogotá. Alimentada por `calculate_hourly_rollup`, que aplica
+    `compute_meter_indicators` sobre la ventana de `colombia_hour_range(hour)`. El KPI
+    oficial diario sigue siendo `ElectricMeterIndicators`, sin cambios; este rollup es
+    solo para graficar el detalle horario.
+    """
+    device = models.ForeignKey('scada_proxy.Device', on_delete=models.CASCADE, related_name='hourly_meter_indicators')
+    institution = models.ForeignKey('scada_proxy.Institution', on_delete=models.CASCADE, related_name='hourly_meter_indicators')
+
+    hour = models.DateTimeField(help_text="Inicio de la hora del registro (aware, hora de Bogotá).")
+
+    # 3.2. Energía Consumida Acumulada (de la hora)
+    imported_energy_kwh = models.FloatField(default=0.0, null=True, blank=True, help_text="Energía importada en la hora en kWh.")
+    exported_energy_kwh = models.FloatField(default=0.0, null=True, blank=True, help_text="Energía exportada en la hora en kWh.")
+    net_energy_consumption_kwh = models.FloatField(default=0.0, null=True, blank=True, help_text="Energía neta consumida en la hora en kWh.")
+
+    # 3.3. Demanda Pico (de la hora)
+    peak_demand_kw = models.FloatField(default=0.0, null=True, blank=True, help_text="Demanda pico de la hora en kW.")
+    avg_demand_kw = models.FloatField(default=0.0, null=True, blank=True, help_text="Demanda promedio de la hora en kW.")
+
+    # 3.4. Factor de Carga (de la hora)
+    load_factor_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Factor de carga de la hora en porcentaje.")
+
+    # 3.5. Factor de Potencia Promedio (de la hora)
+    avg_power_factor = models.FloatField(default=0.0, null=True, blank=True, help_text="Factor de potencia promedio de la hora.")
+
+    # 3.6. Desbalance de Fases (de la hora)
+    max_voltage_unbalance_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Desbalance máximo de tensión de la hora en porcentaje.")
+    max_current_unbalance_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Desbalance máximo de corriente de la hora en porcentaje.")
+
+    # 3.7. Distorsión Armónica Total (THD) y Demanda de Distorsión Total (TDD) (de la hora)
+    max_voltage_thd_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="THD máximo de tensión de la hora en porcentaje.")
+    max_current_thd_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="THD máximo de corriente de la hora en porcentaje.")
+    max_current_tdd_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="TDD máximo de corriente de la hora en porcentaje.")
+
+    # Metadatos
+    measurement_count = models.IntegerField(default=0, help_text="Número de mediciones procesadas en la hora.")
+    calculated_at = models.DateTimeField(auto_now=True, help_text="Fecha y hora del cálculo.")
+
+    class Meta:
+        verbose_name = "Indicadores Horarios de Medidor Eléctrico"
+        verbose_name_plural = "Indicadores Horarios de Medidores Eléctricos"
+        unique_together = ['device', 'hour']
+        indexes = [
+            models.Index(fields=['device', 'hour']),
+            models.Index(fields=['institution', 'hour']),
+            models.Index(fields=['hour']),
+        ]
+
+    def __str__(self):
+        return f"{self.device.name} - {self.hour.isoformat()} (horario)"
+
+
+class HourlyInverterIndicators(models.Model):
+    """
+    Indicadores de inversor a grano HORARIO (vista horaria, Opción B).
+
+    Tabla dedicada (NO reutiliza `time_range` de `InverterIndicators`): cada fila es una
+    hora cerrada de Bogotá. Alimentada por `calculate_hourly_rollup`, que aplica
+    `compute_inverter_indicators` sobre la ventana de `colombia_hour_range(hour)`.
+    EXCLUYE `avg_irradiance_wm2`/`avg_temperature_c` (siempre 0 en el inversor; ver
+    `InverterIndicators` — no aportan información nueva a este grano).
+    """
+    device = models.ForeignKey('scada_proxy.Device', on_delete=models.CASCADE, related_name='hourly_inverter_indicators')
+    institution = models.ForeignKey('scada_proxy.Institution', on_delete=models.CASCADE, related_name='hourly_inverter_indicators')
+
+    hour = models.DateTimeField(help_text="Inicio de la hora del registro (aware, hora de Bogotá).")
+
+    # 4.1. Eficiencia de Conversión DC-AC (de la hora)
+    energy_ac_kwh = models.FloatField(default=0.0, null=True, blank=True, help_text="Energía AC generada en la hora en kWh.")
+    energy_dc_kwh = models.FloatField(default=0.0, null=True, blank=True, help_text="Energía DC recibida en la hora en kWh.")
+    dc_ac_efficiency_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Eficiencia de conversión DC-AC de la hora en porcentaje.")
+
+    # 4.3. Performance Ratio (PR) (de la hora)
+    performance_ratio_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Performance Ratio de la hora en porcentaje.")
+    reference_energy_kwh = models.FloatField(default=0.0, null=True, blank=True, help_text="Energía de referencia de la hora en kWh.")
+
+    # 4.4. Curva de Generación vs. Potencia (de la hora)
+    avg_power_w = models.FloatField(default=0.0, null=True, blank=True, help_text="Potencia promedio generada en la hora en W.")
+    max_power_w = models.FloatField(default=0.0, null=True, blank=True, help_text="Potencia máxima generada en la hora en W.")
+    min_power_w = models.FloatField(default=0.0, null=True, blank=True, help_text="Potencia mínima generada en la hora en W.")
+
+    # 4.5. Factor de Potencia y Calidad de Inyección (de la hora)
+    avg_power_factor_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Factor de potencia promedio de la hora en porcentaje.")
+    avg_reactive_power_var = models.FloatField(default=0.0, null=True, blank=True, help_text="Potencia reactiva promedio de la hora en VAr.")
+    avg_apparent_power_va = models.FloatField(default=0.0, null=True, blank=True, help_text="Potencia aparente promedio de la hora en VA.")
+    avg_frequency_hz = models.FloatField(default=0.0, null=True, blank=True, help_text="Frecuencia promedio de la hora en Hz.")
+    frequency_stability_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Estabilidad de frecuencia de la hora en porcentaje.")
+
+    # 4.6. Desbalance de Fases en Inyección (de la hora)
+    max_voltage_unbalance_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Desbalance máximo de tensión de la hora en porcentaje.")
+    max_current_unbalance_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Desbalance máximo de corriente de la hora en porcentaje.")
+
+    # 4.7. Análisis de Anomalías Operativas (de la hora)
+    anomaly_score = models.FloatField(default=0.0, null=True, blank=True, help_text="Puntuación de anomalías de la hora (0-100, 0=sin anomalías).")
+    anomaly_details = models.JSONField(default=dict, help_text="Detalles de anomalías detectadas en la hora.")
+
+    # Metadatos
+    measurement_count = models.IntegerField(default=0, help_text="Número de mediciones procesadas en la hora.")
+    calculated_at = models.DateTimeField(auto_now=True, help_text="Fecha y hora del cálculo.")
+
+    class Meta:
+        verbose_name = "Indicadores Horarios de Inversor"
+        verbose_name_plural = "Indicadores Horarios de Inversores"
+        unique_together = ['device', 'hour']
+        indexes = [
+            models.Index(fields=['device', 'hour']),
+            models.Index(fields=['institution', 'hour']),
+            models.Index(fields=['hour']),
+        ]
+
+    def __str__(self):
+        return f"{self.device.name} - {self.hour.isoformat()} (horario)"
+
+
+class HourlyWeatherIndicators(models.Model):
+    """
+    Indicadores de estación meteorológica a grano HORARIO (vista horaria, Opción B).
+
+    Tabla dedicada (NO reutiliza `time_range` de `WeatherStationIndicators`): cada fila
+    es una hora cerrada de Bogotá. Alimentada por `calculate_hourly_rollup`, que aplica
+    `calculate_single_hour_weather_indicators` sobre la ventana de `colombia_hour_range(hour)`.
+    EXCLUYE `wind_direction_distribution`/`wind_speed_distribution` (poco significativas
+    a grano horario).
+    """
+    device = models.ForeignKey('scada_proxy.Device', on_delete=models.CASCADE, related_name='hourly_weather_indicators')
+    institution = models.ForeignKey('scada_proxy.Institution', on_delete=models.CASCADE, related_name='hourly_weather_indicators')
+
+    hour = models.DateTimeField(help_text="Inicio de la hora del registro (aware, hora de Bogotá).")
+
+    # 5.1/5.2. Irradiancia de la hora (filtro 06-18h y 0-1100 W/m², igual que el diario)
+    avg_irradiance_wm2 = models.FloatField(default=0.0, null=True, blank=True, help_text="Irradiancia promedio de la hora en W/m² (filtrada 06-18h, 0-1100).")
+    irradiance_energy_kwh_m2 = models.FloatField(default=0.0, null=True, blank=True, help_text="Irradiancia acumulada de la hora en kWh/m².")
+
+    # Temperatura de la hora
+    avg_temperature_c = models.FloatField(default=0.0, null=True, blank=True, help_text="Temperatura promedio de la hora en °C.")
+    max_temperature_c = models.FloatField(default=0.0, null=True, blank=True, help_text="Temperatura máxima de la hora en °C.")
+    min_temperature_c = models.FloatField(default=0.0, null=True, blank=True, help_text="Temperatura mínima de la hora en °C.")
+
+    # Humedad de la hora
+    avg_humidity_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="Humedad relativa promedio de la hora en %.")
+
+    # 5.3. Viento de la hora (sin rosa de los vientos, poco significativa a grano horario)
+    avg_wind_speed_kmh = models.FloatField(default=0.0, null=True, blank=True, help_text="Velocidad media del viento de la hora en km/h.")
+    avg_wind_direction_deg = models.FloatField(default=0.0, null=True, blank=True, help_text="Dirección promedio del viento de la hora en grados (promedio aritmético).")
+
+    # 5.4. Precipitación de la hora
+    precipitation_cm = models.FloatField(default=0.0, null=True, blank=True, help_text="Precipitación de la hora en cm (último valor del acumulador).")
+
+    # Metadatos
+    measurement_count = models.IntegerField(default=0, help_text="Número de mediciones procesadas en la hora.")
+    calculated_at = models.DateTimeField(auto_now=True, help_text="Fecha y hora del cálculo.")
+
+    class Meta:
+        verbose_name = "Indicadores Horarios de Estación Meteorológica"
+        verbose_name_plural = "Indicadores Horarios de Estaciones Meteorológicas"
+        unique_together = ['device', 'hour']
+        indexes = [
+            models.Index(fields=['device', 'hour']),
+            models.Index(fields=['institution', 'hour']),
+            models.Index(fields=['hour']),
+        ]
+
+    def __str__(self):
+        return f"{self.device.name} - {self.hour.isoformat()} (horario)"
+
+
 class GeneratedReport(models.Model):
     """
     Modelo para almacenar información sobre reportes generados

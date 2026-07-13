@@ -17,6 +17,9 @@ COLOMBIA_TZ = pytz.timezone('America/Bogota')
 INDICATORS_DEFAULT_RANGE_DAYS = 31
 INDICATORS_MAX_RANGE_DAYS = 366
 
+# Tope del rango horario (vista horaria, Opción B): 7 días == 168 horas.
+INDICATORS_HOURLY_MAX_RANGE_DAYS = 7
+
 
 def get_colombia_now():
     """Fecha y hora actual en zona horaria de Colombia."""
@@ -38,6 +41,72 @@ def colombia_day_range(start_date, end_date):
     start_dt = COLOMBIA_TZ.localize(datetime.combine(start_date, datetime.min.time()))
     end_dt = COLOMBIA_TZ.localize(datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
     return start_dt, end_dt
+
+
+def colombia_hour_range(hour_start):
+    """Rango datetime aware [hour_start, hour_start+1h) en hora de Bogotá.
+
+    Análogo a `colombia_day_range` pero para el grano horario: recibe un datetime
+    aware que representa el inicio de la hora (p.ej. 14:00:00-05:00) y devuelve el
+    par (start, end) que delimita esa hora exacta. Si `hour_start` no trae tzinfo,
+    se asume que ya está en hora de Bogotá y se localiza; si trae otra zona, se
+    convierte a Bogotá antes de truncar minutos/segundos/microsegundos.
+    """
+    if django_timezone.is_naive(hour_start):
+        hour_start = COLOMBIA_TZ.localize(hour_start)
+    else:
+        hour_start = hour_start.astimezone(COLOMBIA_TZ)
+
+    start_dt = hour_start.replace(minute=0, second=0, microsecond=0)
+    end_dt = start_dt + timedelta(hours=1)
+    return start_dt, end_dt
+
+
+def resolve_indicators_hourly_range(date_str=None, start_date_str=None, end_date_str=None):
+    """Resuelve el rango horario a graficar (vista horaria, Opción B).
+
+    Devuelve (start_date, end_date, error), en las mismas unidades (date, no
+    datetime) que `resolve_indicators_date_range`, para reutilizar `colombia_day_range`
+    al consultar. Reglas:
+    - Si se pasa `date_str`: día único (start_date == end_date == esa fecha).
+    - Si no, se resuelve con `start_date_str`/`end_date_str` igual que la vista diaria
+      (sin fechas -> últimos INDICATORS_HOURLY_MAX_RANGE_DAYS días; solo una de las dos
+      -> se completa la otra).
+    - Tope estricto: el rango no puede superar INDICATORS_HOURLY_MAX_RANGE_DAYS días
+      (7 días == 168 horas). Si se supera, error 400 en español.
+    - Fechas invertidas o formato inválido: error en español.
+    """
+    if date_str:
+        try:
+            single_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return None, None, "Formato de fecha inválido. Use YYYY-MM-DD en 'date'."
+        return single_date, single_date, None
+
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
+    except ValueError:
+        return None, None, "Formato de fecha inválido. Use YYYY-MM-DD en 'start_date' y 'end_date'."
+
+    if end_date is None:
+        end_date = get_colombia_date()
+    if start_date is None:
+        start_date = end_date - timedelta(days=INDICATORS_HOURLY_MAX_RANGE_DAYS - 1)
+
+    if start_date > end_date:
+        return None, None, "La fecha de inicio no puede ser posterior a la fecha de fin."
+
+    # Tope de 7 días (168 horas) para la vista horaria: el rango es inclusivo en
+    # ambos extremos, así que la ventana de días es (end_date - start_date) + 1.
+    if (end_date - start_date).days + 1 > INDICATORS_HOURLY_MAX_RANGE_DAYS:
+        return None, None, (
+            f"El rango horario solicitado supera el máximo permitido de "
+            f"{INDICATORS_HOURLY_MAX_RANGE_DAYS} días ({INDICATORS_HOURLY_MAX_RANGE_DAYS * 24} horas). "
+            f"Reduzca el rango e intente de nuevo."
+        )
+
+    return start_date, end_date, None
 
 
 def resolve_indicators_date_range(start_date_str, end_date_str):

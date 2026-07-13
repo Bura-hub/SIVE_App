@@ -9,6 +9,7 @@ import { WEATHER_KPI_INFO } from '../utils/kpiInfo';
 import { IconCloudSun, IconRefresh, IconSun, IconWind, IconDroplets } from './icons';
 
 // Importaciones desde Chart.js y el plugin de zoom
+import { Chart as ChartJS } from 'chart.js';
 
 // Configuración de gráficos
 const CHART_OPTIONS = {
@@ -82,6 +83,64 @@ const CHART_OPTIONS = {
   transitions: { zoom: { animation: { duration: 300, easing: 'easeInOutQuart' } } }
 };
 
+// Plugin de Chart.js: dibuja a mano las etiquetas de brújula (N, NE, E, SE, S, SW, W, NW)
+// de la Rosa de los Vientos, en ángulos FIJOS (no los `pointLabels` automáticos de Chart.js).
+//
+// Por qué hace falta: al centrar cada cuña en su ángulo real de brújula (ver
+// `scales.r.startAngle: -22.5` más abajo, donde se usa este mismo componente), las
+// `pointLabels` automáticas -que Chart.js posiciona en los BORDES de cada cuña, heredando
+// el mismo desfase de -22.5°- quedarían otra vez descentradas respecto al pétalo que
+// etiquetan. Por eso se desactivan (`pointLabels.display: false`) y se dibujan aquí, en el
+// ángulo del CENTRO de cada cuña.
+//
+// Por qué es un plugin global (y no una prop `plugins` en <ChartCard>): ChartCard.jsx no
+// declara ni reenvía ninguna prop `plugins` al componente react-chartjs-2 subyacente (solo
+// pasa `data`/`options` fijos), y esta tarea solo debe tocar WeatherStationDetails.js. Se
+// registra entonces a nivel de Chart.js -igual que legend/tooltip/zoom-, pero el `afterDraw`
+// no dibuja NADA salvo que encuentre su propia clave `options.plugins.windCompassLabels` en
+// las opciones del chart que lo invoca. Ninguna otra gráfica del proyecto define esa clave,
+// así que en la práctica el efecto queda acotado a la Rosa de los Vientos.
+const windCompassLabelsPlugin = {
+  id: 'windCompassLabels',
+  afterDraw(chart) {
+    const opts = chart.options?.plugins?.windCompassLabels;
+    if (!opts?.enabled) return;
+
+    const scale = chart.scales?.r;
+    if (!scale) return;
+
+    const { ctx } = chart;
+    const { xCenter, yCenter, drawingArea } = scale;
+    const compassLabels = opts.labels || [];
+    // Radio de las etiquetas: un poco más allá del borde del área dibujada (grid/pétalos),
+    // dentro del margen que reserva `layout.padding` en las options del ChartCard (si no
+    // hubiera ese margen, el texto se recortaría contra el borde del canvas).
+    const labelRadius = drawingArea + 18;
+
+    ctx.save();
+    ctx.font = '700 12px sans-serif';
+    ctx.fillStyle = '#334155';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    compassLabels.forEach((label, i) => {
+      // Ángulo real de brújula del sector i (0=N, 1=NE, ..., 7=NW): 0° arriba, sentido
+      // horario, sectores de 45°. En coordenadas de canvas 0 rad apunta a la DERECHA
+      // (eje +x), así que restamos 90° (un cuarto de vuelta) para que el ángulo 0 quede
+      // arriba (Norte). Es el MISMO ángulo -i*45°-90°- en el que queda centrada cada cuña
+      // gracias a `startAngle: -22.5` en scales.r, por eso la etiqueta cae sobre su pétalo.
+      const angleDeg = i * 45 - 90;
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const x = xCenter + labelRadius * Math.cos(angleRad);
+      const y = yCenter + labelRadius * Math.sin(angleRad);
+      ctx.fillText(label, x, y);
+    });
+
+    ctx.restore();
+  },
+};
+ChartJS.register(windCompassLabelsPlugin);
+
 // Componente de encabezado de sección
 const SectionHeader = ({ title, icon, infoText }) => (
   <div className="flex items-center justify-between mb-6">
@@ -132,6 +191,20 @@ const calculateTheoreticalPVPower = (irradiance, temperature = 25) => {
   }
 
   return Math.max(0, power); // No puede ser negativa
+};
+
+// Vista horaria (Opción B): formatea el campo `hour` (datetime ISO, inicio de hora) como
+// HH:mm en zona horaria de Bogotá, consistente con el resto de la vista horaria.
+const formatHourLabel = (isoHour) => {
+  if (!isoHour) return '';
+  const d = new Date(isoHour);
+  if (isNaN(d.getTime())) return isoHour;
+  return d.toLocaleTimeString('es-CO', {
+    timeZone: 'America/Bogota',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 };
 
 // Función para obtener la dirección predominante del viento (pura)
@@ -481,6 +554,10 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
   const irradianceChartData = useMemo(() => ({
     labels: weatherRows.map(item => {
+      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
+      if (filters.timeRange === 'hourly') {
+        return formatHourLabel(item.hour);
+      }
       // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
       const rawDate = item.date;
       // Crear fecha en zona horaria local para evitar desfase UTC
@@ -491,8 +568,14 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     }),
     datasets: [
       {
-        label: 'Irradiancia Acumulada (kWh/m²)',
-        data: weatherRows.map(item => item.daily_irradiance_kwh_m2 || 0),
+        label: filters.timeRange === 'hourly' ? 'Irradiancia de la Hora (kWh/m²)' : 'Irradiancia Acumulada (kWh/m²)',
+        // Vista horaria (Opción B): HourlyWeatherIndicators expone `irradiance_energy_kwh_m2`
+        // (suma horaria), equivalente a `daily_irradiance_kwh_m2` pero para 1 hora.
+        data: weatherRows.map(item => (
+          filters.timeRange === 'hourly'
+            ? (item.irradiance_energy_kwh_m2 || 0)
+            : (item.daily_irradiance_kwh_m2 || 0)
+        )),
         borderColor: '#F59E0B',
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
         fill: true,
@@ -503,8 +586,14 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         pointBorderWidth: 2,
       },
       {
-        label: 'Horas Solares Pico (HSP)',
-        data: weatherRows.map(item => item.daily_hsp_hours || 0),
+        // Vista horaria (Opción B): HourlyWeatherIndicators no tiene HSP (concepto diario);
+        // se muestra en su lugar la irradiancia promedio instantánea de la hora (W/m²).
+        label: filters.timeRange === 'hourly' ? 'Irradiancia Promedio (W/m²)' : 'Horas Solares Pico (HSP)',
+        data: weatherRows.map(item => (
+          filters.timeRange === 'hourly'
+            ? (item.avg_irradiance_wm2 || 0)
+            : (item.daily_hsp_hours || 0)
+        )),
         borderColor: '#10B981',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         fill: false,
@@ -516,10 +605,14 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         pointBorderWidth: 2,
       }
     ],
-  }), [weatherRows]);
+  }), [weatherRows, filters.timeRange]);
 
   const ambientConditionsChartData = useMemo(() => ({
     labels: weatherRows.map(item => {
+      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
+      if (filters.timeRange === 'hourly') {
+        return formatHourLabel(item.hour);
+      }
       // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
       const rawDate = item.date;
       // Crear fecha en zona horaria local para evitar desfase UTC
@@ -550,10 +643,14 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         pointBackgroundColor: '#3B82F6',
       }
     ]
-  }), [weatherRows]);
+  }), [weatherRows, filters.timeRange]);
 
   const windConditionsChartData = useMemo(() => ({
     labels: weatherRows.map(item => {
+      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
+      if (filters.timeRange === 'hourly') {
+        return formatHourLabel(item.hour);
+      }
       // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
       const rawDate = item.date;
       // Crear fecha en zona horaria local para evitar desfase UTC
@@ -574,8 +671,14 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         pointBackgroundColor: '#10B981',
       },
       {
-        label: 'Precipitación Acumulada (cm/día)',
-        data: weatherRows.map(item => item.daily_precipitation_cm || 0),
+        label: filters.timeRange === 'hourly' ? 'Precipitación de la Hora (cm)' : 'Precipitación Acumulada (cm/día)',
+        // Vista horaria (Opción B): HourlyWeatherIndicators expone `precipitation_cm`
+        // (último valor de la hora), equivalente a `daily_precipitation_cm`.
+        data: weatherRows.map(item => (
+          filters.timeRange === 'hourly'
+            ? (item.precipitation_cm || 0)
+            : (item.daily_precipitation_cm || 0)
+        )),
         borderColor: '#8B5CF6',
         backgroundColor: 'rgba(139, 92, 246, 0.1)',
         fill: false,
@@ -585,7 +688,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         pointBackgroundColor: '#8B5CF6',
       }
     ]
-  }), [weatherRows]);
+  }), [weatherRows, filters.timeRange]);
 
   // Rosa de los vientos: agrupa el bundle labels/slow/mid/fast/total/fills que alimenta
   // tanto el `data` (memoizado) como los callbacks del tooltip en `options` (sin tocar
@@ -596,6 +699,19 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     const mid = calculateWindRoseData(weatherRows, 5, 10);
     const fast = calculateWindRoseData(weatherRows, 10, Infinity);
     const total = labels.map((_, i) => (slow[i] || 0) + (mid[i] || 0) + (fast[i] || 0));
+    // Total general de lecturas (suma de las 8 direcciones): base para expresar cada
+    // sector como % del total y para la transformación de escala de abajo.
+    const grandTotal = total.reduce((a, b) => a + b, 0);
+    // Chart.js (polarArea) mapea el RADIO linealmente al valor del dataset, pero el ÁREA
+    // visual de cada pétalo crece con el CUADRADO del radio (área ∝ r²). Si le pasáramos el
+    // conteo crudo, un sector con el doble de lecturas que otro se vería con ~4x más área,
+    // exagerando la diferencia real de frecuencias. Para que el ÁREA (no el radio) sea
+    // proporcional a la frecuencia: se normaliza cada conteo a % del total y se le aplica
+    // raíz cuadrada -> `data: sqrt(100 * v / grandTotal)`. Así, al elevar el radio resultante
+    // al cuadrado (radio² ∝ área), se recupera el % real. El eje (scales.r.ticks.callback)
+    // y el tooltip deshacen esta transformación para mostrar siempre el dato real, nunca la
+    // raíz.
+    const radiusValues = total.map(v => (grandTotal ? Math.sqrt((100 * v) / grandTotal) : 0));
     // Rueda de color tipo brújula (un color por sector), con relleno translúcido.
     const DIR_COLORS = ['#2563eb', '#0891b2', '#059669', '#65a30d', '#d97706', '#ea580c', '#dc2626', '#7c3aed'];
     const fills = DIR_COLORS.map(c => c + 'cc'); // ~80% opacidad
@@ -604,18 +720,22 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       datasets: [
         {
           label: 'Lecturas de viento',
-          data: total,
+          data: radiusValues,
           backgroundColor: fills,
           borderColor: '#ffffff',
           borderWidth: 1.5,
         },
       ],
     };
-    return { labels, slow, mid, fast, total, chartData };
+    return { labels, slow, mid, fast, total, grandTotal, chartData };
   }, [weatherRows]);
 
   const pvTheoreticalPowerChartData = useMemo(() => ({
     labels: weatherRows.map(item => {
+      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
+      if (filters.timeRange === 'hourly') {
+        return formatHourLabel(item.hour);
+      }
       // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
       const rawDate = item.date;
       // Crear fecha en zona horaria local para evitar desfase UTC
@@ -629,7 +749,9 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         label: 'Potencia Teórica (W)',
         data: weatherRows.map(item =>
           calculateTheoreticalPVPower(
-            item?.daily_irradiance_kwh_m2 || 0,
+            // Vista horaria (Opción B): avg_irradiance_wm2 (W/m² instantáneo de la hora)
+            // en vez de daily_irradiance_kwh_m2 (acumulado del día).
+            (filters.timeRange === 'hourly' ? item?.avg_irradiance_wm2 : item?.daily_irradiance_kwh_m2) || 0,
             item?.avg_temperature_c || 25
           )
         ),
@@ -643,8 +765,12 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         pointBorderWidth: 2,
       },
       {
-        label: 'Irradiancia (kWh/m²)',
-        data: weatherRows.map(item => item?.daily_irradiance_kwh_m2 || 0),
+        label: filters.timeRange === 'hourly' ? 'Irradiancia (W/m²)' : 'Irradiancia (kWh/m²)',
+        data: weatherRows.map(item => (
+          filters.timeRange === 'hourly'
+            ? (item?.avg_irradiance_wm2 || 0)
+            : (item?.daily_irradiance_kwh_m2 || 0)
+        )),
         borderColor: '#F59E0B',
         backgroundColor: 'rgba(245, 158, 11, 0.05)',
         fill: false,
@@ -657,7 +783,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         yAxisID: 'y1'
       }
     ],
-  }), [weatherRows]);
+  }), [weatherRows, filters.timeRange]);
 
   // Si está cargando, muestra un spinner o mensaje
   if (loading) {
@@ -1157,7 +1283,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                 // Rosa de los vientos: UN pétalo por dirección cardinal (frecuencia total de
                 // lecturas del rango). El desglose por banda de velocidad (0-5/5-10/10+ km/h,
                 // asignada por la velocidad media de cada día) se muestra en el tooltip.
-                const { labels, slow, mid, fast, total, chartData } = windRoseBundle;
+                const { labels, slow, mid, fast, total, grandTotal, chartData } = windRoseBundle;
                 return (
                   <ChartCard
                     title="Rosa de los Vientos"
@@ -1167,6 +1293,11 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
+                      // Deja aire alrededor del círculo para las etiquetas de brújula que
+                      // dibuja a mano el plugin `windCompassLabels` (definido arriba, cerca
+                      // de CHART_OPTIONS): al apagar `pointLabels` de Chart.js la escala ya
+                      // no reserva ese margen por sí sola.
+                      layout: { padding: 26 },
                       plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -1174,8 +1305,13 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                             title: (items) => (items.length ? `Viento del ${labels[items[0].dataIndex]}` : ''),
                             label: (ctx) => {
                               const i = ctx.dataIndex;
+                              // El tooltip muestra siempre el dato REAL (conteo y % del
+                              // total), nunca el valor con raíz cuadrada que usa el dataset
+                              // solo para que el ÁREA del pétalo sea proporcional (ver
+                              // `radiusValues` en windRoseBundle).
+                              const pct = grandTotal ? Math.round((100 * total[i]) / grandTotal) : 0;
                               return [
-                                `Total: ${total[i]} lecturas`,
+                                `Total: ${total[i]} lecturas (${pct}%)`,
                                 `0–5 km/h: ${slow[i] || 0}`,
                                 `5–10 km/h: ${mid[i] || 0}`,
                                 `10+ km/h: ${fast[i] || 0}`,
@@ -1183,14 +1319,42 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                             },
                           },
                         },
+                        // Config leída por el plugin global `windCompassLabels`: al ser la
+                        // única gráfica del archivo que define esta clave, el plugin solo
+                        // dibuja aquí (ver comentario junto a su registro más arriba).
+                        windCompassLabels: { enabled: true, labels },
                       },
                       scales: {
                         r: {
                           beginAtZero: true,
+                          // Corrige el desfase angular: Chart.js empieza cada cuña en el
+                          // ángulo "crudo" del índice (index * 45°) y la extiende +45° en
+                          // sentido horario, dejándola centrada en index*45° + 22.5° en vez
+                          // de en su ángulo real de brújula. Restar medio sector
+                          // (-22.5° = -(360°/8)/2) recentra la cuña i exactamente en
+                          // i*45° - 90° (con -90° = arriba = Norte), su ángulo real.
+                          startAngle: -22.5,
                           grid: { color: 'rgba(0, 0, 0, 0.08)' },
                           angleLines: { color: 'rgba(0, 0, 0, 0.08)' },
-                          pointLabels: { display: true, font: { size: 14, weight: '700' }, color: '#334155' },
-                          ticks: { display: true, backdropColor: 'transparent', color: '#64748b', font: { size: 10 }, precision: 0 },
+                          // Las point labels automáticas de Chart.js se ubican en los BORDES
+                          // de cada cuña, heredando el mismo desfase de -22.5° que acabamos
+                          // de corregir arriba, así que quedarían otra vez descentradas
+                          // respecto al pétalo. Se desactivan aquí y se dibujan a mano (en
+                          // el ángulo del CENTRO de cada cuña) con el plugin
+                          // `windCompassLabels`.
+                          pointLabels: { display: false },
+                          // Eje transformado con raíz cuadrada (ver radiusValues arriba):
+                          // 0–10 en el eje equivale a 0–100% una vez elevado al cuadrado.
+                          suggestedMax: Math.sqrt(100),
+                          ticks: {
+                            display: true,
+                            backdropColor: 'transparent',
+                            color: '#64748b',
+                            font: { size: 10 },
+                            // El tick vive en la escala con raíz cuadrada; se eleva al
+                            // cuadrado para mostrar el % real del total de lecturas.
+                            callback: (value) => `${Math.round(value * value)}%`,
+                          },
                         },
                       },
                     }}

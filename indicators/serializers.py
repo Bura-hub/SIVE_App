@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from .models import MonthlyConsumptionKPI, DailyChartData, ElectricMeterIndicators, InverterIndicators, InverterChartData, WeatherStationIndicators, WeatherStationChartData
+from .models import (
+    MonthlyConsumptionKPI, DailyChartData, ElectricMeterIndicators, InverterIndicators,
+    InverterChartData, WeatherStationIndicators, WeatherStationChartData,
+    HourlyMeterIndicators, HourlyInverterIndicators, HourlyWeatherIndicators,
+)
 
 class MonthlyConsumptionKPISerializer(serializers.ModelSerializer):
     class Meta:
@@ -87,6 +91,27 @@ class ElectricMeterIndicatorsSerializer(serializers.ModelSerializer):
         read_only_fields = ['calculated_at']
 
 
+class HourlyMeterIndicatorsSerializer(serializers.ModelSerializer):
+    """Vista horaria (Opción B) de indicadores de medidor eléctrico. Mismo patrón que
+    `ElectricMeterIndicatorsSerializer`, pero expone `hour` (datetime ISO, inicio de la
+    hora) en vez de `date`/`time_range_display` (la tabla horaria no tiene esos campos)."""
+    device_name = serializers.CharField(source='device.name', read_only=True)
+    institution_name = serializers.CharField(source='institution.name', read_only=True)
+
+    class Meta:
+        model = HourlyMeterIndicators
+        fields = [
+            'id', 'device', 'device_name', 'institution', 'institution_name',
+            'hour',
+            'imported_energy_kwh', 'exported_energy_kwh', 'net_energy_consumption_kwh',
+            'peak_demand_kw', 'avg_demand_kw', 'load_factor_pct', 'avg_power_factor',
+            'max_voltage_unbalance_pct', 'max_current_unbalance_pct',
+            'max_voltage_thd_pct', 'max_current_thd_pct', 'max_current_tdd_pct',
+            'measurement_count', 'calculated_at'
+        ]
+        read_only_fields = ['calculated_at']
+
+
 class InverterIndicatorsSerializer(serializers.ModelSerializer):
     device_name = serializers.CharField(source='device.name', read_only=True)
     institution_name = serializers.CharField(source='institution.name', read_only=True)
@@ -105,6 +130,31 @@ class InverterIndicatorsSerializer(serializers.ModelSerializer):
             'max_voltage_unbalance_pct', 'max_current_unbalance_pct',
             'anomaly_score', 'anomaly_details',
             'measurement_count', 'last_measurement_date', 'calculated_at'
+        ]
+        read_only_fields = ['calculated_at']
+
+
+class HourlyInverterIndicatorsSerializer(serializers.ModelSerializer):
+    """Vista horaria (Opción B) de indicadores de inversor. Mismo patrón que
+    `InverterIndicatorsSerializer`, pero expone `hour` (datetime ISO, inicio de la hora)
+    en vez de `date`/`time_range_display`. EXCLUYE `avg_irradiance_wm2`/`avg_temperature_c`
+    (la tabla horaria no los tiene: siempre 0 en el inversor, ver diseño)."""
+    device_name = serializers.CharField(source='device.name', read_only=True)
+    institution_name = serializers.CharField(source='institution.name', read_only=True)
+
+    class Meta:
+        model = HourlyInverterIndicators
+        fields = [
+            'id', 'device', 'device_name', 'institution', 'institution_name',
+            'hour',
+            'energy_ac_kwh', 'energy_dc_kwh', 'dc_ac_efficiency_pct',
+            'performance_ratio_pct', 'reference_energy_kwh',
+            'avg_power_w', 'max_power_w', 'min_power_w',
+            'avg_power_factor_pct', 'avg_reactive_power_var', 'avg_apparent_power_va',
+            'avg_frequency_hz', 'frequency_stability_pct',
+            'max_voltage_unbalance_pct', 'max_current_unbalance_pct',
+            'anomaly_score', 'anomaly_details',
+            'measurement_count', 'calculated_at'
         ]
         read_only_fields = ['calculated_at']
 
@@ -195,6 +245,28 @@ class WeatherStationIndicatorsSerializer(serializers.ModelSerializer):
             'avg_humidity_pct', 'max_temperature_c', 'min_temperature_c',
             'measurement_count', 'last_measurement_date', 'calculated_at'
         ]
+
+
+class HourlyWeatherIndicatorsSerializer(serializers.ModelSerializer):
+    """Vista horaria (Opción B) de indicadores de estación meteorológica. Mismo patrón
+    que `WeatherStationIndicatorsSerializer`, pero expone `hour` (datetime ISO, inicio de
+    la hora) en vez de `date`/`time_range`. EXCLUYE `wind_direction_distribution`/
+    `wind_speed_distribution` (la tabla horaria no los tiene, ver diseño)."""
+    device_name = serializers.CharField(source='device.name', read_only=True)
+    institution_name = serializers.CharField(source='institution.name', read_only=True)
+
+    class Meta:
+        model = HourlyWeatherIndicators
+        fields = [
+            'id', 'device', 'device_name', 'institution', 'institution_name',
+            'hour',
+            'avg_irradiance_wm2', 'irradiance_energy_kwh_m2',
+            'avg_temperature_c', 'max_temperature_c', 'min_temperature_c',
+            'avg_humidity_pct', 'avg_wind_speed_kmh', 'avg_wind_direction_deg',
+            'precipitation_cm',
+            'measurement_count', 'calculated_at'
+        ]
+        read_only_fields = ['calculated_at']
 
 
 class WeatherStationChartDataSerializer(serializers.ModelSerializer):

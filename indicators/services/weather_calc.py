@@ -184,6 +184,100 @@ def calculate_single_month_weather_indicators(measurements):
     return monthly_indicators
 
 
+def calculate_single_hour_weather_indicators(measurements):
+    """
+    Calcula indicadores meteorológicos para UNA hora específica (vista horaria, Opción B).
+
+    Recibe filas dict de una sola hora (mismo formato que `calculate_single_day_weather_indicators`:
+    `.values('date', <columnas meteorológicas>)`) y devuelve el dict de campos de
+    `HourlyWeatherIndicators`. Extraída verbatim de la lógica que ya agrupaba por hora
+    dentro de `calculate_single_day_weather_chart_data`, para poder reutilizarla también
+    en el rollup horario dedicado sin duplicar código ni alterar la salida diaria existente.
+
+    Nota: `avg_wind_direction_deg` usa promedio aritmético simple (no circular), el mismo
+    criterio ya presente en el cálculo diario/mensual — defecto heredado, fuera de alcance.
+    """
+    irradiance_values = []
+    temperature_values = []
+    humidity_values = []
+    wind_speed_values = []
+    wind_direction_values = []
+    precipitation_values = []
+
+    for data in measurements:
+        if data['irradiance'] is not None:
+            irr = float(data['irradiance'])
+            # Mismo filtro que el cálculo diario: rango físico 0–1100 W/m² y solo en
+            # horas de luz (06–18 local), para no inflar el acumulado con sensores pegados.
+            ts = data['date']
+            try:
+                hour_of_day = ts.astimezone(COLOMBIA_TZ).hour
+            except (ValueError, AttributeError):
+                hour_of_day = 12  # sin tz utilizable: no descartar por hora
+            if 0.0 <= irr <= 1100.0 and 6 <= hour_of_day < 18:
+                irradiance_values.append(irr)
+        if data['temperature'] is not None:
+            temperature_values.append(float(data['temperature']))
+        if data['humidity'] is not None:
+            humidity_values.append(float(data['humidity']))
+        if data['windSpeed'] is not None:
+            wind_speed_values.append(float(data['windSpeed']))
+        if data['windDirection'] is not None:
+            wind_direction_values.append(float(data['windDirection']))
+        if data['precipitation'] is not None:
+            precipitation_values.append(float(data['precipitation']))
+
+    indicators = {}
+
+    # Irradiancia promedio de la hora (ya filtrada 06-18h y 0-1100 W/m²).
+    if irradiance_values:
+        indicators['avg_irradiance_wm2'] = sum(irradiance_values) / len(irradiance_values)
+    else:
+        indicators['avg_irradiance_wm2'] = 0.0
+
+    # Irradiancia acumulada de la hora (kWh/m²): igual criterio que el diario pero
+    # sobre el slice de 1 hora (lecturas de 2 min -> Wh/m² -> kWh/m²).
+    if irradiance_values:
+        total_irradiance_wh_m2 = sum(irradiance_values) * (2 / 60)  # Wh/m²
+        indicators['irradiance_energy_kwh_m2'] = total_irradiance_wh_m2 / 1000  # kWh/m²
+    else:
+        indicators['irradiance_energy_kwh_m2'] = 0.0
+
+    if temperature_values:
+        indicators['avg_temperature_c'] = sum(temperature_values) / len(temperature_values)
+        indicators['max_temperature_c'] = max(temperature_values)
+        indicators['min_temperature_c'] = min(temperature_values)
+    else:
+        indicators['avg_temperature_c'] = 0.0
+        indicators['max_temperature_c'] = 0.0
+        indicators['min_temperature_c'] = 0.0
+
+    if humidity_values:
+        indicators['avg_humidity_pct'] = sum(humidity_values) / len(humidity_values)
+    else:
+        indicators['avg_humidity_pct'] = 0.0
+
+    if wind_speed_values:
+        indicators['avg_wind_speed_kmh'] = sum(wind_speed_values) / len(wind_speed_values)
+    else:
+        indicators['avg_wind_speed_kmh'] = 0.0
+
+    if wind_direction_values:
+        indicators['avg_wind_direction_deg'] = sum(wind_direction_values) / len(wind_direction_values)
+    else:
+        indicators['avg_wind_direction_deg'] = 0.0
+
+    # Precipitación: último valor de la hora (acumulador), mismo criterio que el diario.
+    if precipitation_values:
+        indicators['precipitation_cm'] = precipitation_values[-1]
+    else:
+        indicators['precipitation_cm'] = 0.0
+
+    indicators['measurement_count'] = len(measurements)
+
+    return indicators
+
+
 def calculate_single_day_weather_chart_data(measurements):
     """
     Calcula datos de gráficos para un día específico.
@@ -194,25 +288,16 @@ def calculate_single_day_weather_chart_data(measurements):
         return {}
 
     # Agrupar mediciones por hora
-    hourly_data = {i: {'irradiance': [], 'temperature': [], 'humidity': [], 'wind_speed': [], 'wind_direction': [], 'precipitation': []} for i in range(24)}
-
+    hourly_measurements = {i: [] for i in range(24)}
     for data in measurements:
-        hour = data['date'].hour
+        hourly_measurements[data['date'].hour].append(data)
 
-        if data['irradiance'] is not None:
-            hourly_data[hour]['irradiance'].append(float(data['irradiance']))
-        if data['temperature'] is not None:
-            hourly_data[hour]['temperature'].append(float(data['temperature']))
-        if data['humidity'] is not None:
-            hourly_data[hour]['humidity'].append(float(data['humidity']))
-        if data['windSpeed'] is not None:
-            hourly_data[hour]['wind_speed'].append(float(data['windSpeed']))
-        if data['windDirection'] is not None:
-            hourly_data[hour]['wind_direction'].append(float(data['windDirection']))
-        if data['precipitation'] is not None:
-            hourly_data[hour]['precipitation'].append(float(data['precipitation']))
-    
-    # Calcular promedios por hora
+    # Calcular indicadores por hora reutilizando la función pura horaria (Opción B)
+    # para temperatura/humedad/viento/precipitación: nunca tuvieron filtro y siguen
+    # sin él en `calculate_single_hour_weather_indicators`, así que su salida es
+    # bit-idéntica al cálculo previo in-line.
+    hourly_indicators = {hour: calculate_single_hour_weather_indicators(rows) for hour, rows in hourly_measurements.items()}
+
     chart_data = {
         'hourly_irradiance': [],
         'hourly_temperature': [],
@@ -221,51 +306,33 @@ def calculate_single_day_weather_chart_data(measurements):
         'hourly_wind_direction': [],
         'hourly_precipitation': []
     }
-    
+
     for hour in range(24):
-        # Irradiancia promedio por hora
-        if hourly_data[hour]['irradiance']:
-            chart_data['hourly_irradiance'].append(sum(hourly_data[hour]['irradiance']) / len(hourly_data[hour]['irradiance']))
-        else:
-            chart_data['hourly_irradiance'].append(0)
-        
-        # Temperatura promedio por hora
-        if hourly_data[hour]['temperature']:
-            chart_data['hourly_temperature'].append(sum(hourly_data[hour]['temperature']) / len(hourly_data[hour]['temperature']))
-        else:
-            chart_data['hourly_temperature'].append(0)
-        
-        # Humedad promedio por hora
-        if hourly_data[hour]['humidity']:
-            chart_data['hourly_humidity'].append(sum(hourly_data[hour]['humidity']) / len(hourly_data[hour]['humidity']))
-        else:
-            chart_data['hourly_humidity'].append(0)
-        
-        # Velocidad del viento promedio por hora
-        if hourly_data[hour]['wind_speed']:
-            chart_data['hourly_wind_speed'].append(sum(hourly_data[hour]['wind_speed']) / len(hourly_data[hour]['wind_speed']))
-        else:
-            chart_data['hourly_wind_speed'].append(0)
-        
-        # Dirección del viento promedio por hora
-        if hourly_data[hour]['wind_direction']:
-            chart_data['hourly_wind_direction'].append(sum(hourly_data[hour]['wind_direction']) / len(hourly_data[hour]['wind_direction']))
-        else:
-            chart_data['hourly_wind_direction'].append(0)
-        
-        # Precipitación acumulada por hora (si es acumulador)
-        if hourly_data[hour]['precipitation']:
-            chart_data['hourly_precipitation'].append(hourly_data[hour]['precipitation'][len(hourly_data[hour]['precipitation'])-1])  # Último valor
-        else:
-            chart_data['hourly_precipitation'].append(0)
-    
+        rows = hourly_measurements[hour]
+        ind = hourly_indicators[hour]
+
+        # Irradiancia: el chart diario históricamente promedia TODAS las lecturas de
+        # la hora sin filtro de rango físico ni ventana 06-18h (a diferencia del nuevo
+        # `avg_irradiance_wm2` horario, que sí filtra para no inflar el acumulado con
+        # sensores pegados). Se mantiene el cálculo original in-line para no alterar
+        # bit a bit la salida diaria existente; el filtro nuevo queda reservado al
+        # indicador horario dedicado (HourlyWeatherIndicators).
+        irr_values = [float(r['irradiance']) for r in rows if r['irradiance'] is not None]
+        chart_data['hourly_irradiance'].append(sum(irr_values) / len(irr_values) if irr_values else 0)
+
+        chart_data['hourly_temperature'].append(ind['avg_temperature_c'])
+        chart_data['hourly_humidity'].append(ind['avg_humidity_pct'])
+        chart_data['hourly_wind_speed'].append(ind['avg_wind_speed_kmh'])
+        chart_data['hourly_wind_direction'].append(ind['avg_wind_direction_deg'])
+        chart_data['hourly_precipitation'].append(ind['precipitation_cm'])
+
     # Calcular valores diarios
     chart_data['daily_irradiance_kwh_m2'] = sum(chart_data['hourly_irradiance']) * (2/60) / 1000  # kWh/m²
     chart_data['avg_daily_temperature_c'] = sum(chart_data['hourly_temperature']) / 24
     chart_data['avg_daily_humidity_pct'] = sum(chart_data['hourly_humidity']) / 24
     chart_data['avg_daily_wind_speed_kmh'] = sum(chart_data['hourly_wind_speed']) / 24
     chart_data['daily_precipitation_cm'] = chart_data['hourly_precipitation'][len(chart_data['hourly_precipitation'])-1] if chart_data['hourly_precipitation'] else 0
-    
+
     return chart_data
 
 
