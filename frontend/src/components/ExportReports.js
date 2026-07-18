@@ -1,6 +1,7 @@
 // Importaciones necesarias de React y componentes personalizados
 import React, { useState, useEffect, useRef } from 'react';
 import TransitionOverlay from './TransitionOverlay';
+import RangeCalendar from './filters/RangeCalendar';
 import { formatDateForAPI, monthInputToStartDate, monthInputToEndDate, dateStringToMonthInput } from '../utils/dateUtils';
 import { ENDPOINTS, buildApiUrl, getDefaultFetchOptions, handleApiResponse, fetchWithAuth } from '../utils/apiConfig';
 import { IconFileDown, IconDownload } from './icons';
@@ -852,40 +853,34 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
               </select>
             </div>
 
-            {/* Fechas */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
-              <div>
-                <label htmlFor="startDate" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Fecha de Inicio <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type={timeRange === 'monthly' ? 'month' : 'date'}
-                  id="startDate"
-                  className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm lg:text-base"
-                  value={timeRange === 'monthly' ? (startDate ? dateStringToMonthInput(startDate) : '') : startDate}
-                  onChange={(e) => setStartDate(
-                    timeRange === 'monthly'
-                      ? (e.target.value ? monthInputToStartDate(e.target.value) : '')
-                      : e.target.value
-                  )}
+            {/* Fechas: selector de rango secuencial en español (inicio -> fin) */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Rango de Fechas <span className="text-red-500">*</span>
+              </label>
+              {timeRange === 'monthly' ? (
+                <RangeCalendar
+                  mode="month"
+                  startValue={startDate ? dateStringToMonthInput(startDate) : ''}
+                  endValue={endDate ? dateStringToMonthInput(endDate) : ''}
+                  onChange={(s, e) => {
+                    setStartDate(s ? monthInputToStartDate(s) : '');
+                    setEndDate(e ? monthInputToEndDate(e) : '');
+                  }}
+                  accentColor="green"
                 />
-              </div>
-              <div>
-                <label htmlFor="endDate" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Fecha de Fin <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type={timeRange === 'monthly' ? 'month' : 'date'}
-                  id="endDate"
-                  className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm lg:text-base"
-                  value={timeRange === 'monthly' ? (endDate ? dateStringToMonthInput(endDate) : '') : endDate}
-                  onChange={(e) => setEndDate(
-                    timeRange === 'monthly'
-                      ? (e.target.value ? monthInputToEndDate(e.target.value) : '')
-                      : e.target.value
-                  )}
+              ) : (
+                <RangeCalendar
+                  mode="day"
+                  startValue={startDate}
+                  endValue={endDate}
+                  onChange={(s, e) => {
+                    setStartDate(s);
+                    setEndDate(e);
+                  }}
+                  accentColor="green"
                 />
-              </div>
+              )}
             </div>
 
             {/* Formato de Exportación */}
