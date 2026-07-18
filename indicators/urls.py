@@ -29,6 +29,7 @@ from .views import (
     ReportHistoryView,
     DeleteReportView
 )
+from .views_availability import DataAvailabilityView
 
 router = DefaultRouter()
 router.register(r'electric-meter-indicators', ElectricMeterIndicatorsViewSet, basename='electric-meter-indicators')
@@ -67,5 +68,7 @@ urlpatterns = [
     path('reports/history/', ReportHistoryView.as_view(), name='report-history'),
     path('reports/delete/', DeleteReportView.as_view(), name='delete-report'),
     
+    path('data-availability/', DataAvailabilityView.as_view(), name='data-availability'),
+
     path('', include(router.urls)),
 ]
