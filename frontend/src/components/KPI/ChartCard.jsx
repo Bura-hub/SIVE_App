@@ -661,25 +661,30 @@ export function ChartCard({
             {/* Indicador de controles: footer en el flujo (antes era absolute bottom-4 y tapaba el eje X) */}
             <div className="shrink-0 w-fit mx-auto mb-4 mt-1 bg-black/60 text-white px-6 py-3 rounded-full text-sm backdrop-blur-sm border border-white/10">
               <div className="flex flex-col lg:flex-row gap-2 lg:gap-8 items-center">
-                {/* Pista táctil: en móvil el zoom se hace con pellizco (pinch) */}
-                <span className="flex lg:hidden items-center">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  Pellizca para hacer zoom
-                </span>
-                <span className="hidden lg:flex items-center">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  Zoom con rueda del mouse
-                </span>
-                <span className="hidden lg:flex items-center">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                  Arrastrar para mover
-                </span>
+                {/* Pistas según el tipo de puntero real (coincide con los gestos habilitados) */}
+                {isCoarse ? (
+                  <span className="flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    Pellizca para hacer zoom
+                  </span>
+                ) : (
+                  <>
+                    <span className="flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      Zoom con rueda del mouse
+                    </span>
+                    <span className="flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                      Arrastrar para mover
+                    </span>
+                  </>
+                )}
                 {!isZoomed && (
                   <span className="flex items-center text-yellow-300">
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
