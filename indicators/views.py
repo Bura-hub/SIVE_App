@@ -1038,9 +1038,30 @@ class InverterIndicatorsView(APIView):
             # Ordenar por fecha descendente y nombre del dispositivo
             queryset = queryset.order_by('-date', 'device__name')
             
+            # Sin device_id, daily/monthly consolida por periodo (Sum/Avg/Max/Min
+            # entre dispositivos) para no devolver N puntos duplicados por fecha.
+            if not device_id and time_range in ('daily', 'monthly'):
+                results = aggregate_indicators_by_period(
+                    queryset,
+                    sum_fields=['energy_ac_daily_kwh', 'energy_dc_daily_kwh',
+                                'total_generated_energy_kwh', 'reference_energy_kwh',
+                                'measurement_count'],
+                    avg_fields=['dc_ac_efficiency_pct', 'performance_ratio_pct',
+                                'avg_irradiance_wm2', 'avg_temperature_c',
+                                'avg_power_factor_pct', 'avg_reactive_power_var',
+                                'avg_apparent_power_va', 'avg_frequency_hz',
+                                'frequency_stability_pct', 'anomaly_score'],
+                    max_fields=['max_power_w', 'max_voltage_unbalance_pct',
+                                'max_current_unbalance_pct', 'last_measurement_date'],
+                    min_fields=['min_power_w'],
+                )
+            else:
+                from .serializers import InverterIndicatorsSerializer
+                results = InverterIndicatorsSerializer(queryset, many=True).data
+
             # Agregar información de resumen
             summary = {
-                'total_records': queryset.count(),
+                'total_records': len(results),
                 'institutions': list(queryset.values('institution__name').distinct()),
                 'devices': list(queryset.values('device__name').distinct()),
                 'date_range': {
@@ -1048,17 +1069,8 @@ class InverterIndicatorsView(APIView):
                     'max_date': queryset.aggregate(Max('date'))['date__max']
                 }
             }
-            
-            # Serializar datos
-            from .serializers import InverterIndicatorsSerializer
-            serializer = InverterIndicatorsSerializer(queryset, many=True)
-            
-            response_data = {
-                'summary': summary,
-                'results': serializer.data
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+
+            return Response({'summary': summary, 'results': results}, status=status.HTTP_200_OK)
             
         except Exception as e:
             logger.error(f"Error obteniendo indicadores de inversores: {str(e)}")
