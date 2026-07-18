@@ -203,7 +203,9 @@ export const getDefaultDailyRange = () => {
   const end = toColombiaTime(new Date());
   const start = new Date(end);
   start.setDate(start.getDate() - 30);
-  const fmt = (d) => d.toISOString().split('T')[0];
+  const fmt = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-` +
+    `${String(d.getDate()).padStart(2, '0')}`;
   return { startDate: fmt(start), endDate: fmt(end) };
 };
 
@@ -234,4 +236,5 @@ export const buildAxisLabel = (item, timeRange) => {
   if (timeRange === 'hourly') return formatHourLabel(item.hour);
   if (timeRange === 'monthly') return formatMonthYearLabel(item.date);
   return new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES');
-}; 
+};
+ 

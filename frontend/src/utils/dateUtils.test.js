@@ -1,6 +1,7 @@
 import {
   formatMonthYearLabel, monthInputToStartDate, monthInputToEndDate,
-  dateStringToMonthInput, getDefaultMonthlyRange, formatHourLabel, buildAxisLabel,
+  dateStringToMonthInput, getDefaultMonthlyRange, getDefaultDailyRange,
+  formatHourLabel, buildAxisLabel,
 } from './dateUtils';
 
 describe('dateUtils nuevas utilidades', () => {
@@ -26,6 +27,15 @@ describe('dateUtils nuevas utilidades', () => {
     const [ey, em] = endMonth.split('-').map(Number);
     const diff = (ey - sy) * 12 + (em - sm);
     expect(diff).toBe(5); // inclusivo => 6 meses
+  });
+  test('getDefaultDailyRange usa formato YYYY-MM-DD y abarca 30 días', () => {
+    const { startDate, endDate } = getDefaultDailyRange();
+    expect(startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const diffDays = Math.round(
+      (new Date(endDate + 'T00:00:00') - new Date(startDate + 'T00:00:00')) / 86400000
+    );
+    expect(diffDays).toBe(30);
   });
   test('formatHourLabel formatea HH:MM', () => {
     const label = formatHourLabel('2026-07-18T14:00:00-05:00');

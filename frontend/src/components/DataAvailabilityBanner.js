@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ENDPOINTS, buildApiUrl, getDefaultFetchOptions, fetchWithAuth } from '../utils/apiConfig';
-import { formatMonthYearLabel, formatAPIDateForDisplay } from '../utils/dateUtils';
+import { formatMonthYearLabel, formatAPIDateForDisplay, toColombiaTime } from '../utils/dateUtils';
 
 const CATEGORY_LABELS = {
   electricMeter: 'medidores',
@@ -30,7 +30,11 @@ export default function DataAvailabilityBanner({ authToken, institutionId, categ
   const dm = info?.daily_monthly;
   const hasData = dm && dm.min_date && dm.max_date;
   const catLabel = CATEGORY_LABELS[category] || category;
-  const today = formatAPIDateForDisplay(new Date().toISOString().split('T')[0]);
+  const nowColombia = toColombiaTime(new Date());
+  const todayISO =
+    `${nowColombia.getFullYear()}-${String(nowColombia.getMonth() + 1).padStart(2, '0')}-` +
+    `${String(nowColombia.getDate()).padStart(2, '0')}`;
+  const today = formatAPIDateForDisplay(todayISO);
 
   if (!hasData) {
     return (
