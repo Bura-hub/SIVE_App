@@ -122,7 +122,7 @@ const RangeCalendar = ({
   const [startTime, setStartTime] = useState({ h: 0, m: 0 });
   const [endTime, setEndTime] = useState({ h: 23, m: 0 });
   const [viewDate, setViewDate] = useState(new Date());
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 340 });
   const triggerRef = useRef(null);
   const popoverRef = useRef(null);
 
@@ -134,7 +134,8 @@ const RangeCalendar = ({
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const W = 340;
+    // Ancho responsive: nunca más ancho que la ventana (con margen de 16px).
+    const W = Math.min(340, window.innerWidth - 16);
     const H = mode === 'datetime' ? 480 : 400;
     let left = r.left;
     let top = r.bottom + 8;
@@ -143,7 +144,7 @@ const RangeCalendar = ({
       const above = r.top - H - 8;
       top = above > 8 ? above : Math.max(8, window.innerHeight - H - 8);
     }
-    setPos({ top, left });
+    setPos({ top, left, width: W });
   };
 
   // Al abrir, inicializa el borrador desde las props (valores confirmados).
@@ -289,7 +290,7 @@ const RangeCalendar = ({
     const isEnd = rangeEnd && dayKey(d) === dayKey(rangeEnd);
     const between = rangeStart && rangeEnd &&
       dayKey(d) > dayKey(rangeStart) && dayKey(d) < dayKey(rangeEnd);
-    let cls = 'w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-colors ';
+    let cls = 'aspect-square w-full flex items-center justify-center text-sm rounded-lg transition-colors ';
     if (disabled) {
       cls += 'opacity-30 cursor-not-allowed text-gray-400';
     } else if (isStart || isEnd) {
@@ -346,7 +347,7 @@ const RangeCalendar = ({
         aria-label={triggerAria}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`${inputClass} bg-white text-left flex items-center gap-2 min-w-[16rem] text-sm text-gray-700`}
+        className={`${inputClass} bg-white text-left flex items-center gap-2 min-w-0 w-full lg:min-w-[16rem] lg:w-auto text-sm text-gray-700`}
       >
         <CalendarIcon />
         <span className="truncate">{triggerLabel()}</span>
@@ -356,7 +357,7 @@ const RangeCalendar = ({
         <div
           ref={popoverRef}
           role="dialog"
-          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, maxWidth: 'calc(100vw - 16px)', zIndex: 9999 }}
           className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4"
         >
           {/* Encabezado de navegación */}
@@ -398,14 +399,14 @@ const RangeCalendar = ({
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-7 gap-1 mb-1">
+              <div className="grid grid-cols-7 gap-1 w-full mb-1">
                 {WEEKDAYS.map((w) => (
-                  <div key={w} className="w-9 text-center text-xs font-medium text-gray-500">
+                  <div key={w} className="w-full text-center text-xs font-medium text-gray-500">
                     {w}
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-1 w-full">
                 {buildDayCells().map((d, i) => {
                   const disabled = isDisabled(d);
                   return (
@@ -426,7 +427,7 @@ const RangeCalendar = ({
 
           {mode === 'datetime' && (
             <div className="mt-4 pt-3 border-t border-gray-100 space-y-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm text-gray-600">Hora inicio</span>
                 <div className="flex items-center gap-1">
                   <select
@@ -448,7 +449,7 @@ const RangeCalendar = ({
                   </select>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm text-gray-600">Hora fin</span>
                 <div className="flex items-center gap-1">
                   <select
