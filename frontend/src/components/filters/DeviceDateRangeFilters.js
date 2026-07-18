@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ENDPOINTS, getDefaultFetchOptions, buildApiUrl } from '../../utils/apiConfig';
 import {
   getDefaultMonthlyRange,
@@ -7,6 +7,7 @@ import {
   monthInputToStartDate,
   monthInputToEndDate,
 } from '../../utils/dateUtils';
+import RangeCalendar from './RangeCalendar';
 
 // Mapa fijo de clases Tailwind por color de acento. NO concatenar cadenas
 // dinámicas: Tailwind solo detecta clases presentes literalmente en el código.
@@ -15,37 +16,29 @@ const ACCENT_CLASSES = {
     ring: 'focus:ring-green-500',
     text: 'text-green-700',
     spinner: 'border-green-500',
+    hint: 'ring-2 ring-green-200',
   },
   red: {
     ring: 'focus:ring-red-500',
     text: 'text-red-700',
     spinner: 'border-red-500',
+    hint: 'ring-2 ring-red-200',
   },
   orange: {
     ring: 'focus:ring-orange-500',
     text: 'text-orange-700',
     spinner: 'border-orange-500',
+    hint: 'ring-2 ring-orange-200',
   },
-};
-
-// Suma un mes a un valor datetime-local ('YYYY-MM-DDTHH:MM'), devolviendo el
-// mismo formato. Usado como límite `max` del rango horario (máximo 1 mes).
-const addOneMonthToDatetime = (datetime) => {
-  if (!datetime) return undefined;
-  const d = new Date(datetime);
-  if (isNaN(d.getTime())) return undefined;
-  d.setMonth(d.getMonth() + 1);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 /**
  * Filtro compartido y adaptativo de dispositivo + rango de fechas.
- * Cambia el tipo de input de fecha según la granularidad seleccionada:
- *  - daily: dos <input type="date">
- *  - monthly: dos <input type="month"> (traducidos a primer/último día del mes)
- *  - hourly: dos <input type="datetime-local"> (fuerza un solo dispositivo, límite 1 mes)
+ * Usa un selector de rango personalizado (RangeCalendar) en español según la
+ * granularidad seleccionada:
+ *  - daily: calendario de días (rango primer/último día)
+ *  - monthly: selector de meses (traducidos a primer/último día del mes)
+ *  - hourly: calendario con hora (fuerza un solo dispositivo, límite 1 mes)
  */
 const DeviceDateRangeFilters = ({
   authToken,
@@ -78,6 +71,10 @@ const DeviceDateRangeFilters = ({
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Flujo guiado: al elegir institución, auto-enfoca el selector de dispositivo.
+  const deviceSelectRef = useRef(null);
+  const justPickedInstitution = useRef(false);
+
   // Cargar instituciones al montar.
   useEffect(() => {
     fetchInstitutions();
@@ -94,6 +91,15 @@ const DeviceDateRangeFilters = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInstitution]);
+
+  // Tras cargar dispositivos de una institución recién elegida, enfoca el select.
+  useEffect(() => {
+    if (justPickedInstitution.current && !loading && selectedInstitution) {
+      justPickedInstitution.current = false;
+      deviceSelectRef.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, devices]);
 
   // Vista horaria: fuerza un único dispositivo (auto-selecciona el primero).
   useEffect(() => {
@@ -215,9 +221,9 @@ const DeviceDateRangeFilters = ({
           onChange={(e) => handleTimeRangeChange(e.target.value)}
           className={inputClass}
         >
+          <option value="hourly">Horario</option>
           <option value="daily">Diario</option>
           <option value="monthly">Mensual</option>
-          <option value="hourly">Horario</option>
         </select>
       </div>
 
@@ -230,8 +236,9 @@ const DeviceDateRangeFilters = ({
           onChange={(e) => {
             setSelectedInstitution(e.target.value);
             setSelectedDevice('');
+            justPickedInstitution.current = !!e.target.value;
           }}
-          className={inputClass}
+          className={`${inputClass} ${!selectedInstitution ? accent.hint : ''}`}
         >
           <option value="">Seleccionar institución</option>
           {institutions.map((institution) => (
@@ -240,12 +247,18 @@ const DeviceDateRangeFilters = ({
             </option>
           ))}
         </select>
+        {!selectedInstitution && (
+          <span className={`text-xs mt-1 ${accent.text}`}>
+            Comienza eligiendo la institución
+          </span>
+        )}
       </div>
 
       {/* Filtro de dispositivo */}
       <div className="flex flex-col">
         <label className="text-sm font-medium text-gray-700 mb-1">{deviceLabel}</label>
         <select
+          ref={deviceSelectRef}
           aria-label={deviceLabel}
           value={selectedDevice}
           onChange={(e) => setSelectedDevice(e.target.value)}
@@ -261,80 +274,41 @@ const DeviceDateRangeFilters = ({
         </select>
       </div>
 
-      {/* Inputs de fecha según granularidad */}
+      {/* Selector de rango según granularidad */}
       {timeRange === 'monthly' ? (
-        <>
-          <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-1">Mes de Inicio</label>
-            <input
-              aria-label="Mes de Inicio"
-              type="month"
-              value={startMonth}
-              onChange={(e) => setStartMonth(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-1">Mes de Fin</label>
-            <input
-              aria-label="Mes de Fin"
-              type="month"
-              value={endMonth}
-              min={startMonth}
-              onChange={(e) => setEndMonth(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-        </>
+        <div className="flex flex-col">
+          <label className="text-sm font-medium text-gray-700 mb-1">Rango de Meses</label>
+          <RangeCalendar
+            mode="month"
+            startValue={startMonth}
+            endValue={endMonth}
+            onChange={(s, e) => { setStartMonth(s); setEndMonth(e); }}
+            accentColor={accentColor}
+          />
+        </div>
       ) : timeRange === 'hourly' ? (
-        <>
-          <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-1">Fecha y Hora de Inicio</label>
-            <input
-              aria-label="Fecha y Hora de Inicio"
-              type="datetime-local"
-              value={startDatetime}
-              onChange={(e) => setStartDatetime(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-1">Fecha y Hora de Fin</label>
-            <input
-              aria-label="Fecha y Hora de Fin"
-              type="datetime-local"
-              value={endDatetime}
-              min={startDatetime || undefined}
-              max={addOneMonthToDatetime(startDatetime)}
-              onChange={(e) => setEndDatetime(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-        </>
+        <div className="flex flex-col">
+          <label className="text-sm font-medium text-gray-700 mb-1">Fecha y Hora</label>
+          <RangeCalendar
+            mode="datetime"
+            startValue={startDatetime}
+            endValue={endDatetime}
+            onChange={(s, e) => { setStartDatetime(s); setEndDatetime(e); }}
+            accentColor={accentColor}
+            maxRangeDays={31}
+          />
+        </div>
       ) : (
-        <>
-          <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-            <input
-              aria-label="Fecha de Inicio"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700 mb-1">Fecha de Fin</label>
-            <input
-              aria-label="Fecha de Fin"
-              type="date"
-              value={endDate}
-              min={startDate || undefined}
-              onChange={(e) => setEndDate(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-        </>
+        <div className="flex flex-col">
+          <label className="text-sm font-medium text-gray-700 mb-1">Rango de Fechas</label>
+          <RangeCalendar
+            mode="day"
+            startValue={startDate}
+            endValue={endDate}
+            onChange={(s, e) => { setStartDate(s); setEndDate(e); }}
+            accentColor={accentColor}
+          />
+        </div>
       )}
 
       {timeRange === 'hourly' && (

@@ -12,34 +12,50 @@ beforeEach(() => {
   });
 });
 
-test('muestra selector mensual con inputs de tipo month', async () => {
-  const onFiltersChange = vi.fn();
-  const { container } = render(
-    <DeviceDateRangeFilters
-      authToken="t" devicesEndpoint="/api/electric-meters/list/"
-      deviceIdField="scada_id" deviceLabel="Medidor"
-      allOptionLabel="Todos los medidores" accentColor="green"
-      onFiltersChange={onFiltersChange} />
-  );
-  // cambiar a mensual
+const baseProps = {
+  authToken: 't',
+  devicesEndpoint: '/api/electric-meters/list/',
+  deviceIdField: 'scada_id',
+  deviceLabel: 'Medidor',
+  allOptionLabel: 'Todos los medidores',
+  accentColor: 'green',
+};
+
+test('el selector de granularidad lista Horario, Diario y Mensual en ese orden', async () => {
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}} />);
+  const rangeSelect = await screen.findByLabelText(/rango de tiempo/i);
+  const options = Array.from(rangeSelect.querySelectorAll('option')).map((o) => o.value);
+  expect(options).toEqual(['hourly', 'daily', 'monthly']);
+  // El valor por defecto sigue siendo diario.
+  expect(rangeSelect.value).toBe('daily');
+});
+
+test('modo diario muestra el trigger del selector de rango de fechas', async () => {
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}} />);
+  await screen.findByLabelText(/rango de tiempo/i);
+  expect(screen.getByLabelText('Seleccionar rango de fechas')).toBeInTheDocument();
+});
+
+test('al cambiar a mensual aparece el trigger del selector de rango de meses', async () => {
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}} />);
   const rangeSelect = await screen.findByLabelText(/rango de tiempo/i);
   fireEvent.change(rangeSelect, { target: { value: 'monthly' } });
   await waitFor(() => {
-    expect(container.querySelector('input[type="month"]')).toBeInTheDocument();
+    expect(screen.getByLabelText('Seleccionar rango de meses')).toBeInTheDocument();
   });
 });
 
-test('modo horario usa datetime-local', async () => {
-  render(
-    <DeviceDateRangeFilters
-      authToken="t" devicesEndpoint="/api/electric-meters/list/"
-      deviceIdField="scada_id" deviceLabel="Medidor"
-      allOptionLabel="Todos los medidores" accentColor="green"
-      onFiltersChange={() => {}} />
-  );
+test('modo horario muestra el trigger del selector con hora', async () => {
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}} />);
   const rangeSelect = await screen.findByLabelText(/rango de tiempo/i);
   fireEvent.change(rangeSelect, { target: { value: 'hourly' } });
   await waitFor(() => {
-    expect(document.querySelector('input[type="datetime-local"]')).toBeInTheDocument();
+    expect(screen.getByLabelText('Seleccionar rango de fechas')).toBeInTheDocument();
   });
+});
+
+test('muestra la ayuda para elegir institución cuando no hay ninguna seleccionada', async () => {
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}} />);
+  await screen.findByLabelText(/rango de tiempo/i);
+  expect(screen.getByText(/comienza eligiendo la institución/i)).toBeInTheDocument();
 });
