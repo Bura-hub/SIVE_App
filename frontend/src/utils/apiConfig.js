@@ -10,6 +10,7 @@ export const ENDPOINTS = {
     charts: '/api/dashboard/chart-data/',
     tasks: '/api/dashboard/tasks/'
   },
+  dataAvailability: '/api/data-availability/',
   electrical: {
     // meters/consumption/details apuntan al endpoint de indicadores (fuente única);
     // los antiguos /api/electric-meters/ y /api/electrical/energy/ se retiraron (tablas vacías).
