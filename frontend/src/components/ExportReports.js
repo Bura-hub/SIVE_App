@@ -225,9 +225,9 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
         institution: report.institution_name,
         date: new Date(report.created_at).toLocaleString('es-CO'),
         format: report.format,
-        status: report.status === 'completed' ? 'Completed' :
-                report.status === 'failed' ? 'Failed' :
-                report.status === 'processing' ? 'Processing' : 'Pending',
+        status: report.status === 'completed' ? 'Completado' :
+                report.status === 'failed' ? 'Fallido' :
+                report.status === 'processing' ? 'Procesando' : 'Pendiente',
         fileSize: report.file_size || 'N/A',
         recordCount: report.record_count || 0
       }));
@@ -338,7 +338,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           institution: institutions.find(inst => inst.id.toString() === selectedInstitution)?.name,
           date: new Date().toLocaleString('es-CO'),
           format: exportFormat,
-          status: 'Pending',
+          status: 'Pendiente',
           fileSize: 'Generando...',
           recordCount: 0
         };
@@ -411,7 +411,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           // Actualizar estado en la lista
           setPreviousExports(prev => prev.map(exp =>
             exp.id === taskId
-              ? { ...exp, status: 'Completed', fileSize: 'Descargando...', recordCount: statusInfo.record_count || 0 }
+              ? { ...exp, status: 'Completado', fileSize: 'Descargando...', recordCount: statusInfo.record_count || 0 }
               : exp
           ));
 
@@ -429,7 +429,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           // Actualizar estado en la lista
           setPreviousExports(prev => prev.map(exp =>
             exp.id === taskId
-              ? { ...exp, status: 'Failed', fileSize: 'Error', recordCount: 0 }
+              ? { ...exp, status: 'Fallido', fileSize: 'Error', recordCount: 0 }
               : exp
           ));
 
@@ -579,7 +579,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           institution: exportItem.institution,
           date: new Date().toLocaleString('es-CO'),
           format: exportFormat,
-          status: 'Pending',
+          status: 'Pendiente',
           fileSize: 'Generando...',
           recordCount: 0
         };
@@ -1058,13 +1058,13 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                       <td className="px-3 lg:px-6 py-3 lg:py-4 whitespace-nowrap">
                         <div className="flex flex-col space-y-1">
                           <span className={`px-2 lg:px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            exportItem.status === 'Completed' ? 'bg-green-100 text-green-800' : 
-                            exportItem.status === 'Failed' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'
+                            exportItem.status === 'Completado' ? 'bg-green-100 text-green-800' : 
+                            exportItem.status === 'Fallido' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'
                           }`}>
                             {exportItem.status}
                           </span>
                           {/* Mostrar barra de progreso para reportes en proceso */}
-                          {exportItem.status === 'Pending' && reportProgress[exportItem.id] !== undefined && (
+                          {exportItem.status === 'Pendiente' && reportProgress[exportItem.id] !== undefined && (
                             <div className="w-full bg-gray-200 rounded-full h-1.5">
                               <div 
                                 className="bg-blue-600 h-1.5 rounded-full transition duration-300 ease-out"
@@ -1076,7 +1076,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                       </td>
                       <td className="px-3 lg:px-6 py-3 lg:py-4 whitespace-nowrap text-xs lg:text-sm text-gray-500">
                         <div>{exportItem.fileSize}</div>
-                        <div>{exportItem.recordCount.toLocaleString()} registros</div>
+                        <div>{exportItem.recordCount.toLocaleString('es-CO')} registros</div>
                       </td>
                       <td className="px-3 lg:px-6 py-3 lg:py-4 whitespace-nowrap text-xs lg:text-sm font-medium">
                         <div className="flex space-x-1 lg:space-x-2">
@@ -1084,7 +1084,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                             className="text-blue-600 hover:text-blue-900 transition-colors p-1 rounded hover:bg-blue-50"
                             title="Descargar"
                             onClick={() => downloadReport(exportItem.id)}
-                            disabled={exportItem.status !== 'Completed'}
+                            disabled={exportItem.status !== 'Completado'}
                           >
                             <IconDownload className="w-3 lg:w-4 h-3 lg:h-4" />
                           </button>

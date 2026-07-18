@@ -754,7 +754,7 @@ function ProfileSettings({ username, isSuperuser, onClose, onProfileImageUpdate 
                                                                 <p className="font-bold text-lg text-slate-800">{session.name || 'Dispositivo'}</p>
                                                                 <p className="text-slate-600 font-medium">IP: {session.ip_address}</p>
                                                                 <p className="text-sm text-slate-500">
-                                                                    Último uso: {new Date(session.last_used).toLocaleString()}
+                                                                    Último uso: {new Date(session.last_used).toLocaleString('es-CO')}
                                                                 </p>
                                                             </div>
                                                         </div>

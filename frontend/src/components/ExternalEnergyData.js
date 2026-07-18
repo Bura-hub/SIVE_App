@@ -335,7 +335,7 @@ const ExternalEnergyData = () => {
               </div>
               {lastUpdate && (
                 <p className="text-blue-200 text-xs">
-                  Última actualización: {lastUpdate.toLocaleTimeString()}
+                  Última actualización: {lastUpdate.toLocaleTimeString('es-CO')}
                 </p>
               )}
             </div>
@@ -602,7 +602,7 @@ const ExternalEnergyData = () => {
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                     <span className="text-gray-700 font-medium">Última sincronización:</span>
                     <span className="text-gray-900 font-medium">
-                      {lastUpdate ? lastUpdate.toLocaleString() : 'N/A'}
+                      {lastUpdate ? lastUpdate.toLocaleString('es-CO') : 'N/A'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
