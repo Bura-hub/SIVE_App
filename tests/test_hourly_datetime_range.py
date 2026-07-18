@@ -6,7 +6,7 @@ vista horaria existente (`resolve_indicators_hourly_range`, por día). Se usa
 cuando la vista recibe `start_datetime`/`end_datetime` en query params; si no,
 se mantiene el comportamiento actual por día.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -29,7 +29,7 @@ class HourlyDatetimeRangeTest(TestCase):
         self.assertEqual(s.hour, 8)
         self.assertEqual(e.hour, 14)
         self.assertEqual(e.minute, 30)
-        self.assertEqual(s.tzinfo, COLOMBIA_TZ)
+        self.assertEqual(s.utcoffset(), timedelta(hours=-5))
 
     def test_rejects_bad_format(self):
         s, e, err = resolve_indicators_hourly_datetime_range("18/07/2026", "x")

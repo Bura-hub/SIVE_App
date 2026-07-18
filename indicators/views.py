@@ -1401,6 +1401,8 @@ class WeatherStationIndicatorsView(APIView):
                     if error:
                         return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
                     hourly_filters = Q(hour__gte=start_dt, hour__lte=end_dt)
+                    applied_start = start_dt.isoformat()
+                    applied_end = end_dt.isoformat()
                 else:
                     resolved_start, resolved_end, error = resolve_indicators_hourly_range(
                         date_str, start_date, end_date)
@@ -1408,6 +1410,8 @@ class WeatherStationIndicatorsView(APIView):
                         return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
                     start_dt, end_dt = colombia_day_range(resolved_start, resolved_end)
                     hourly_filters = Q(hour__gte=start_dt, hour__lt=end_dt)
+                    applied_start = resolved_start.isoformat()
+                    applied_end = resolved_end.isoformat()
 
                 if institution_id:
                     try:
@@ -1434,8 +1438,8 @@ class WeatherStationIndicatorsView(APIView):
                     'filters_applied': {
                         'institution_id': institution_id,
                         'device_id': device_id,
-                        'start_date': start_dt.isoformat(),
-                        'end_date': end_dt.isoformat()
+                        'start_date': applied_start,
+                        'end_date': applied_end
                     }
                 })
 

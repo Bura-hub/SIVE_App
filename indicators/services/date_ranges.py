@@ -132,8 +132,8 @@ def resolve_indicators_hourly_datetime_range(start_datetime_str, end_datetime_st
     if start_naive is None or end_naive is None:
         return None, None, "Formato de fecha/hora inválido. Use YYYY-MM-DDTHH:MM."
 
-    start_dt = start_naive.replace(tzinfo=COLOMBIA_TZ)
-    end_dt = end_naive.replace(tzinfo=COLOMBIA_TZ)
+    start_dt = COLOMBIA_TZ.localize(start_naive)
+    end_dt = COLOMBIA_TZ.localize(end_naive)
 
     if start_dt > end_dt:
         return None, None, "La fecha/hora de inicio no puede ser posterior a la de fin."
