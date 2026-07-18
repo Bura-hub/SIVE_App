@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import siveLogo from './sive-logo.svg';
 import { IconHome, IconDashboard, IconGauge, IconInverter, IconCloudSun, IconGlobe, IconFileDown } from './icons';
 import { useIsMobile } from '../hooks/useMediaQuery';
@@ -15,6 +15,7 @@ function Sidebar({
   const isMobile = useIsMobile();
   // En móvil el drawer usa ancho completo (w-72): se ignora el minimizado.
   const effectiveMinimized = isSidebarMinimized && !isMobile;
+  const asideRef = useRef(null);
 
   // A11y (móvil): cerrar el drawer con la tecla Escape cuando está abierto.
   useEffect(() => {
@@ -23,6 +24,13 @@ function Sidebar({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [isSidebarOpen, setIsSidebarOpen]);
+
+  // A11y (móvil): al abrir el drawer, trasladar el foco al panel.
+  useEffect(() => {
+    if (isSidebarOpen && isMobile && asideRef.current) {
+      asideRef.current.focus();
+    }
+  }, [isSidebarOpen, isMobile]);
 
   // Al seleccionar un ítem: navegar y cerrar el drawer en móvil.
   const handleNavigate = (page) => {
@@ -91,7 +99,15 @@ function Sidebar({
           aria-hidden="true"
         ></div>
       )}
-      <aside className={`bg-white border-r border-gray-200 shadow-lg flex flex-col justify-between fixed inset-y-0 left-0 z-40 w-72 transition-transform lg:static lg:translate-x-0 lg:z-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarMinimized ? 'lg:w-20' : 'lg:w-72'}`}>
+      <aside
+        ref={asideRef}
+        id="app-sidebar"
+        tabIndex={-1}
+        role={isMobile ? 'dialog' : undefined}
+        aria-modal={isMobile && isSidebarOpen ? true : undefined}
+        aria-label="Menú de navegación"
+        className={`bg-white border-r border-gray-200 shadow-lg flex flex-col justify-between fixed inset-y-0 left-0 z-40 w-72 transition-transform outline-none lg:static lg:translate-x-0 lg:z-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarMinimized ? 'lg:w-20' : 'lg:w-72'}`}
+      >
       {/* Header con logo y botón de toggle */}
       <div className="p-6 border-b border-gray-100">
         <div className={`flex items-center ${effectiveMinimized ? 'justify-center' : 'justify-between'}`}>

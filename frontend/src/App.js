@@ -171,6 +171,7 @@ function App() {
             onClick={() => setIsSidebarOpen(true)}
             className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors duration-150"
             aria-label="Abrir menú de navegación"
+            aria-controls="app-sidebar"
             aria-expanded={isSidebarOpen}
           >
             <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
