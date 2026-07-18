@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Selector de rango de fechas personalizado, controlado y en español.
@@ -121,7 +122,29 @@ const RangeCalendar = ({
   const [startTime, setStartTime] = useState({ h: 0, m: 0 });
   const [endTime, setEndTime] = useState({ h: 23, m: 0 });
   const [viewDate, setViewDate] = useState(new Date());
-  const containerRef = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef(null);
+  const popoverRef = useRef(null);
+
+  // Calcula la posición flotante (fixed) del popover anclada al trigger,
+  // ajustando si se saldría por el borde derecho o inferior de la ventana.
+  // Se renderiza vía portal a document.body para que NO quede recortado por
+  // el contenedor de filtros (que puede ser muy pequeño cuando no hay datos).
+  const updatePosition = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const W = 340;
+    const H = mode === 'datetime' ? 480 : 400;
+    let left = r.left;
+    let top = r.bottom + 8;
+    if (left + W > window.innerWidth - 8) left = Math.max(8, window.innerWidth - W - 8);
+    if (top + H > window.innerHeight - 8) {
+      const above = r.top - H - 8;
+      top = above > 8 ? above : Math.max(8, window.innerHeight - H - 8);
+    }
+    setPos({ top, left });
+  };
 
   // Al abrir, inicializa el borrador desde las props (valores confirmados).
   useEffect(() => {
@@ -141,13 +164,26 @@ const RangeCalendar = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Cierre al hacer clic fuera y con la tecla Escape.
+  // Reposiciona el popover flotante al abrir y ante scroll/resize.
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode]);
+
+  // Cierre al hacer clic fuera (ni en el trigger ni en el popover) y con Escape.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setOpen(false);
-      }
+      if (triggerRef.current && triggerRef.current.contains(e.target)) return;
+      if (popoverRef.current && popoverRef.current.contains(e.target)) return;
+      setOpen(false);
     };
     const onKey = (e) => {
       if (e.key === 'Escape') setOpen(false);
@@ -302,8 +338,9 @@ const RangeCalendar = ({
     `${accent.ring} focus:border-transparent`;
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
+    <div className="inline-block">
       <button
+        ref={triggerRef}
         type="button"
         aria-haspopup="dialog"
         aria-label={triggerAria}
@@ -315,10 +352,12 @@ const RangeCalendar = ({
         <span className="truncate">{triggerLabel()}</span>
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
+          ref={popoverRef}
           role="dialog"
-          className="absolute z-50 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 p-4"
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4"
         >
           {/* Encabezado de navegación */}
           <div className="flex items-center justify-between mb-3">
@@ -439,7 +478,8 @@ const RangeCalendar = ({
               Rango máximo de {maxRangeDays} días.
             </p>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
