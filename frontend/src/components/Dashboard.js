@@ -876,9 +876,9 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header con banner profesional */}
-      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg -mx-8 -mt-8">
-        <div className="px-8 py-12">
-          <div className="flex items-center justify-between pr-16 lg:pr-64">
+      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
+        <div className="px-8 py-8 lg:py-12">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pr-16 lg:pr-64">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-white/20 rounded-xl">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -886,7 +886,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                 </svg>
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white">Dashboard Principal</h1>
+                <h1 className="text-2xl lg:text-4xl font-bold text-white">Dashboard Principal</h1>
                 <p className="text-blue-100 mt-1">Visión general y análisis de indicadores del sistema</p>
               </div>
             </div>

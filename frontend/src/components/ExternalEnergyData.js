@@ -310,13 +310,13 @@ const ExternalEnergyData = () => {
       {/* Header con banner profesional */}
       <header className="bg-gradient-to-r from-blue-700 to-indigo-800 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
         <div className="px-6 py-8">
-          <div className="flex items-center justify-between pr-16 lg:pr-64">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pr-16 lg:pr-64">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-white/20 rounded-xl">
                 <IconGlobe className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                <h1 className="text-4xl font-bold text-white">Datos Energéticos Externos</h1>
+                <h1 className="text-2xl lg:text-4xl font-bold text-white">Datos Energéticos Externos</h1>
                 <p className="text-blue-50 mt-1">Integración con Sistema Interconectado Nacional (XM)</p>
                   </div>
                 </div>
