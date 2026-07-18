@@ -45,6 +45,9 @@ function App() {
     return savedSidebarState ? JSON.parse(savedSidebarState) : false;
   });
 
+  // Estado del drawer móvil (off-canvas). Sin persistencia: se abre bajo demanda.
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
 
 
   // Maneja el éxito en el login: guarda los datos en el estado y en localStorage
@@ -155,18 +158,39 @@ function App() {
         }}
         navigateTo={navigateTo}
         currentPage={currentPage}
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
       />
       {/* Contenedor principal de la página */}
-      <main className="flex-1 p-8 bg-gray-100 rounded-tl-3xl shadow-inner">
-        {/* Suspense muestra el fallback mientras se descarga el chunk de la pantalla */}
-        <Suspense fallback={<PageLoader />}>
-          {/* Si una pantalla lanza un error de render, el ErrorBoundary muestra un fallback
-              en vez de tumbar toda la app; key={currentPage} lo resetea al navegar. */}
-          <ErrorBoundary key={currentPage}>
-            {renderPageContent()} {/* Renderiza el componente correspondiente */}
-          </ErrorBoundary>
-        </Suspense>
-      </main>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Barra superior solo en móvil: botón hamburguesa para abrir el drawer.
+            El UserMenu queda fijo arriba-derecha, por eso el botón va a la izquierda. */}
+        <div className="lg:hidden sticky top-0 z-20 flex items-center bg-white border-b border-gray-200 px-4 py-3">
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors duration-150"
+            aria-label="Abrir menú de navegación"
+            aria-expanded={isSidebarOpen}
+          >
+            <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+          </button>
+          <span className="ml-3 font-semibold text-gray-800">SIVE</span>
+        </div>
+        {/* Contenedor principal de la página */}
+        <main className="flex-1 p-4 lg:p-8 bg-gray-100 lg:rounded-tl-3xl shadow-inner">
+          {/* Suspense muestra el fallback mientras se descarga el chunk de la pantalla */}
+          <Suspense fallback={<PageLoader />}>
+            {/* Si una pantalla lanza un error de render, el ErrorBoundary muestra un fallback
+                en vez de tumbar toda la app; key={currentPage} lo resetea al navegar. */}
+            <ErrorBoundary key={currentPage}>
+              {renderPageContent()} {/* Renderiza el componente correspondiente */}
+            </ErrorBoundary>
+          </Suspense>
+        </main>
+      </div>
 
 
     </div>

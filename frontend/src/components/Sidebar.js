@@ -1,14 +1,34 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import siveLogo from './sive-logo.svg';
 import { IconHome, IconDashboard, IconGauge, IconInverter, IconCloudSun, IconGlobe, IconFileDown } from './icons';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 function Sidebar({
   isSuperuser,
   isSidebarMinimized,
   setIsSidebarMinimized,
   navigateTo,
-  currentPage
+  currentPage,
+  isSidebarOpen,
+  setIsSidebarOpen
 }) {
+  const isMobile = useIsMobile();
+  // En móvil el drawer usa ancho completo (w-72): se ignora el minimizado.
+  const effectiveMinimized = isSidebarMinimized && !isMobile;
+
+  // A11y (móvil): cerrar el drawer con la tecla Escape cuando está abierto.
+  useEffect(() => {
+    if (!isSidebarOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setIsSidebarOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isSidebarOpen, setIsSidebarOpen]);
+
+  // Al seleccionar un ítem: navegar y cerrar el drawer en móvil.
+  const handleNavigate = (page) => {
+    navigateTo(page);
+    setIsSidebarOpen(false);
+  };
   const navItems = [
     {
       name: 'Inicio',
@@ -62,11 +82,20 @@ function Sidebar({
   ];
 
   return (
-    <aside className={`bg-white border-r border-gray-200 shadow-lg flex flex-col justify-between ${isSidebarMinimized ? 'w-20' : 'w-72'}`}>
+    <>
+      {/* Backdrop del drawer: solo en móvil y cuando está abierto */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        ></div>
+      )}
+      <aside className={`bg-white border-r border-gray-200 shadow-lg flex flex-col justify-between fixed inset-y-0 left-0 z-40 w-72 transition-transform lg:static lg:translate-x-0 lg:z-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarMinimized ? 'lg:w-20' : 'lg:w-72'}`}>
       {/* Header con logo y botón de toggle */}
       <div className="p-6 border-b border-gray-100">
-        <div className={`flex items-center ${isSidebarMinimized ? 'justify-center' : 'justify-between'}`}>
-          {!isSidebarMinimized && (
+        <div className={`flex items-center ${effectiveMinimized ? 'justify-center' : 'justify-between'}`}>
+          {!effectiveMinimized && (
             <div className="flex items-center space-x-3 sidebar-fade-in">
               <img
                 src={siveLogo}
@@ -77,7 +106,7 @@ function Sidebar({
           )}
           <button
             onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
-            className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors duration-150"
+            className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors duration-150 hidden lg:flex"
             title={isSidebarMinimized ? "Expandir menú" : "Minimizar menú"}
             aria-label={isSidebarMinimized ? "Expandir menú" : "Minimizar menú"}
             aria-expanded={!isSidebarMinimized}
@@ -115,13 +144,13 @@ function Sidebar({
                     title={item.name}
                     aria-label={item.name}
                     aria-current={currentPage === item.page ? 'page' : undefined}
-                    className={`w-full flex items-center p-4 rounded-xl text-left transition-colors duration-150 ${isSidebarMinimized ? 'justify-center' : ''} ${
+                    className={`w-full flex items-center p-4 rounded-xl text-left transition-colors duration-150 ${effectiveMinimized ? 'justify-center' : ''} ${
                       currentPage === item.page ? item.activeClasses : item.inactiveClasses
                     }`}
-                    onClick={() => navigateTo(item.page)}
+                    onClick={() => handleNavigate(item.page)}
                   >
                     {item.icon}
-                    {!isSidebarMinimized && (
+                    {!effectiveMinimized && (
                       <span className="font-medium ml-3 whitespace-nowrap sidebar-fade-in">
                         {item.name}
                       </span>
@@ -137,7 +166,7 @@ function Sidebar({
         </nav>
 
         {/* About del sistema */}
-        {!isSidebarMinimized && (
+        {!effectiveMinimized && (
           <div className="px-3 py-3 border-t border-gray-100">
             <div className="text-center space-y-2">
               <p className="text-xs text-gray-600 font-medium leading-tight">
@@ -156,6 +185,7 @@ function Sidebar({
         )}
       </div>
     </aside>
+    </>
   );
 }
 
