@@ -17,8 +17,9 @@ COLOMBIA_TZ = pytz.timezone('America/Bogota')
 INDICATORS_DEFAULT_RANGE_DAYS = 31
 INDICATORS_MAX_RANGE_DAYS = 366
 
-# Tope del rango horario (vista horaria, Opción B): 7 días == 168 horas.
-INDICATORS_HOURLY_MAX_RANGE_DAYS = 7
+# Tope del rango horario (vista horaria, Opción B): 31 días == 744 horas.
+INDICATORS_HOURLY_MAX_RANGE_DAYS = 31
+INDICATORS_HOURLY_DEFAULT_RANGE_DAYS = 14
 
 
 def get_colombia_now():
@@ -92,7 +93,7 @@ def resolve_indicators_hourly_range(date_str=None, start_date_str=None, end_date
     if end_date is None:
         end_date = get_colombia_date()
     if start_date is None:
-        start_date = end_date - timedelta(days=INDICATORS_HOURLY_MAX_RANGE_DAYS - 1)
+        start_date = end_date - timedelta(days=INDICATORS_HOURLY_DEFAULT_RANGE_DAYS - 1)
 
     if start_date > end_date:
         return None, None, "La fecha de inicio no puede ser posterior a la fecha de fin."
