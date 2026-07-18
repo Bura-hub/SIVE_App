@@ -2,9 +2,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
-import WeatherStationFilters from './WeatherStationFilters';
+import DeviceDateRangeFilters from './filters/DeviceDateRangeFilters';
+import DataAvailabilityBanner from './DataAvailabilityBanner';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { ENDPOINTS, buildApiUrl } from '../utils/apiConfig';
+import { buildAxisLabel } from '../utils/dateUtils';
 import { WEATHER_KPI_INFO } from '../utils/kpiInfo';
 import { IconCloudSun, IconRefresh, IconSun, IconWind, IconDroplets } from './icons';
 
@@ -191,20 +193,6 @@ const calculateTheoreticalPVPower = (irradiance, temperature = 25) => {
   }
 
   return Math.max(0, power); // No puede ser negativa
-};
-
-// Vista horaria (Opción B): formatea el campo `hour` (datetime ISO, inicio de hora) como
-// HH:mm en zona horaria de Bogotá, consistente con el resto de la vista horaria.
-const formatHourLabel = (isoHour) => {
-  if (!isoHour) return '';
-  const d = new Date(isoHour);
-  if (isNaN(d.getTime())) return isoHour;
-  return d.toLocaleTimeString('es-CO', {
-    timeZone: 'America/Bogota',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
 };
 
 // Función para obtener la dirección predominante del viento (pura)
@@ -553,19 +541,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
   // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
   const irradianceChartData = useMemo(() => ({
-    labels: weatherRows.map(item => {
-      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
-      if (filters.timeRange === 'hourly') {
-        return formatHourLabel(item.hour);
-      }
-      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-      const rawDate = item.date;
-      // Crear fecha en zona horaria local para evitar desfase UTC
-      const localDate = new Date(rawDate + 'T00:00:00');
-      const formattedDate = localDate.toLocaleDateString('es-ES');
-
-      return formattedDate;
-    }),
+    labels: weatherRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: filters.timeRange === 'hourly' ? 'Irradiancia de la Hora (kWh/m²)' : 'Irradiancia Acumulada (kWh/m²)',
@@ -608,19 +584,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   }), [weatherRows, filters.timeRange]);
 
   const ambientConditionsChartData = useMemo(() => ({
-    labels: weatherRows.map(item => {
-      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
-      if (filters.timeRange === 'hourly') {
-        return formatHourLabel(item.hour);
-      }
-      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-      const rawDate = item.date;
-      // Crear fecha en zona horaria local para evitar desfase UTC
-      const localDate = new Date(rawDate + 'T00:00:00');
-      const formattedDate = localDate.toLocaleDateString('es-ES');
-
-      return formattedDate;
-    }),
+    labels: weatherRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Temperatura Promedio (°C)',
@@ -646,19 +610,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   }), [weatherRows, filters.timeRange]);
 
   const windConditionsChartData = useMemo(() => ({
-    labels: weatherRows.map(item => {
-      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
-      if (filters.timeRange === 'hourly') {
-        return formatHourLabel(item.hour);
-      }
-      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-      const rawDate = item.date;
-      // Crear fecha en zona horaria local para evitar desfase UTC
-      const localDate = new Date(rawDate + 'T00:00:00');
-      const formattedDate = localDate.toLocaleDateString('es-ES');
-
-      return formattedDate;
-    }),
+    labels: weatherRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Velocidad del Viento (km/h)',
@@ -731,19 +683,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   }, [weatherRows]);
 
   const pvTheoreticalPowerChartData = useMemo(() => ({
-    labels: weatherRows.map(item => {
-      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
-      if (filters.timeRange === 'hourly') {
-        return formatHourLabel(item.hour);
-      }
-      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-      const rawDate = item.date;
-      // Crear fecha en zona horaria local para evitar desfase UTC
-      const localDate = new Date(rawDate + 'T00:00:00');
-      const formattedDate = localDate.toLocaleDateString('es-ES');
-
-      return formattedDate;
-    }),
+    labels: weatherRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Potencia Teórica (W)',
@@ -1120,9 +1060,19 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
           
           {/* Contenido de la sección */}
           <div className="p-4 lg:p-8">
-            <WeatherStationFilters 
-              onFiltersChange={handleFilterChange}
+            <DataAvailabilityBanner
               authToken={authToken}
+              institutionId={filters.institutionId}
+              category="weatherStation"
+            />
+            <DeviceDateRangeFilters
+              authToken={authToken}
+              devicesEndpoint={ENDPOINTS.weather.stations}
+              deviceIdField="id"
+              deviceLabel="Estación Meteorológica"
+              allOptionLabel="Todas las estaciones"
+              accentColor="orange"
+              onFiltersChange={handleFilterChange}
             />
 
             {/* Mensaje informativo sobre fechas por defecto */}
