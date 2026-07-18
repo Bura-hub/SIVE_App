@@ -1,7 +1,7 @@
 // Importaciones necesarias de React y componentes personalizados
 import React, { useState, useEffect, useRef } from 'react';
 import TransitionOverlay from './TransitionOverlay';
-import { formatDateForAPI } from '../utils/dateUtils';
+import { formatDateForAPI, monthInputToStartDate, monthInputToEndDate, dateStringToMonthInput } from '../utils/dateUtils';
 import { ENDPOINTS, buildApiUrl, getDefaultFetchOptions, handleApiResponse, fetchWithAuth } from '../utils/apiConfig';
 import { IconFileDown, IconDownload } from './icons';
 
@@ -836,7 +836,16 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                 id="timeRange"
                 className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm lg:text-base"
                 value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
+                onChange={(e) => {
+                  const newRange = e.target.value;
+                  setTimeRange(newRange);
+                  // Al pasar a mensual, alinear las fechas internas a los límites del
+                  // mes seleccionado para mantener la coherencia con el selector de meses.
+                  if (newRange === 'monthly') {
+                    setStartDate(prev => (prev ? monthInputToStartDate(dateStringToMonthInput(prev)) : prev));
+                    setEndDate(prev => (prev ? monthInputToEndDate(dateStringToMonthInput(prev)) : prev));
+                  }
+                }}
               >
                 <option value="daily">Diario</option>
                 <option value="monthly">Mensual</option>
@@ -850,11 +859,15 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                   Fecha de Inicio <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="date"
+                  type={timeRange === 'monthly' ? 'month' : 'date'}
                   id="startDate"
                   className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm lg:text-base"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  value={timeRange === 'monthly' ? (startDate ? dateStringToMonthInput(startDate) : '') : startDate}
+                  onChange={(e) => setStartDate(
+                    timeRange === 'monthly'
+                      ? (e.target.value ? monthInputToStartDate(e.target.value) : '')
+                      : e.target.value
+                  )}
                 />
               </div>
               <div>
@@ -862,11 +875,15 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                   Fecha de Fin <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="date"
+                  type={timeRange === 'monthly' ? 'month' : 'date'}
                   id="endDate"
                   className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm lg:text-base"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  value={timeRange === 'monthly' ? (endDate ? dateStringToMonthInput(endDate) : '') : endDate}
+                  onChange={(e) => setEndDate(
+                    timeRange === 'monthly'
+                      ? (e.target.value ? monthInputToEndDate(e.target.value) : '')
+                      : e.target.value
+                  )}
                 />
               </div>
             </div>
