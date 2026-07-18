@@ -3,9 +3,11 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { KpiCard } from "./KPI/KpiCard";
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
-import InverterFilters from './InverterFilters';
+import DeviceDateRangeFilters from './filters/DeviceDateRangeFilters';
+import DataAvailabilityBanner from './DataAvailabilityBanner';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { buildApiUrl, ENDPOINTS } from '../utils/apiConfig';
+import { buildAxisLabel } from '../utils/dateUtils';
 import { INVERTER_KPI_INFO } from '../utils/kpiInfo';
 import { IconInverter, IconScale, IconActivity, IconWaveform, IconRefresh } from './icons';
 
@@ -82,20 +84,6 @@ const CHART_OPTIONS = {
   interaction: { mode: 'nearest', axis: 'x', intersect: false },
   animation: { duration: 1000, easing: 'easeInOutQuart' },
   transitions: { zoom: { animation: { duration: 300, easing: 'easeInOutQuart' } } }
-};
-
-// Vista horaria (Opción B): formatea el campo `hour` (datetime ISO, inicio de hora) como
-// HH:mm en zona horaria de Bogotá, consistente con el resto de la vista horaria.
-const formatHourLabel = (isoHour) => {
-  if (!isoHour) return '';
-  const d = new Date(isoHour);
-  if (isNaN(d.getTime())) return isoHour;
-  return d.toLocaleTimeString('es-CO', {
-    timeZone: 'America/Bogota',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
 };
 
 // Componente de encabezado de sección
@@ -468,11 +456,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
   // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
   const generationChartData = useMemo(() => ({
-    labels: invRows.map(item => (
-      filters.timeRange === 'hourly'
-        ? formatHourLabel(item.hour)
-        : new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')
-    )),
+    labels: invRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Energía Total Generada (kWh)',
@@ -509,11 +493,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   }), [invRows, filters.timeRange]);
 
   const powerFactorChartData = useMemo(() => ({
-    labels: invRows.map(item => (
-      filters.timeRange === 'hourly'
-        ? formatHourLabel(item.hour)
-        : new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')
-    )),
+    labels: invRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Factor de Potencia Promedio',
@@ -529,11 +509,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   }), [invRows, filters.timeRange]);
 
   const unbalanceChartData = useMemo(() => ({
-    labels: invRows.map(item => (
-      filters.timeRange === 'hourly'
-        ? formatHourLabel(item.hour)
-        : new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES')
-    )),
+    labels: invRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Desbalance de Voltaje (%)',
@@ -907,7 +883,20 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
           
           {/* Contenido de la sección */}
           <div className="p-4 lg:p-8">
-            <InverterFilters onFiltersChange={handleFiltersChange} authToken={authToken} />
+            <DataAvailabilityBanner
+              authToken={authToken}
+              institutionId={filters.institutionId}
+              category="inverter"
+            />
+            <DeviceDateRangeFilters
+              authToken={authToken}
+              devicesEndpoint={ENDPOINTS.inverters.list}
+              deviceIdField="scada_id"
+              deviceLabel="Inversor"
+              allOptionLabel="Todos los inversores"
+              accentColor="red"
+              onFiltersChange={handleFiltersChange}
+            />
 
             {/* Mensaje informativo sobre fechas por defecto */}
             {filters.institutionId && !filters.startDate && !filters.endDate && (
