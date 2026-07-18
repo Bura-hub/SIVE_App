@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { KpiCard } from "./KPI/KpiCard";
 import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
-import ElectricMeterFilters from './ElectricMeterFilters';
+import DeviceDateRangeFilters from './filters/DeviceDateRangeFilters';
+import DataAvailabilityBanner from './DataAvailabilityBanner';
 import { buildApiUrl, ENDPOINTS } from '../utils/apiConfig';
+import { buildAxisLabel } from '../utils/dateUtils';
 import { IconGauge, IconRefresh } from './icons';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { METER_KPI_INFO } from '../utils/kpiInfo';
@@ -81,20 +83,6 @@ const CHART_OPTIONS = {
   interaction: { mode: 'nearest', axis: 'x', intersect: false },
   animation: { duration: 1000, easing: 'easeInOutQuart' },
   transitions: { zoom: { animation: { duration: 300, easing: 'easeInOutQuart' } } }
-};
-
-// Vista horaria (Opción B): formatea el campo `hour` (datetime ISO, inicio de hora) como
-// HH:mm en zona horaria de Bogotá, consistente con el resto de la vista horaria.
-const formatHourLabel = (isoHour) => {
-  if (!isoHour) return '';
-  const d = new Date(isoHour);
-  if (isNaN(d.getTime())) return isoHour;
-  return d.toLocaleTimeString('es-CO', {
-    timeZone: 'America/Bogota',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
 };
 
 // Componente de encabezado de sección
@@ -247,19 +235,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
   // de chart.update()) en cada render (p.ej. al paginar la tabla o abrir un modal de KPI).
   const energyChartData = useMemo(() => ({
-    labels: meterRows.map(item => {
-      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
-      if (filters.timeRange === 'hourly') {
-        return formatHourLabel(item.hour);
-      }
-      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-      const rawDate = item.date;
-      // Crear fecha en zona horaria local para evitar desfase UTC
-      const localDate = new Date(rawDate + 'T00:00:00');
-      const formattedDate = localDate.toLocaleDateString('es-ES');
-
-      return formattedDate;
-    }),
+    labels: meterRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Energía Importada (kWh)',
@@ -302,19 +278,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   }), [meterRows, filters.timeRange]);
 
   const qualityIndicatorsChartData = useMemo(() => ({
-    labels: meterRows.map(item => {
-      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
-      if (filters.timeRange === 'hourly') {
-        return formatHourLabel(item.hour);
-      }
-      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-      const rawDate = item.date;
-      // Crear fecha en zona horaria local para evitar desfase UTC
-      const localDate = new Date(rawDate + 'T00:00:00');
-      const formattedDate = localDate.toLocaleDateString('es-ES');
-
-      return formattedDate;
-    }),
+    labels: meterRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Demanda Pico (kW)',
@@ -351,19 +315,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   }), [meterRows, filters.timeRange]);
 
   const energyQualityChartData = useMemo(() => ({
-    labels: meterRows.map(item => {
-      // Vista horaria (Opción B): labels desde `item.hour` (HH:mm, Bogotá).
-      if (filters.timeRange === 'hourly') {
-        return formatHourLabel(item.hour);
-      }
-      // 🔍 CORREGIR PROCESAMIENTO DE FECHAS PARA EVITAR DESFASE
-      const rawDate = item.date;
-      // Crear fecha en zona horaria local para evitar desfase UTC
-      const localDate = new Date(rawDate + 'T00:00:00');
-      const formattedDate = localDate.toLocaleDateString('es-ES');
-
-      return formattedDate;
-    }),
+    labels: meterRows.map(item => buildAxisLabel(item, filters.timeRange)),
     datasets: [
       {
         label: 'Desequilibrio de Voltaje (%)',
@@ -828,7 +780,20 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
           
           {/* Contenido de la sección */}
           <div className="p-4 lg:p-8">
-          <ElectricMeterFilters onFiltersChange={handleFiltersChange} authToken={authToken} />
+          <DataAvailabilityBanner
+            authToken={authToken}
+            institutionId={filters.institutionId}
+            category="electricMeter"
+          />
+          <DeviceDateRangeFilters
+            authToken={authToken}
+            devicesEndpoint={ENDPOINTS.electrical.devices}
+            deviceIdField="scada_id"
+            deviceLabel="Medidor"
+            allOptionLabel="Todos los medidores"
+            accentColor="green"
+            onFiltersChange={handleFiltersChange}
+          />
 
           {/* Mensaje informativo sobre fechas por defecto */}
           {filters.institutionId && !filters.startDate && !filters.endDate && (
