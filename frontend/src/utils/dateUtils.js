@@ -160,4 +160,78 @@ export const isTodayInColombia = (date) => {
   const colombiaDate = toColombiaTime(date);
   const today = toColombiaTime(new Date());
   return colombiaDate.toDateString() === today.toDateString();
+};
+
+const MONTHS_ES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MONTHS_ES_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+/** '2026-07-01' -> 'Jul 2026' (o 'Julio 2026' si abbreviated=false). */
+export const formatMonthYearLabel = (dateString, { abbreviated = true } = {}) => {
+  if (!dateString) return '';
+  const [year, month] = dateString.split('-');
+  const idx = parseInt(month, 10) - 1;
+  const names = abbreviated ? MONTHS_ES_ABBR : MONTHS_ES_FULL;
+  return `${names[idx]} ${year}`;
+};
+
+/** '2026-07' -> '2026-07-01'. */
+export const monthInputToStartDate = (month) => `${month}-01`;
+
+/** '2026-07' -> '2026-07-31' (último día real del mes). */
+export const monthInputToEndDate = (month) => {
+  const [year, m] = month.split('-').map(Number);
+  const lastDay = new Date(year, m, 0).getDate(); // día 0 del mes siguiente
+  return `${month}-${String(lastDay).padStart(2, '0')}`;
+};
+
+/** '2026-07-01' -> '2026-07'. */
+export const dateStringToMonthInput = (dateString) => dateString.slice(0, 7);
+
+/** Últimos 6 meses (inclusive el actual) en zona Colombia. */
+export const getDefaultMonthlyRange = () => {
+  const now = toColombiaTime(new Date());
+  const end = new Date(now.getFullYear(), now.getMonth(), 1);
+  const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return { startMonth: fmt(start), endMonth: fmt(end) };
+};
+
+/** Últimos 30 días. */
+export const getDefaultDailyRange = () => {
+  const end = toColombiaTime(new Date());
+  const start = new Date(end);
+  start.setDate(start.getDate() - 30);
+  const fmt = (d) => d.toISOString().split('T')[0];
+  return { startDate: fmt(start), endDate: fmt(end) };
+};
+
+/** Últimas 2 semanas (con hora), formato datetime-local YYYY-MM-DDTHH:MM. */
+export const getDefaultHourlyRange = () => {
+  const end = toColombiaTime(new Date());
+  const start = new Date(end);
+  start.setDate(start.getDate() - 14);
+  const fmt = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-` +
+    `${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:` +
+    `${String(d.getMinutes()).padStart(2, '0')}`;
+  return { startDatetime: fmt(start), endDatetime: fmt(end) };
+};
+
+/** ISO con hora -> 'HH:MM' (zona Colombia). Extraído de los componentes Details. */
+export const formatHourLabel = (isoHour) => {
+  if (!isoHour) return '';
+  const d = new Date(isoHour);
+  if (isNaN(d.getTime())) return isoHour;
+  return d.toLocaleTimeString('es-CO', {
+    timeZone: COLOMBIA_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+};
+
+/** Etiqueta de eje X según granularidad. Compartida por las 3 pantallas de detalle. */
+export const buildAxisLabel = (item, timeRange) => {
+  if (timeRange === 'hourly') return formatHourLabel(item.hour);
+  if (timeRange === 'monthly') return formatMonthYearLabel(item.date);
+  return new Date(item.date + 'T00:00:00').toLocaleDateString('es-ES');
 }; 
