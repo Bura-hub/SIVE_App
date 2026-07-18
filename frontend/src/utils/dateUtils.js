@@ -214,10 +214,11 @@ export const getDefaultHourlyRange = () => {
   const end = toColombiaTime(new Date());
   const start = new Date(end);
   start.setDate(start.getDate() - 14);
+  // Minutos en punto (:00) para que el valor por defecto coincida con la
+  // rejilla de minutos del selector horario (múltiplos de 5).
   const fmt = (d) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-` +
-    `${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:` +
-    `${String(d.getMinutes()).padStart(2, '0')}`;
+    `${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:00`;
   return { startDatetime: fmt(start), endDatetime: fmt(end) };
 };
 
