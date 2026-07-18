@@ -56,7 +56,7 @@ from indicators.services.date_ranges import (  # noqa: E402
 )
 from indicators.services.formatting import auto_energy_unit, format_energy_value  # noqa: E402
 from indicators.services.kpi import calculate_kpi_metrics, summarize_inverter_status  # noqa: E402
-from indicators.services.queries import apply_device_filter  # noqa: E402
+from indicators.services.queries import apply_device_filter, aggregate_indicators_by_period  # noqa: E402
 from indicators.serializers import DashboardChartPointSerializer  # noqa: E402
 
 class ConsumptionSummaryView(APIView):
@@ -888,9 +888,28 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
 
         queryset = self.get_queryset()
 
+        device_id = request.query_params.get('device_id')
+        time_range = request.query_params.get('time_range', 'daily')
+
+        # Sin device_id, daily/monthly consolida por periodo (Sum/Avg/Max entre
+        # dispositivos) para no devolver N puntos duplicados por fecha (N=dispositivos).
+        if not device_id and time_range in ('daily', 'monthly'):
+            results = aggregate_indicators_by_period(
+                queryset,
+                sum_fields=['imported_energy_kwh', 'exported_energy_kwh',
+                            'net_energy_consumption_kwh', 'measurement_count'],
+                avg_fields=['avg_demand_kw', 'load_factor_pct', 'avg_power_factor'],
+                max_fields=['peak_demand_kw', 'max_voltage_unbalance_pct',
+                            'max_current_unbalance_pct', 'max_voltage_thd_pct',
+                            'max_current_thd_pct', 'max_current_tdd_pct',
+                            'last_measurement_date'],
+            )
+        else:
+            results = self.get_serializer(queryset, many=True).data
+
         # Agregar información de resumen
         summary = {
-            'total_records': queryset.count(),
+            'total_records': len(results),
             'institutions': list(queryset.values('institution__name').distinct()),
             'devices': list(queryset.values('device__name').distinct()),
             'date_range': {
@@ -901,12 +920,7 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Sin paginación (pagination_class = None): se conserva el contrato
         # {'summary', 'results'} que espera el frontend.
-        serializer = self.get_serializer(queryset, many=True)
-        response_data = {
-            'summary': summary,
-            'results': serializer.data
-        }
-        return Response(response_data)
+        return Response({'summary': summary, 'results': results})
 
 # ========================= Vistas para Indicadores de Inversores =========================
 
