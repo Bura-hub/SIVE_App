@@ -17,6 +17,7 @@ import {
   Filler,
 } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
+import { useIsMobile, useIsCoarsePointer } from '../../hooks/useMediaQuery';
 
 // Formateadores es-ES reutilizados: crear un Intl.NumberFormat por punto/tick era
 // un coste notable en cada frame de hover. Se instancian una sola vez a nivel de módulo.
@@ -59,6 +60,11 @@ export function ChartCard({
   const fullscreenChartRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+
+  // Responsive: por debajo de 1024px (lg) mostramos controles al tacto y reducimos alturas;
+  // en punteros gruesos (táctil) ajustamos los gestos de zoom para no secuestrar el scroll.
+  const isMobile = useIsMobile();
+  const isCoarse = useIsCoarsePointer();
 
   // Selección dinámica del tipo de gráfico: línea, barras o rosa polar (rosa de los vientos)
   const ChartComponent = type === "bar" ? Bar : type === "polarArea" ? PolarArea : Line;
@@ -273,7 +279,9 @@ export function ChartCard({
       },
       zoom: {
         pan: {
-          enabled: true,
+          // En puntero grueso (táctil) el modifierKey 'ctrl' no aplica, así que
+          // deshabilitamos el pan para no interferir con el gesto de scroll de la página.
+          enabled: !isCoarse,
           mode: 'x',
           modifierKey: 'ctrl',
           onPanComplete: () => setIsZoomed(true),
@@ -288,7 +296,9 @@ export function ChartCard({
           },
           mode: 'x',
           drag: {
-            enabled: true,
+            // En táctil el drag-zoom secuestra el scroll vertical de la página;
+            // ahí confiamos en el gesto de pellizco (pinch).
+            enabled: !isCoarse,
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
             borderColor: 'rgba(59, 130, 246, 0.3)',
             borderWidth: 1,
@@ -369,12 +379,20 @@ export function ChartCard({
         }
       }
     }
-  }), []);
+  }), [isCoarse]);
 
   // Los `chartOptions` de arriba son para gráficos cartesianos (línea/barra): escalas x/y,
   // tooltip por context.parsed.y y zoom en x. Para tipos radiales (p. ej. polarArea) esas
   // opciones rompen el render (escalas cartesianas -> tamaños raros; parsed.y -> NaN en el
   // tooltip), así que ahí se respetan las `options` que pasa el llamador.
+  // Alturas responsive: en móvil (< lg) reducimos el alto para que la gráfica no domine la
+  // pantalla; en escritorio se respetan los valores que pasa el llamador. maintainAspectRatio
+  // ya está en false, así que encoger el contenedor es seguro.
+  const effectiveHeight = isMobile ? '260px' : height;
+  // En escritorio el canvas del modal llena el área flex (h-full); en móvil, con el panel
+  // apilado debajo, fijamos una altura explícita para que la gráfica no quede aplastada.
+  const fullscreenChartStyle = isMobile ? { height: '55vh' } : undefined;
+
   const isCartesian = type === 'line' || type === 'bar';
   const effectiveOptions = useMemo(
     () => (isCartesian
@@ -415,7 +433,7 @@ export function ChartCard({
             </div>
             
             {/* Botones de acciones con diseño mejorado */}
-            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition duration-300">
+            <div className="flex items-center space-x-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition duration-300">
               <button
                 onClick={resetChartZoom}
                 className={`p-2 rounded-lg transition duration-150 hover:scale-105 group/btn relative ${
@@ -451,7 +469,7 @@ export function ChartCard({
 
         {/* Contenedor del gráfico con padding y altura definida */}
         <div className="p-6">
-          <div className="chart-container relative w-full" style={{ height: height }}>
+          <div className="chart-container relative w-full" style={{ height: effectiveHeight }}>
             <ErrorBoundary fallback={chartErrorFallback}>
               <ChartComponent ref={chartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
             </ErrorBoundary>
@@ -462,7 +480,7 @@ export function ChartCard({
         </div>
 
         {/* Indicador de interactividad en la parte inferior */}
-        <div className="px-6 pb-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className="px-6 pb-4 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-300">
           <div className="flex items-center justify-center text-xs text-gray-500 space-x-4">
             <span className="flex items-center">
               <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -505,9 +523,9 @@ export function ChartCard({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header del modal con diseño elegante similar a ProfileSettings */}
-            <div className="flex items-center justify-between p-8 border-b border-gray-100 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 shrink-0">
+            <div className="flex items-center justify-between p-4 lg:p-8 border-b border-gray-100 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 shrink-0">
               <div className="space-y-2">
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-blue-700 bg-clip-text text-transparent">
+                <h2 className="text-xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 to-blue-700 bg-clip-text text-transparent">
                   {title}
                 </h2>
                 {description && (
@@ -547,10 +565,10 @@ export function ChartCard({
             </div>
 
             {/* Contenido principal del modal: ocupa el espacio restante del flex-col */}
-            <div className="flex flex-1 min-h-0">
+            <div className="flex flex-col lg:flex-row flex-1 min-h-0">
               {/* Área del gráfico (min-h-0 permite que el canvas se ajuste sin desbordar/recortar) */}
               <div className="flex-1 min-h-0 p-8 overflow-hidden bg-gradient-to-br from-white to-slate-50/30">
-                <div className="chart-container w-full h-full">
+                <div className="chart-container w-full h-full" style={fullscreenChartStyle}>
                   <ErrorBoundary fallback={chartErrorFallback}>
                     <ChartComponent ref={fullscreenChartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
                   </ErrorBoundary>
@@ -558,7 +576,7 @@ export function ChartCard({
               </div>
 
               {/* Panel lateral con controles e información */}
-              <div className="w-80 bg-gradient-to-b from-slate-50 to-blue-50 border-l border-slate-200 p-6">
+              <div className="w-full lg:w-80 bg-gradient-to-b from-slate-50 to-blue-50 border-t lg:border-l lg:border-t-0 border-slate-200 p-6">
                 <div className="space-y-6">
                   {/* Información del gráfico */}
                   <div className="space-y-4">
@@ -642,14 +660,21 @@ export function ChartCard({
 
             {/* Indicador de controles: footer en el flujo (antes era absolute bottom-4 y tapaba el eje X) */}
             <div className="shrink-0 w-fit mx-auto mb-4 mt-1 bg-black/60 text-white px-6 py-3 rounded-full text-sm backdrop-blur-sm border border-white/10">
-              <div className="flex items-center space-x-8">
-                <span className="flex items-center">
+              <div className="flex flex-col lg:flex-row gap-2 lg:gap-8 items-center">
+                {/* Pista táctil: en móvil el zoom se hace con pellizco (pinch) */}
+                <span className="flex lg:hidden items-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  Pellizca para hacer zoom
+                </span>
+                <span className="hidden lg:flex items-center">
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   Zoom con rueda del mouse
                 </span>
-                <span className="flex items-center">
+                <span className="hidden lg:flex items-center">
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                   </svg>
