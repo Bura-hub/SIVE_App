@@ -746,10 +746,12 @@ class ElectricMetersListView(APIView):
         parameters=[
             OpenApiParameter("institution_id", int, OpenApiParameter.QUERY, description="ID de la institución"),
             OpenApiParameter("device_id", str, OpenApiParameter.QUERY, description="ID del medidor específico (obligatorio si time_range='hourly')"),
-            OpenApiParameter("time_range", str, OpenApiParameter.QUERY, description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 7 días/168 horas vía 'date' o 'start_date'/'end_date')"),
-            OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD). Sin rango: últimos 31 días (daily/monthly) o 7 días (hourly)"),
-            OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD). Rango máximo: 366 días (daily/monthly) o 7 días (hourly)"),
+            OpenApiParameter("time_range", str, OpenApiParameter.QUERY, description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 31 días/744 horas vía 'date' o 'start_date'/'end_date')"),
+            OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD). Sin rango: últimos 31 días (daily/monthly) o 14 días (hourly)"),
+            OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD). Rango máximo: 366 días (daily/monthly) o 31 días (hourly)"),
             OpenApiParameter("date", str, OpenApiParameter.QUERY, description="Día único (YYYY-MM-DD). Solo aplica con time_range='hourly'; alternativa a start_date/end_date"),
+            OpenApiParameter("start_datetime", str, OpenApiParameter.QUERY, description="Inicio del rango horario con hora (YYYY-MM-DDTHH:MM), modo horario"),
+            OpenApiParameter("end_datetime", str, OpenApiParameter.QUERY, description="Fin del rango horario con hora (YYYY-MM-DDTHH:MM), modo horario"),
         ],
         responses={200: ElectricMeterIndicatorsSerializer(many=True)}
     ),
@@ -843,7 +845,7 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
         """
         if self._is_hourly():
             # Contrato vista horaria (Opción B): device_id es obligatorio y el rango
-            # se resuelve/acota con resolve_indicators_hourly_range (tope 7 días/168h).
+            # se resuelve/acota con resolve_indicators_hourly_range (tope 31 días/744h).
             device_id = request.query_params.get('device_id')
             if not device_id:
                 return Response(
@@ -932,10 +934,12 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
     parameters=[
         OpenApiParameter("institution_id", int, OpenApiParameter.QUERY, description="ID de la institución"),
         OpenApiParameter("device_id", str, OpenApiParameter.QUERY, description="ID del inversor específico (obligatorio si time_range='hourly')"),
-        OpenApiParameter("time_range", str, OpenApiParameter.QUERY, description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 7 días/168 horas vía 'date' o 'start_date'/'end_date')"),
-        OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD). Sin rango: últimos 31 días (daily/monthly) o 7 días (hourly)"),
-        OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD). Rango máximo: 366 días (daily/monthly) o 7 días (hourly)"),
+        OpenApiParameter("time_range", str, OpenApiParameter.QUERY, description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 31 días/744 horas vía 'date' o 'start_date'/'end_date')"),
+        OpenApiParameter("start_date", str, OpenApiParameter.QUERY, description="Fecha de inicio (YYYY-MM-DD). Sin rango: últimos 31 días (daily/monthly) o 14 días (hourly)"),
+        OpenApiParameter("end_date", str, OpenApiParameter.QUERY, description="Fecha de fin (YYYY-MM-DD). Rango máximo: 366 días (daily/monthly) o 31 días (hourly)"),
         OpenApiParameter("date", str, OpenApiParameter.QUERY, description="Día único (YYYY-MM-DD). Solo aplica con time_range='hourly'; alternativa a start_date/end_date"),
+        OpenApiParameter("start_datetime", str, OpenApiParameter.QUERY, description="Inicio del rango horario con hora (YYYY-MM-DDTHH:MM), modo horario"),
+        OpenApiParameter("end_datetime", str, OpenApiParameter.QUERY, description="Fin del rango horario con hora (YYYY-MM-DDTHH:MM), modo horario"),
     ],
     responses={200: InverterIndicatorsSerializer(many=True)}
 )
@@ -967,7 +971,7 @@ class InverterIndicatorsView(APIView):
 
             if time_range == 'hourly':
                 # Vista horaria (Opción B): tabla dedicada HourlyInverterIndicators.
-                # Contrato: device_id obligatorio; rango resuelto/acotado (tope 7 días/168h).
+                # Contrato: device_id obligatorio; rango resuelto/acotado (tope 31 días/744h).
                 if not device_id:
                     return Response({
                         "detail": "device_id es obligatorio para la vista horaria (time_range=hourly)."
@@ -1369,7 +1373,7 @@ class WeatherStationIndicatorsView(APIView):
         description="Obtiene los indicadores meteorológicos calculados para estaciones meteorológicas",
         parameters=[
             OpenApiParameter(name='time_range', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
-                           description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 7 días/168 horas vía 'date' o 'start_date'/'end_date')", required=False),
+                           description="Rango de tiempo: 'daily', 'monthly' u 'hourly' (vista horaria: requiere device_id; rango máximo 31 días/744 horas vía 'date' o 'start_date'/'end_date')", required=False),
             OpenApiParameter(name='institution_id', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
                            description='ID de la institución', required=False),
             OpenApiParameter(name='device_id', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
@@ -1380,6 +1384,10 @@ class WeatherStationIndicatorsView(APIView):
                            description='Fecha de fin (YYYY-MM-DD)', required=False),
             OpenApiParameter(name='date', type=OpenApiTypes.DATE, location=OpenApiParameter.QUERY,
                            description="Día único (YYYY-MM-DD). Solo aplica con time_range='hourly'; alternativa a start_date/end_date", required=False),
+            OpenApiParameter(name='start_datetime', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                           description="Inicio del rango horario con hora (YYYY-MM-DDTHH:MM), modo horario", required=False),
+            OpenApiParameter(name='end_datetime', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                           description="Fin del rango horario con hora (YYYY-MM-DDTHH:MM), modo horario", required=False),
         ],
         responses={
             200: WeatherStationIndicatorsSerializer(many=True),
@@ -1411,7 +1419,7 @@ class WeatherStationIndicatorsView(APIView):
 
             if time_range == 'hourly':
                 # Vista horaria (Opción B): tabla dedicada HourlyWeatherIndicators.
-                # Contrato: device_id obligatorio; rango resuelto/acotado (tope 7 días/168h).
+                # Contrato: device_id obligatorio; rango resuelto/acotado (tope 31 días/744h).
                 if not device_id:
                     return Response(
                         {"detail": "device_id es obligatorio para la vista horaria (time_range=hourly)."},

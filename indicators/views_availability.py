@@ -47,6 +47,13 @@ class DataAvailabilityView(APIView):
                 {'detail': "category debe ser 'electricMeter', 'inverter' o 'weatherStation'."},
                 status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            institution_id = int(institution_id)
+        except ValueError:
+            return Response(
+                {"detail": "institution_id debe ser un número entero válido"},
+                status=status.HTTP_400_BAD_REQUEST)
+
         daily_model, hourly_model = _CATEGORY_MODELS[category]
 
         dm = (daily_model.objects.filter(institution_id=institution_id)

@@ -74,7 +74,7 @@ def resolve_indicators_hourly_range(date_str=None, start_date_str=None, end_date
       (sin fechas -> últimos INDICATORS_HOURLY_MAX_RANGE_DAYS días; solo una de las dos
       -> se completa la otra).
     - Tope estricto: el rango no puede superar INDICATORS_HOURLY_MAX_RANGE_DAYS días
-      (7 días == 168 horas). Si se supera, error 400 en español.
+      (31 días == 744 horas). Si se supera, error 400 en español.
     - Fechas invertidas o formato inválido: error en español.
     """
     if date_str:

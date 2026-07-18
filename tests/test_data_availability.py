@@ -48,6 +48,10 @@ class DataAvailabilityTest(TestCase):
         resp = self._get({'institution_id': self.inst.id, 'category': 'foo'})
         self.assertEqual(resp.status_code, 400)
 
+    def test_non_numeric_institution_id_400(self):
+        resp = self._get({'institution_id': 'abc', 'category': 'electricMeter'})
+        self.assertEqual(resp.status_code, 400)
+
     def test_no_data_returns_null(self):
         other = Institution.objects.create(scada_id='I6', name='Otra')
         resp = self._get({'institution_id': other.id, 'category': 'electricMeter'})
