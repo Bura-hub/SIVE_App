@@ -98,8 +98,8 @@ def resolve_indicators_hourly_range(date_str=None, start_date_str=None, end_date
     if start_date > end_date:
         return None, None, "La fecha de inicio no puede ser posterior a la fecha de fin."
 
-    # Tope de 7 días (168 horas) para la vista horaria: el rango es inclusivo en
-    # ambos extremos, así que la ventana de días es (end_date - start_date) + 1.
+    # Tope de INDICATORS_HOURLY_MAX_RANGE_DAYS días para la vista horaria: el rango
+    # es inclusivo en ambos extremos, así que la ventana de días es (end_date - start_date) + 1.
     if (end_date - start_date).days + 1 > INDICATORS_HOURLY_MAX_RANGE_DAYS:
         return None, None, (
             f"El rango horario solicitado supera el máximo permitido de "
@@ -108,6 +108,43 @@ def resolve_indicators_hourly_range(date_str=None, start_date_str=None, end_date
         )
 
     return start_date, end_date, None
+
+
+def resolve_indicators_hourly_datetime_range(start_datetime_str, end_datetime_str):
+    """Resuelve un rango horario con precisión de hora/minuto.
+
+    Acepta ISO 'YYYY-MM-DDTHH:MM' o 'YYYY-MM-DDTHH:MM:SS'. Devuelve
+    (start_dt, end_dt, error) con datetimes aware en zona Colombia.
+    """
+    def _parse(value):
+        for fmt in ('%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M'):
+            try:
+                return datetime.strptime(value, fmt)
+            except (ValueError, TypeError):
+                continue
+        return None
+
+    if not start_datetime_str or not end_datetime_str:
+        return None, None, "Se requieren 'start_datetime' y 'end_datetime' (YYYY-MM-DDTHH:MM)."
+
+    start_naive = _parse(start_datetime_str)
+    end_naive = _parse(end_datetime_str)
+    if start_naive is None or end_naive is None:
+        return None, None, "Formato de fecha/hora inválido. Use YYYY-MM-DDTHH:MM."
+
+    start_dt = start_naive.replace(tzinfo=COLOMBIA_TZ)
+    end_dt = end_naive.replace(tzinfo=COLOMBIA_TZ)
+
+    if start_dt > end_dt:
+        return None, None, "La fecha/hora de inicio no puede ser posterior a la de fin."
+
+    if (end_dt - start_dt).days + 1 > INDICATORS_HOURLY_MAX_RANGE_DAYS:
+        return None, None, (
+            f"El rango horario solicitado supera el máximo permitido de "
+            f"{INDICATORS_HOURLY_MAX_RANGE_DAYS} días. Reduzca el rango e intente de nuevo."
+        )
+
+    return start_dt, end_dt, None
 
 
 def resolve_indicators_date_range(start_date_str, end_date_str):

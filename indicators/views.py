@@ -51,6 +51,7 @@ from indicators.services.date_ranges import (  # noqa: E402
     get_colombia_now,
     resolve_indicators_date_range,
     resolve_indicators_hourly_range,
+    resolve_indicators_hourly_datetime_range,
     colombia_day_range,
 )
 from indicators.services.formatting import auto_energy_unit, format_energy_value  # noqa: E402
@@ -792,14 +793,22 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
                 queryset = apply_device_filter(queryset, device_id)
 
             if self.action == 'list':
-                start_date, end_date, error = resolve_indicators_hourly_range(
-                    self.request.query_params.get('date'),
-                    self.request.query_params.get('start_date'),
-                    self.request.query_params.get('end_date'),
-                )
-                if error is None:
-                    start_dt, end_dt = colombia_day_range(start_date, end_date)
-                    queryset = queryset.filter(hour__gte=start_dt, hour__lt=end_dt)
+                start_datetime = self.request.query_params.get('start_datetime')
+                end_datetime = self.request.query_params.get('end_datetime')
+                if start_datetime or end_datetime:
+                    start_dt, end_dt, error = resolve_indicators_hourly_datetime_range(
+                        start_datetime, end_datetime)
+                    if error is None:
+                        queryset = queryset.filter(hour__gte=start_dt, hour__lte=end_dt)
+                else:
+                    start_date, end_date, error = resolve_indicators_hourly_range(
+                        self.request.query_params.get('date'),
+                        self.request.query_params.get('start_date'),
+                        self.request.query_params.get('end_date'),
+                    )
+                    if error is None:
+                        start_dt, end_dt = colombia_day_range(start_date, end_date)
+                        queryset = queryset.filter(hour__gte=start_dt, hour__lt=end_dt)
 
             return queryset.order_by('-hour', 'device__name')
 
@@ -842,11 +851,16 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            _, _, error = resolve_indicators_hourly_range(
-                request.query_params.get('date'),
-                request.query_params.get('start_date'),
-                request.query_params.get('end_date'),
-            )
+            start_datetime = request.query_params.get('start_datetime')
+            end_datetime = request.query_params.get('end_datetime')
+            if start_datetime or end_datetime:
+                _, _, error = resolve_indicators_hourly_datetime_range(start_datetime, end_datetime)
+            else:
+                _, _, error = resolve_indicators_hourly_range(
+                    request.query_params.get('date'),
+                    request.query_params.get('start_date'),
+                    request.query_params.get('end_date'),
+                )
             if error:
                 return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -946,17 +960,25 @@ class InverterIndicatorsView(APIView):
                     }, status=status.HTTP_400_BAD_REQUEST)
 
                 date_str = request.query_params.get('date')
-                start_date, end_date, error = resolve_indicators_hourly_range(date_str, start_date_str, end_date_str)
-                if error:
-                    return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
-
-                start_dt, end_dt = colombia_day_range(start_date, end_date)
-
-                queryset = HourlyInverterIndicators.objects.select_related('device', 'institution').filter(
-                    institution_id=institution_id,
-                    hour__gte=start_dt,
-                    hour__lt=end_dt,
-                )
+                start_datetime = request.query_params.get('start_datetime')
+                end_datetime = request.query_params.get('end_datetime')
+                if start_datetime or end_datetime:
+                    start_dt, end_dt, error = resolve_indicators_hourly_datetime_range(
+                        start_datetime, end_datetime)
+                    if error:
+                        return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+                    queryset = HourlyInverterIndicators.objects.select_related(
+                        'device', 'institution').filter(
+                        institution_id=institution_id, hour__gte=start_dt, hour__lte=end_dt)
+                else:
+                    start_date, end_date, error = resolve_indicators_hourly_range(
+                        date_str, start_date_str, end_date_str)
+                    if error:
+                        return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+                    start_dt, end_dt = colombia_day_range(start_date, end_date)
+                    queryset = HourlyInverterIndicators.objects.select_related(
+                        'device', 'institution').filter(
+                        institution_id=institution_id, hour__gte=start_dt, hour__lt=end_dt)
                 queryset = apply_device_filter(queryset, device_id)
                 queryset = queryset.order_by('-hour', 'device__name')
 
@@ -1371,13 +1393,21 @@ class WeatherStationIndicatorsView(APIView):
                     )
 
                 date_str = request.query_params.get('date')
-                resolved_start, resolved_end, error = resolve_indicators_hourly_range(date_str, start_date, end_date)
-                if error:
-                    return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
-
-                start_dt, end_dt = colombia_day_range(resolved_start, resolved_end)
-
-                hourly_filters = Q(hour__gte=start_dt, hour__lt=end_dt)
+                start_datetime = request.query_params.get('start_datetime')
+                end_datetime = request.query_params.get('end_datetime')
+                if start_datetime or end_datetime:
+                    start_dt, end_dt, error = resolve_indicators_hourly_datetime_range(
+                        start_datetime, end_datetime)
+                    if error:
+                        return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+                    hourly_filters = Q(hour__gte=start_dt, hour__lte=end_dt)
+                else:
+                    resolved_start, resolved_end, error = resolve_indicators_hourly_range(
+                        date_str, start_date, end_date)
+                    if error:
+                        return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+                    start_dt, end_dt = colombia_day_range(resolved_start, resolved_end)
+                    hourly_filters = Q(hour__gte=start_dt, hour__lt=end_dt)
 
                 if institution_id:
                     try:
@@ -1404,8 +1434,8 @@ class WeatherStationIndicatorsView(APIView):
                     'filters_applied': {
                         'institution_id': institution_id,
                         'device_id': device_id,
-                        'start_date': resolved_start.isoformat(),
-                        'end_date': resolved_end.isoformat()
+                        'start_date': start_dt.isoformat(),
+                        'end_date': end_dt.isoformat()
                     }
                 })
 
