@@ -1516,19 +1516,31 @@ class WeatherStationIndicatorsView(APIView):
                 'device', 'institution'
             ).order_by('-date')
             
-            # Serializar y devolver resultados
-            serializer = WeatherStationIndicatorsSerializer(indicators, many=True)
-            
+            # Sin device_id, daily/monthly consolida por periodo (Sum/Avg/Max/Min entre
+            # dispositivos) para no devolver N puntos duplicados por fecha (N=dispositivos).
+            if not device_id and time_range in ('daily', 'monthly'):
+                results = aggregate_indicators_by_period(
+                    indicators,
+                    sum_fields=['daily_irradiance_kwh_m2', 'daily_hsp_hours',
+                                'daily_precipitation_cm', 'measurement_count'],
+                    avg_fields=['avg_wind_speed_kmh', 'avg_temperature_c',
+                                'avg_humidity_pct', 'theoretical_pv_power_w'],
+                    max_fields=['max_temperature_c'],
+                    min_fields=['min_temperature_c'],
+                )
+            else:
+                results = WeatherStationIndicatorsSerializer(indicators, many=True).data
+
             return Response({
-                'count': indicators.count(),
-                'results': serializer.data,
+                'count': len(results),
+                'results': results,
                 'time_range': time_range,
                 'filters_applied': {
                     'institution_id': institution_id,
                     'device_id': device_id,
                     'start_date': start_date.isoformat() if start_date else None,
-                    'end_date': end_date.isoformat() if end_date else None
-                }
+                    'end_date': end_date.isoformat() if end_date else None,
+                },
             })
 
         except Exception as e:
