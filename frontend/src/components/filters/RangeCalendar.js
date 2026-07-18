@@ -339,7 +339,7 @@ const RangeCalendar = ({
     `${accent.ring} focus:border-transparent`;
 
   return (
-    <div className="inline-block">
+    <div className="block w-full lg:inline-block lg:w-auto">
       <button
         ref={triggerRef}
         type="button"

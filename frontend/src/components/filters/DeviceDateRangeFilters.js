@@ -205,13 +205,13 @@ const DeviceDateRangeFilters = ({
   };
 
   const inputClass =
-    `px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 ` +
+    `w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 ` +
     `${accent.ring} focus:border-transparent`;
 
   return (
     <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
       {/* Filtro de rango de tiempo */}
-      <div className="flex flex-col">
+      <div className="flex flex-col w-full sm:w-auto">
         <label htmlFor="time-range" className="text-sm font-medium text-gray-700 mb-1">
           Rango de Tiempo
         </label>
@@ -228,7 +228,7 @@ const DeviceDateRangeFilters = ({
       </div>
 
       {/* Filtro de institución */}
-      <div className="flex flex-col">
+      <div className="flex flex-col w-full sm:w-auto">
         <label className="text-sm font-medium text-gray-700 mb-1">Institución</label>
         <select
           aria-label="Institución"
@@ -255,7 +255,7 @@ const DeviceDateRangeFilters = ({
       </div>
 
       {/* Filtro de dispositivo */}
-      <div className="flex flex-col">
+      <div className="flex flex-col w-full sm:w-auto">
         <label className="text-sm font-medium text-gray-700 mb-1">{deviceLabel}</label>
         <select
           ref={deviceSelectRef}
@@ -276,7 +276,7 @@ const DeviceDateRangeFilters = ({
 
       {/* Selector de rango según granularidad */}
       {timeRange === 'monthly' ? (
-        <div className="flex flex-col">
+        <div className="flex flex-col w-full sm:w-auto">
           <label className="text-sm font-medium text-gray-700 mb-1">Rango de Meses</label>
           <RangeCalendar
             mode="month"
@@ -287,7 +287,7 @@ const DeviceDateRangeFilters = ({
           />
         </div>
       ) : timeRange === 'hourly' ? (
-        <div className="flex flex-col">
+        <div className="flex flex-col w-full sm:w-auto">
           <label className="text-sm font-medium text-gray-700 mb-1">Fecha y Hora</label>
           <RangeCalendar
             mode="datetime"
@@ -299,7 +299,7 @@ const DeviceDateRangeFilters = ({
           />
         </div>
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col w-full sm:w-auto">
           <label className="text-sm font-medium text-gray-700 mb-1">Rango de Fechas</label>
           <RangeCalendar
             mode="day"
