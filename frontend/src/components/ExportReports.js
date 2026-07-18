@@ -867,7 +867,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                     setStartDate(s ? monthInputToStartDate(s) : '');
                     setEndDate(e ? monthInputToEndDate(e) : '');
                   }}
-                  accentColor="green"
+                  accentColor="blue"
                 />
               ) : (
                 <RangeCalendar
@@ -878,7 +878,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                     setStartDate(s);
                     setEndDate(e);
                   }}
-                  accentColor="green"
+                  accentColor="blue"
                 />
               )}
             </div>
