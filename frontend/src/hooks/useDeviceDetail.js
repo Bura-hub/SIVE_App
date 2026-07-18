@@ -47,13 +47,19 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
       const defaultStartDate = new Date();
       defaultStartDate.setDate(defaultStartDate.getDate() - 10);
 
+      const isHourly = (f.timeRange || 'daily') === 'hourly';
       const baseParams = {
         time_range: f.timeRange || 'daily',
         ...(f.institutionId && { institution_id: f.institutionId }),
         ...(f.deviceId && { device_id: f.deviceId }),
-        start_date: f.startDate || defaultStartDate.toISOString().split('T')[0],
-        end_date: f.endDate || defaultEndDate.toISOString().split('T')[0],
       };
+      if (isHourly && (f.startDatetime || f.endDatetime)) {
+        baseParams.start_datetime = f.startDatetime;
+        baseParams.end_datetime = f.endDatetime;
+      } else {
+        baseParams.start_date = f.startDate || defaultStartDate.toISOString().split('T')[0];
+        baseParams.end_date = f.endDate || defaultEndDate.toISOString().split('T')[0];
+      }
 
       const resp = await fetch(buildApiUrl(indicatorsEndpoint, baseParams), {
         headers: { 'Authorization': `Token ${authToken}`, 'Content-Type': 'application/json' },
