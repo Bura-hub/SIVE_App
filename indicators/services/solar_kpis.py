@@ -86,10 +86,15 @@ def calcular(institution, start_date, end_date, granularidad='month'):
     horas = energia_horaria(institution.scada_id, start_date, end_date)
     irr = irradiacion_diaria(institution.scada_id, start_date, end_date)
 
-    # Energía AC por día, para el PR (solo días con irradiación válida).
-    e_dia = {}
+    # Energía AC por día y horas de sol con lectura del inversor, para el PR: un día cuenta solo si la estación
+    # es válida Y el inversor tiene lectura en ≥ 80 % de las horas de sol (sin eso, el PR mide el hueco de datos).
+    e_dia, horas_sol_dato = {}, {}
     for h in horas:
-        e_dia[h['hora'].date()] = e_dia.get(h['hora'].date(), 0.0) + h['g_kwh']
+        dia = h['hora'].date()
+        e_dia[dia] = e_dia.get(dia, 0.0) + h['g_kwh']
+        if HORA_INICIO_DIA_SOLAR <= h['hora'].hour < HORA_FIN_DIA_SOLAR and h['n_g'] > 0:
+            horas_sol_dato[dia] = horas_sol_dato.get(dia, 0) + 1
+    minimo_horas_sol = 0.8 * (HORA_FIN_DIA_SOLAR - HORA_INICIO_DIA_SOLAR)
 
     periodos = OrderedDict()
     total = _nuevo_acumulador()
@@ -120,7 +125,9 @@ def calcular(institution, start_date, end_date, granularidad='month'):
 
     for dia, d_irr in irr.items():
         for acc in ([periodos[_clave(dia, granularidad)]] if _clave(dia, granularidad) in periodos else []) + [total]:
-            if d_irr['valido']:
+            if d_irr['valido'] and horas_sol_dato.get(dia, 0) < minimo_horas_sol:
+                acc['pr_motivos'].add('inversor sin lecturas en ≥ 80 % de las horas de sol')
+            elif d_irr['valido']:
                 acc['pr_e'] += e_dia.get(dia, 0.0)
                 acc['pr_ref'] += d_irr['h_kwh_m2'] * kwp
                 acc['pr_dias'] += 1

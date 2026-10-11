@@ -138,6 +138,15 @@ class IrradiacionYPRTests(_Base):
         self.assertIsNone(r['total']['performance_ratio'])
         self.assertIn('cobertura diurna', r['total']['pr_motivo'])
 
+    def test_dia_sin_datos_del_inversor_no_cuenta_en_pr(self):
+        inst, devs = self._institucion(HUDN, 'HUDN')
+        cfg = INSTITUCIONES[HUDN]
+        for hora in range(6, 18):                           # estación completa, inversor sin datos
+            self._serie(WeatherStationMeasurement, devs[cfg['estacion']], 'irradiance', DIA, hora, 500.0)
+        r = solar_kpis.calcular(inst, DIA, DIA, 'day')
+        self.assertIsNone(r['total']['performance_ratio'])
+        self.assertIn('inversor sin lecturas', r['total']['pr_motivo'])
+
     def test_estacion_no_apta(self):
         inst, devs = self._institucion(UDENAR, 'Udenar')
         cfg = INSTITUCIONES[UDENAR]
