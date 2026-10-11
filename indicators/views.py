@@ -1050,13 +1050,17 @@ class InverterIndicatorsView(APIView):
                     sum_fields=['energy_ac_daily_kwh', 'energy_dc_daily_kwh',
                                 'total_generated_energy_kwh', 'reference_energy_kwh',
                                 'measurement_count'],
+                    # PR: solo el inversor de generación de la planta tiene PR (institution_config),
+                    # así que el Avg (que ignora NULL) es el PR de la planta. NULL si ninguno lo
+                    # tiene, con su motivo en performance_ratio_note.
                     avg_fields=['dc_ac_efficiency_pct', 'performance_ratio_pct',
                                 'avg_irradiance_wm2', 'avg_temperature_c',
-                                'avg_power_factor_pct', 'avg_reactive_power_var',
+                                'avg_power_factor', 'avg_reactive_power_var',
                                 'avg_apparent_power_va', 'avg_frequency_hz',
                                 'frequency_stability_pct', 'anomaly_score'],
                     max_fields=['max_power_w', 'max_voltage_unbalance_pct',
-                                'max_current_unbalance_pct', 'last_measurement_date'],
+                                'max_current_unbalance_pct', 'last_measurement_date',
+                                'performance_ratio_valid_days', 'performance_ratio_note'],
                     min_fields=['min_power_w'],
                 )
             else:

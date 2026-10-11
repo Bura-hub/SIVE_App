@@ -392,3 +392,48 @@ def calculate_wind_speed_distribution(wind_speeds):
             speed_ranges['30+'] += 1
     
     return speed_ranges
+
+
+# ---------------------------------------------------------------------------------------------
+# Irradiación diaria para el Performance Ratio (D5, corrección de octubre de 2026)
+# ---------------------------------------------------------------------------------------------
+
+PR_IRRADIANCE_MAX_WM2 = 1400.0         # tope físico de una muestra (con realce por nubes)
+PR_DAYLIGHT_START_HOUR = 6             # ventana diurna en hora de Bogotá: [06:00, 18:00)
+PR_DAYLIGHT_END_HOUR = 18
+PR_EXPECTED_DAYLIGHT_SAMPLES = 360     # 12 h × 30 muestras/h (Δt = 2 min)
+PR_MIN_COVERAGE = 0.80                 # ≥ 80 % de las muestras diurnas esperadas
+PR_MAX_DAILY_KWH_M2 = 8.0              # por encima, el día no es físico (sensor descalibrado)
+
+
+def daily_irradiation_for_pr(rows):
+    """Irradiación diurna por día de Bogotá para el PR, a partir de filas
+    `.values('date', 'irradiance')` de la estación.
+
+        H_día = Σ irradiancia (W/m²) de las muestras de 06:00–18:00 en [0, 1400] × (2/60) / 1000
+
+    Devuelve {día: (H en kWh/m², válido)}; un día es válido si tiene al menos el 80 % de las 360
+    muestras diurnas esperadas y 0 < H ≤ 8 kWh/m²."""
+    sums = {}
+    counts = {}
+    for row in rows:
+        irr = row['irradiance']
+        local = row['date'].astimezone(COLOMBIA_TZ)
+        if not (PR_DAYLIGHT_START_HOUR <= local.hour < PR_DAYLIGHT_END_HOUR):
+            continue
+        day = local.date()
+        sums.setdefault(day, 0.0)
+        counts.setdefault(day, 0)
+        if irr is None or not (0.0 <= float(irr) <= PR_IRRADIANCE_MAX_WM2):
+            continue
+        sums[day] += float(irr)
+        counts[day] += 1
+
+    result = {}
+    min_samples = PR_MIN_COVERAGE * PR_EXPECTED_DAYLIGHT_SAMPLES
+    for day, total in sums.items():
+        h = total * (2 / 60) / 1000
+        # H = 0 con cobertura completa es un sensor muerto, no un día sin sol.
+        ok = counts[day] >= min_samples and 0.0 < h <= PR_MAX_DAILY_KWH_M2
+        result[day] = (h, ok)
+    return result

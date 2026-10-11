@@ -50,7 +50,18 @@ from indicators.services.date_ranges import (  # noqa: E402,F401
 )
 from indicators.services.device_calc import run_over_days, run_over_months  # noqa: E402
 from indicators.services.meter_calc import METER_FIELDS, compute_meter_indicators  # noqa: E402
-from indicators.services.inverter_calc import INVERTER_FIELDS, compute_inverter_indicators  # noqa: E402
+from indicators.services.inverter_calc import (  # noqa: E402
+    INVERTER_FIELDS,
+    PR_REASON_NO_PLANT,
+    PR_REASON_NO_STATION,
+    PR_REASON_STATION_NOT_APT,
+    compute_inverter_hourly_chart,
+    compute_inverter_indicators,
+    compute_performance_ratio,
+    daily_ac_energy_kwh,
+    pr_unavailable,
+)
+from indicators.institution_config import config_institucion, inversor_vigente  # noqa: E402
 from indicators.services.rows import _row_get  # noqa: E402,F401
 
 @shared_task(bind=True, retry_backoff=60, max_retries=3)
@@ -531,6 +542,9 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
         computed = compute_inverter_indicators(
             measurements.values(*INVERTER_FIELDS).iterator(chunk_size=2000)
         )
+        # Performance Ratio con la estación de la institución (C4/D5).
+        computed.update(_inverter_performance_ratio(
+            device, start_date, end_date - timedelta(days=1), measurements))
 
         # Guardar o actualizar los indicadores
         indicators, created = InverterIndicators.objects.update_or_create(
@@ -545,78 +559,62 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
             }
         )
 
-        # Crear datos para gráficos
-        hourly_data = _calculate_hourly_inverter_data(
-            measurements.values('date', 'acPower', 'dcPower').iterator(chunk_size=2000)
-        )
-        
-        chart_data, chart_created = InverterChartData.objects.update_or_create(
-            device=device,
-            institution=institution,
-            date=date,
-            defaults=hourly_data
-        )
-        
+        # Gráfica horaria: solo para el diario. InverterChartData es única por (device, date) sin
+        # time_range, así que la corrida mensual (date = día 1) pisaba la gráfica del día 1 con
+        # medias horarias de todo el mes.
+        if time_range == 'daily':
+            hourly_data = _calculate_hourly_inverter_data(
+                measurements.values('date', 'acPower', 'dcPower').iterator(chunk_size=2000)
+            )
+            InverterChartData.objects.update_or_create(
+                device=device,
+                institution=institution,
+                date=date,
+                defaults=hourly_data
+            )
+
         action = "creado" if created else "actualizado"
         return f"Indicadores de inversor {action} para {device.name} en {date} ({time_range})"
-        
+
     except Exception as e:
+        # Fallar en voz alta: se registra con traza (antes solo se devolvía el texto del error).
+        logger.error(f"Error calculando indicadores de inversor {device_id} {date_str} ({time_range}): {e}",
+                     exc_info=True)
         return f"Error calculando indicadores de inversor: {str(e)}"
 
 
-def _calculate_hourly_inverter_data(measurements):
-    """
-    Calcula datos por hora para gráficos de inversores.
+def _inverter_performance_ratio(device, first_day, last_day, measurements):
+    """PR del inversor entre `first_day` y `last_day` (inclusive, días de Bogotá), con la estación
+    de su institución según `institution_config` (D5). Devuelve los campos performance_ratio_* y
+    reference_energy_kwh, con el motivo cuando el PR no se puede calcular."""
+    config = config_institucion(device.institution.scada_id) if device.institution else None
+    if not config or str(device.scada_id) not in config['inversores_generacion']:
+        return pr_unavailable(PR_REASON_NO_PLANT)
+    if not config['estacion_apta_pr']:
+        return pr_unavailable(PR_REASON_STATION_NOT_APT.format(institucion=config['nombre']))
+    station = Device.objects.filter(scada_id=config['estacion']).first()
+    if station is None:
+        return pr_unavailable(PR_REASON_NO_STATION.format(institucion=config['nombre']))
 
-    Recibe filas dict (v2: `.values('date', 'acPower', 'dcPower')`).
-    """
-    hourly_efficiency = [0] * 24
-    hourly_generation = [0] * 24
-    hourly_irradiance = [0] * 24
-    hourly_temperature = [0] * 24
-    hourly_dc_power = [0] * 24
-    hourly_ac_power = [0] * 24
-
-    hourly_counts = [0] * 24
-
-    for row in measurements:
-        hour = row['date'].hour
-
-        # Acumular valores por hora
-        if row['acPower'] is not None:
-            hourly_ac_power[hour] += row['acPower']
-            hourly_counts[hour] += 1
-
-        if row['dcPower'] is not None:
-            hourly_dc_power[hour] += row['dcPower']
-
-        # v2: la categoría 'inverter' no tiene columnas irradiance/temperature
-        # (en v1 data.get(...) devolvía None y nunca se acumulaba nada):
-        # hourly_irradiance y hourly_temperature quedan en 0, como antes.
-    
-    # Calcular promedios por hora
-    for hour in range(24):
-        if hourly_counts[hour] > 0:
-            hourly_ac_power[hour] /= hourly_counts[hour]
-            hourly_dc_power[hour] /= hourly_counts[hour]
-            hourly_irradiance[hour] /= hourly_counts[hour]
-            hourly_temperature[hour] /= hourly_counts[hour]
-            
-            # Calcular eficiencia por hora
-            if hourly_dc_power[hour] > 0:
-                hourly_efficiency[hour] = (hourly_ac_power[hour] / hourly_dc_power[hour]) * 100
-            
-            # Convertir potencia a energía (kWh) - asumiendo mediciones cada 2 minutos
-            hourly_generation[hour] = hourly_ac_power[hour] * (2/60) / 1000
-    
-    return {
-        'hourly_efficiency': hourly_efficiency,
-        'hourly_generation': hourly_generation,
-        'hourly_irradiance': hourly_irradiance,
-        'hourly_temperature': hourly_temperature,
-        'hourly_dc_power': hourly_dc_power,
-        'hourly_ac_power': hourly_ac_power,
+    start_dt, end_dt = colombia_day_range(first_day, last_day)
+    irradiation = daily_irradiation_for_pr(
+        WeatherStationMeasurement.objects.filter(
+            device=station, date__gte=start_dt, date__lt=end_dt,
+        ).values('date', 'irradiance').iterator(chunk_size=2000)
+    )
+    energy = {
+        day: e for day, e in daily_ac_energy_kwh(
+            measurements.values('date', 'acPower').iterator(chunk_size=2000)
+        ).items()
+        if inversor_vigente(config, device.scada_id, day)
     }
+    return compute_performance_ratio(energy, irradiation, config['kwp'])
+
+
+def _calculate_hourly_inverter_data(measurements):
+    """Datos por hora (Bogotá) para la gráfica del inversor. Ver
+    `services.inverter_calc.compute_inverter_hourly_chart` (C5 y C7)."""
+    return compute_inverter_hourly_chart(measurements)
 
 
 @shared_task
@@ -936,6 +934,7 @@ def calculate_monthly_weather_indicators(station, measurements, start_date, end_
 # `hourly_*` de WeatherStationChartData) fallaban en silencio. Se añade aquí junto con
 # `calculate_single_hour_weather_indicators`, que usa el rollup horario nuevo.
 from indicators.services.weather_calc import (  # noqa: E402,F401
+    daily_irradiation_for_pr,
     calculate_single_day_weather_indicators,
     calculate_single_month_weather_indicators,
     calculate_single_day_weather_chart_data,
@@ -1142,7 +1141,7 @@ def _calculate_hourly_inverter_row(inverter, hour_start):
             'avg_power_w': avg_power_w,
             'max_power_w': computed['max_power_w'],
             'min_power_w': computed['min_power_w'],
-            'avg_power_factor_pct': computed['avg_power_factor_pct'],
+            'avg_power_factor': computed['avg_power_factor'],
             'avg_reactive_power_var': computed['avg_reactive_power_var'],
             'avg_apparent_power_va': computed['avg_apparent_power_va'],
             'avg_frequency_hz': computed['avg_frequency_hz'],
@@ -1602,15 +1601,17 @@ def generate_inverter_report(institution_id, devices, report_type, time_range, s
     # Obtener datos según el tipo de reporte
     if report_type == 'Resumen de Generación':
         data = InverterIndicators.objects.filter(filters).select_related('device')
-        columns = ['device__name', 'date', 'total_generated_energy_kwh', 'dc_ac_efficiency_pct', 'energy_ac_daily_kwh']
+        # Sin eficiencia DC/AC: no se calcula (C3/D6, `dcPower` mide una sola entrada MPPT).
+        columns = ['device__name', 'date', 'total_generated_energy_kwh', 'energy_ac_daily_kwh', 'max_power_w']
         
     elif report_type == 'Análisis de Rendimiento':
         data = InverterIndicators.objects.filter(filters).select_related('device')
-        columns = ['device__name', 'date', 'performance_ratio_pct', 'avg_irradiance_wm2', 'avg_temperature_c']
+        # PR con la estación de la institución (C4/D5); el inversor no mide irradiancia ni temperatura.
+        columns = ['device__name', 'date', 'performance_ratio_pct', 'reference_energy_kwh', 'performance_ratio_valid_days']
         
     elif report_type == 'Métricas Operativas':
         data = InverterIndicators.objects.filter(filters).select_related('device')
-        columns = ['device__name', 'date', 'avg_power_factor_pct', 'avg_frequency_hz', 'frequency_stability_pct']
+        columns = ['device__name', 'date', 'avg_power_factor', 'avg_frequency_hz', 'frequency_stability_pct']
         
     elif report_type == 'Reporte de Anomalías':
         data = InverterIndicators.objects.filter(filters).select_related('device')
@@ -1618,7 +1619,7 @@ def generate_inverter_report(institution_id, devices, report_type, time_range, s
         
     elif report_type == 'Reporte Integral':
         data = InverterIndicators.objects.filter(filters).select_related('device')
-        columns = ['device__name', 'date', 'total_generated_energy_kwh', 'dc_ac_efficiency_pct', 'performance_ratio_pct', 'avg_power_factor_pct']
+        columns = ['device__name', 'date', 'total_generated_energy_kwh', 'performance_ratio_pct', 'avg_power_factor']
         
     else:
         raise ValueError(f"Tipo de reporte no válido: {report_type}")
