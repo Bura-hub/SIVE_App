@@ -79,11 +79,13 @@ class EnergiaHorariaTests(_Base):
     def test_faltante_cero_en_generacion_y_hora_de_medidor_invalida(self):
         inst, devs = self._institucion(HUDN, 'HUDN')
         cfg = INSTITUCIONES[HUDN]
-        self._serie(InverterMeasurement, devs[cfg['inversores_generacion'][0]], 'acPower', DIA, 12, 6000.0, n=15)
+        self._serie(InverterMeasurement, devs[cfg['inversores_generacion'][0]], 'acPower', DIA, 12, 6000.0, n=10)
+        self._serie(InverterMeasurement, devs[cfg['inversores_generacion'][0]], 'acPower', DIA, 13, 6000.0, n=20)
         self._serie(MeterMeasurement, devs[cfg['medidor_demanda']], 'totalActivePower', DIA, 12, 9.0, n=14)
-        h = next(x for x in energia_horaria(HUDN, DIA, DIA) if x['hora'].hour == 12)
-        self.assertAlmostEqual(h['g_kwh'], 3.0)          # 15 muestras: la mitad, no se rellena
-        self.assertIsNone(h['d_kwh'])                    # < 15 muestras: hora del medidor no válida
+        horas = {x['hora'].hour: x for x in energia_horaria(HUDN, DIA, DIA)}
+        self.assertAlmostEqual(horas[12]['g_kwh'], 2.0)  # 10 < 15 lecturas: faltante = 0, no se repone
+        self.assertAlmostEqual(horas[13]['g_kwh'], 6.0)  # 20 de 30: se reponen las perdidas con la media
+        self.assertIsNone(horas[12]['d_kwh'])            # < 15 muestras: hora del medidor no válida
 
     def test_medidor_neto_reconstruye_demanda_y_mide_exportacion(self):
         inst, devs = self._institucion(MARIANA, 'Mariana')

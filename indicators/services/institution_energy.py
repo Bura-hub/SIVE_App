@@ -1,8 +1,11 @@
 """
 Energía horaria por institución con la convención de la tesis y del mercado P2P (diseño, decisiones D2 y D3).
 
-- G (generación): Σ acPower de los inversores de generación vigentes, en kWh por hora, con «faltante = 0»: la
-  energía de la hora es Σ P·Δt con Δt nominal de 2 min. Una muestra que no llegó no suma; no se rellena.
+- G (generación): Σ acPower de los inversores de generación vigentes, en kWh por hora (Δt nominal de 2 min).
+  Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes (Σ P·Δt × 30/n),
+  como la tesis; con menos de 15 (amanecer, atardecer, caídas) rige «faltante = 0», como el mercado P2P. Así una RPi
+  que pierde lecturas sueltas (HUDN perdió hasta un 25 % en sep-2026) no se lee como menos generación: con
+  «faltante = 0» puro, sep-2026 salía −25 % frente a Solar.web; reponiendo, cuadra (−0,7 %).
 - D (demanda del circuito medido): media de totalActivePower del medidor principal (M1) en la hora × 1 h, válida solo
   si la hora tiene ≥ 15 de 30 muestras (como el motor del mercado). En medidores netos se reconstruye
   D = max(0, P_M1 + Σ inversores aguas abajo).
@@ -83,7 +86,12 @@ def _energia_horaria_sin_cache(institution_scada_id, start_date, end_date):
 
     def kwh(scada_id, hora):
         s, n = inv.get((scada_id, hora), (None, 0))
-        return (max(s, 0.0) * DT_H / 1000.0 if s is not None else 0.0), n
+        if s is None:
+            return 0.0, n
+        e = max(s, 0.0) * DT_H / 1000.0
+        if MINIMO_MUESTRAS_MEDIDOR <= n < MUESTRAS_HORA:
+            e *= MUESTRAS_HORA / n          # repone lecturas perdidas sueltas en una hora casi completa
+        return e, n
 
     horas = []
     for hora in _horas(inicio, fin):
@@ -133,7 +141,7 @@ def _meses(start_date, end_date):
 
 
 def _clave_energia(institution_scada_id, mes):
-    return f'energia-horaria:v1:{institution_scada_id}:{mes:%Y-%m}'
+    return f'energia-horaria:v2:{institution_scada_id}:{mes:%Y-%m}'
 
 
 def _clave_irradiacion(institution_scada_id, mes):
