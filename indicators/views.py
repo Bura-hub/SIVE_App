@@ -1531,11 +1531,14 @@ class WeatherStationIndicatorsView(APIView):
             # Sin device_id, daily/monthly consolida por periodo (Sum/Avg/Max/Min entre
             # dispositivos) para no devolver N puntos duplicados por fecha (N=dispositivos).
             if not device_id and time_range in ('daily', 'monthly'):
+                # C8: irradiación, HSP y precipitación son magnitudes por estación (por m² o por
+                # pluviómetro): entre estaciones se promedian, no se suman (antes se sumaban).
                 results = aggregate_indicators_by_period(
                     indicators,
-                    sum_fields=['daily_irradiance_kwh_m2', 'daily_hsp_hours',
-                                'daily_precipitation_cm', 'measurement_count'],
-                    avg_fields=['avg_wind_speed_kmh', 'avg_temperature_c',
+                    sum_fields=['measurement_count'],
+                    avg_fields=['daily_irradiance_kwh_m2', 'daily_hsp_hours',
+                                'daily_precipitation_cm',
+                                'avg_wind_speed_kmh', 'avg_temperature_c',
                                 'avg_humidity_pct', 'theoretical_pv_power_w'],
                     max_fields=['max_temperature_c'],
                     min_fields=['min_temperature_c'],
