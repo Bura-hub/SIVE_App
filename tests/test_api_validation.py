@@ -149,8 +149,13 @@ class ChartDataValidationTests(TestCase):
     def test_valido_da_200(self):
         self.assertEqual(self._get({'start_date': '2026-07-01', 'end_date': '2026-07-10'}).status_code, 200)
 
-    def test_sin_auth_no_autorizado(self):
-        self.assertIn(self._get({}, authed=False).status_code, (401, 403))
+    def test_sin_auth_lectura_publica(self):
+        # Modo invitado: el GET de la gráfica del dashboard es de lectura pública.
+        self.assertEqual(self._get({}, authed=False).status_code, 200)
+
+    def test_sin_auth_no_puede_escribir(self):
+        req = self.factory.post('/api/dashboard/chart-data/', {})
+        self.assertIn(ChartDataView.as_view()(req).status_code, (401, 403))
 
     def test_forma_de_respuesta_con_serializer(self):
         # Con datos reales, la respuesta (DashboardChartPointSerializer) conserva la forma:
