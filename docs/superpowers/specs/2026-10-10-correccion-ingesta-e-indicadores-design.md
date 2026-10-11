@@ -137,3 +137,15 @@ recalcular y administrar piden sesión.
 ## 4. Registro de cambios (antes → después)
 
 Se completa con cada commit de la rama.
+
+**D1 — Reconciliación de mediciones** (`17b82c3`; `scada_proxy/tasks.py`, `core/settings.py`, comando
+`reconcile_measurements`, `tests/test_reconcile_measurements.py`).
+- Antes: la ingesta pedía las últimas 3 h cada hora y `refetch_and_verify_yesterday` re-descargaba solo ayer a la 01:30;
+  lo que las RPi enviaban con más retraso no entraba nunca (§2.2).
+- Después: `reconcile_measurements` compara por dispositivo y día de Bogotá el conteo de SIVE con `meta.total` del
+  conector y re-descarga con upsert solo los días distintos; la diferencia que persiste se registra y alerta, y sigue.
+  Recalcula solo lo que ganó filas: diarios y rollup horario por dispositivo y rango de días, chart diario, mensuales
+  de los meses tocados y el KPI mensual una vez. En el beat, `reconcile-measurements-daily` (01:30, hoy y 35 días atrás)
+  y `reconcile-measurements-6h` (cada 6 h en :40, hoy y 2 días atrás); `refetch_and_verify_yesterday` queda como alias y
+  su entrada del beat, deshabilitada desde `settings` (el `DatabaseScheduler` la desactiva al arrancar). Cubre también
+  C15 (los diarios de ayer se recalculan si ayer ganó filas).
