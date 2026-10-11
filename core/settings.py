@@ -218,13 +218,25 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',  # Esquema OpenAPI
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
+        # Igual que AnonRateThrottle ('anon') salvo en las lecturas públicas del modo
+        # invitado, que usan su propio cupo ('anon_read' / 'anon_xm'). Ver core/throttling.py.
+        'core.throttling.GuestAwareAnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
-        'user': '1000/day'
+        'user': '1000/day',
+        # Modo invitado: lectura anónima de las pantallas de datos (por IP).
+        'anon_read': os.getenv('SIVE_GUEST_READ_RATE', '120/min'),
+        # Modo invitado: vistas que pueden consultar la API de XM en vivo (por IP).
+        'anon_xm': os.getenv('SIVE_GUEST_XM_RATE', '30/min'),
     },
+    # Proxies de confianza delante del backend (Apache -> backend = 1). DRF identifica al
+    # anónimo por el último salto de X-Forwarded-For (el que añade el proxy), no por la
+    # cabecera completa que el cliente puede falsear; sin esto todos los invitados
+    # compartirían la IP del gateway de Docker o podrían saltarse el cupo cambiando la cabecera.
+    # 0 = usar REMOTE_ADDR (despliegue sin proxy).
+    'NUM_PROXIES': int(os.getenv('SIVE_NUM_PROXIES', '1')),
     # Paginación global: acota el payload de los ViewSets/generics que devuelven listas.
     # Los endpoints cuyo shape plano/custom consume el frontend se eximen con
     # pagination_class = None en la vista (ver ElectricMeterIndicatorsViewSet).
@@ -300,7 +312,7 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'scada_proxy.tasks.fetch_historical_measurements_for_all_devices',
         'schedule': crontab(minute=10),  # Cada hora en :10 (después de sync)
         # Ventana de 3h con cadencia 1h: tolera caídas del connector de hasta
-        # ~2h sin pérdida (upserts idempotentes); >2h lo cubre el refetch de ayer.
+        # ~2h sin pérdida (upserts idempotentes); >2h lo cubre la reconciliación (D1).
         'args': (int(timedelta(hours=3).total_seconds()),),
     },
     'check-devices-status-hourly': {
@@ -311,9 +323,37 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'scada_proxy.tasks.repair_device_relationships',
         'schedule': crontab(minute=2),
     },
+    # D1 (diseño 2026-10-10): las RPi envían colas atrasadas días después y la
+    # ventana de 3 h no las recoge. La reconciliación compara por dispositivo y
+    # día el conteo local con meta.total del connector, re-descarga solo los días
+    # distintos y recalcula solo lo tocado.
+    'reconcile-measurements-daily': {
+        'task': 'scada_proxy.tasks.reconcile_recent_measurements',
+        'schedule': crontab(hour=1, minute=30),  # Diario 01:30 Bogotá: hoy + 35 días atrás
+        'kwargs': {'days': 35},
+    },
+    'reconcile-measurements-6h': {
+        'task': 'scada_proxy.tasks.reconcile_recent_measurements',
+        'schedule': crontab(hour='6,12,18', minute=40),  # Cada 6 h en :40: hoy + 2 días atrás
+        'kwargs': {'days': 2},
+    },
+    # La de las 00:40 es la misma reconciliación, pero recalcula SIEMPRE el día de
+    # ayer completo (diarios, chart, rollup y mensual de su mes) aunque los conteos
+    # coincidan: las filas que la ingesta horaria trae después del recálculo de las
+    # 23:10 no cambian los conteos y, sin esto, el diario de ayer quedaba a medias (C15).
+    'reconcile-measurements-midnight': {
+        'task': 'scada_proxy.tasks.reconcile_recent_measurements',
+        'schedule': crontab(hour=0, minute=40),
+        'kwargs': {'days': 2, 'force_recalc_days': 1},
+    },
+    # Sustituida por reconcile-measurements-daily. Se conserva DESHABILITADA:
+    # el DatabaseScheduler crea/actualiza las PeriodicTask por nombre pero no
+    # borra las obsoletas; con 'enabled': False la fila existente en la BD queda
+    # desactivada sola al arrancar el beat (sin tocar el admin).
     'refetch-verify-yesterday-daily': {
         'task': 'scada_proxy.tasks.refetch_and_verify_yesterday',
-        'schedule': crontab(hour=1, minute=30),  # Diario 01:30 Bogotá
+        'schedule': crontab(hour=1, minute=30),
+        'enabled': False,
     },
     'sync-external-energy-daily': {
         'task': 'external_energy.tasks.sync_external_energy_data',

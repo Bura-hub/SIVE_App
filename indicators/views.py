@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
-from core.permissions import IsSuperUser
+from core.permissions import IsAuthenticatedOrPublicRead, IsSuperUser
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiRequest, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 import logging
@@ -60,11 +60,11 @@ from indicators.services.queries import apply_device_filter, aggregate_indicator
 from indicators.serializers import DashboardChartPointSerializer  # noqa: E402
 
 class ConsumptionSummaryView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     # Caché GLOBAL (no por token): la respuesta es data de flota idéntica para todos los
-    # usuarios autenticados. Se consulta dentro de get(), DESPUÉS de que DRF autentique,
-    # para no exponer datos a anónimos (a diferencia de cache_page a nivel dispatch).
+    # usuarios, invitados incluidos (lectura pública). Se consulta dentro de get(), después
+    # de que DRF aplique permisos y throttling.
     CACHE_KEY = 'dashboard:summary:v1'
     CACHE_TTL = 60 * 5
 
@@ -110,10 +110,8 @@ class ConsumptionSummaryView(APIView):
         if cached is not None:
             return Response(cached)
 
-        token = self.get_scada_token()
-        if isinstance(token, Response):
-            return token
-
+        # Ya no se consulta el conector (C12: los inversores activos salen de la BD de SIVE); el resumen no
+        # depende de que el SCADA responda.
         try:
             # Obtener el registro de KPI pre-calculado
             kpi_record = MonthlyConsumptionKPI.objects.first()
@@ -167,46 +165,24 @@ class ConsumptionSummaryView(APIView):
             avg_irradiance_previous = kpi_record.avg_irradiance_previous_month
             logger.info(f"Avg Irradiance: Current: {avg_irradiance_current} W/m², Previous: {avg_irradiance_previous} W/m²")
 
-            # --- Inversores Activos (Real-time from SCADA API) ---
-            active_inverters_count = 0
-            total_inverters_count = 0
-            inverter_status_text = "normal"
-            inverter_description_text = "Cargando..."
-
-            try:
-                inverter_category_obj = DeviceCategory.objects.get(name='inverter')
-                inverter_scada_id = inverter_category_obj.scada_id
-
-                scada_inverters_response = scada_client.get_devices(token, category_scada_id=inverter_scada_id) 
-                scada_inverters = scada_inverters_response.get('data', [])
-
-                inv_summary = summarize_inverter_status(scada_inverters)
-                active_inverters_count = inv_summary['active']
-                total_inverters_count = inv_summary['total']
-                inverter_status_text = inv_summary['status']
-                inverter_description_text = inv_summary['description']
-
-                logger.info(f"Inverters: Active: {active_inverters_count}, Total: {total_inverters_count}")
-
-            except DeviceCategory.DoesNotExist:
-                logger.error("Inverter category not found in local DB. Cannot fetch real-time inverters from SCADA.")
-                inverter_status_text = "error"
-                inverter_description_text = "Categoría 'inverter' no encontrada localmente."
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Error getting real-time inverter data from SCADA: {e}")
-                inverter_status_text = "error"
-                inverter_description_text = "Error de conexión SCADA"
-            except Exception as e:
-                logger.error(f"Error processing real-time inverter data: {e}", exc_info=True)
-                inverter_status_text = "error"
-                inverter_description_text = "Error interno"
+            # --- Inversores activos (C12) ---
+            # Solo los inversores de las plantas del proyecto vigentes hoy (institution_config: sin los de prueba ni
+            # los Fronius de Udenar retirados el 2026-04-11), y «activo» = con lecturas en SIVE en las últimas 24 h.
+            # Antes se contaba el `status` del conector para todos los inversores registrados; de noche los
+            # inversores no publican y salían «offline», y los de prueba y retirados inflaban el total («4/10»).
+            from indicators.services.kpi import summarize_plant_inverters
+            inv_summary = summarize_plant_inverters()
+            active_inverters_count = inv_summary['active']
+            total_inverters_count = inv_summary['total']
+            inverter_status_text = inv_summary['status']
+            inverter_description_text = inv_summary['description']
 
             # calculate_kpi_metrics: importado de services/kpi.py (Ola 5).
             # KPI de Consumo Total (NETO)
             consumption_kpi = calculate_kpi_metrics(
                 total_consumption_current_month,
                 total_consumption_previous_month,
-                "Consumo total",
+                "Demanda (circuitos medidos)",
                 "kWh"
             )
 
@@ -214,7 +190,7 @@ class ConsumptionSummaryView(APIView):
             gross_consumption_kpi = calculate_kpi_metrics(
                 total_gross_consumption_current_month,
                 total_gross_consumption_previous_month,
-                "Consumo bruto (red)",
+                "Energía tomada de la red",
                 "kWh"
             )
 
@@ -222,7 +198,7 @@ class ConsumptionSummaryView(APIView):
             generation_kpi = calculate_kpi_metrics(
                 total_generation_current_month,
                 total_generation_previous_month,
-                "Generación total",
+                "Generación (plantas FV)",
                 "kWh" 
             )
 
@@ -230,7 +206,7 @@ class ConsumptionSummaryView(APIView):
             energy_balance_kpi = calculate_kpi_metrics(
                 net_balance_current_month,
                 net_balance_previous_month, 
-                "Equilibrio energético",
+                "Balance generación − demanda",
                 "kWh", 
                 is_balance=True
             )
@@ -239,7 +215,7 @@ class ConsumptionSummaryView(APIView):
             avg_power_kpi = calculate_kpi_metrics(
                 avg_instantaneous_power_current,
                 avg_instantaneous_power_previous,
-                "Pot. instan. promedio", 
+                "Potencia media de la flota", 
                 "W", 
                 is_average_power=True 
             )
@@ -328,7 +304,7 @@ class ConsumptionSummaryView(APIView):
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ChartDataView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener datos diarios de consumo, generación, balance, temperatura, velocidad del viento e irradiancia",
@@ -572,7 +548,7 @@ class InstitutionsListView(APIView):
     """
     Vista para obtener la lista de instituciones disponibles
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener lista de instituciones",
@@ -616,7 +592,7 @@ class ElectricMetersListView(APIView):
     """
     Vista para obtener la lista de medidores eléctricos por institución
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener lista de medidores eléctricos",
@@ -763,7 +739,7 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
     Vista para obtener indicadores eléctricos de medidores.
     """
     serializer_class = ElectricMeterIndicatorsSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
     # Contrato con el frontend: ElectricalDetails.js consume {'summary', 'results'} con
     # 'results' como la lista COMPLETA del rango pedido. La paginación global de DRF no
     # debe alterar ese shape; el payload se acota por rango de fechas (31 días por
@@ -947,7 +923,7 @@ class InverterIndicatorsView(APIView):
     """
     Vista para obtener indicadores de inversores.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     def get(self, request, *args, **kwargs):
         """
@@ -1050,13 +1026,17 @@ class InverterIndicatorsView(APIView):
                     sum_fields=['energy_ac_daily_kwh', 'energy_dc_daily_kwh',
                                 'total_generated_energy_kwh', 'reference_energy_kwh',
                                 'measurement_count'],
+                    # PR: solo el inversor de generación de la planta tiene PR (institution_config),
+                    # así que el Avg (que ignora NULL) es el PR de la planta. NULL si ninguno lo
+                    # tiene, con su motivo en performance_ratio_note.
                     avg_fields=['dc_ac_efficiency_pct', 'performance_ratio_pct',
                                 'avg_irradiance_wm2', 'avg_temperature_c',
-                                'avg_power_factor_pct', 'avg_reactive_power_var',
+                                'avg_power_factor', 'avg_reactive_power_var',
                                 'avg_apparent_power_va', 'avg_frequency_hz',
                                 'frequency_stability_pct', 'anomaly_score'],
                     max_fields=['max_power_w', 'max_voltage_unbalance_pct',
-                                'max_current_unbalance_pct', 'last_measurement_date'],
+                                'max_current_unbalance_pct', 'last_measurement_date',
+                                'performance_ratio_valid_days', 'performance_ratio_note'],
                     min_fields=['min_power_w'],
                 )
             else:
@@ -1099,7 +1079,7 @@ class InverterChartDataView(APIView):
     """
     Vista para obtener datos de gráficos de inversores.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
     
     def get(self, request, *args, **kwargs):
         """
@@ -1320,7 +1300,7 @@ class InvertersListView(APIView):
     """
     Vista para listar inversores filtrados por institución.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
     
     def get(self, request, *args, **kwargs):
         """
@@ -1366,7 +1346,7 @@ class InvertersListView(APIView):
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class WeatherStationIndicatorsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener indicadores de estaciones meteorológicas",
@@ -1527,11 +1507,14 @@ class WeatherStationIndicatorsView(APIView):
             # Sin device_id, daily/monthly consolida por periodo (Sum/Avg/Max/Min entre
             # dispositivos) para no devolver N puntos duplicados por fecha (N=dispositivos).
             if not device_id and time_range in ('daily', 'monthly'):
+                # C8: irradiación, HSP y precipitación son magnitudes por estación (por m² o por
+                # pluviómetro): entre estaciones se promedian, no se suman (antes se sumaban).
                 results = aggregate_indicators_by_period(
                     indicators,
-                    sum_fields=['daily_irradiance_kwh_m2', 'daily_hsp_hours',
-                                'daily_precipitation_cm', 'measurement_count'],
-                    avg_fields=['avg_wind_speed_kmh', 'avg_temperature_c',
+                    sum_fields=['measurement_count'],
+                    avg_fields=['daily_irradiance_kwh_m2', 'daily_hsp_hours',
+                                'daily_precipitation_cm',
+                                'avg_wind_speed_kmh', 'avg_temperature_c',
                                 'avg_humidity_pct', 'theoretical_pv_power_w'],
                     max_fields=['max_temperature_c'],
                     min_fields=['min_temperature_c'],
@@ -1562,7 +1545,7 @@ class WeatherStationIndicatorsView(APIView):
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class WeatherStationChartDataView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener datos de gráficos de estaciones meteorológicas",
@@ -1755,7 +1738,7 @@ class CalculateWeatherStationDataView(APIView):
 
 
 class WeatherStationsListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Listar estaciones meteorológicas",

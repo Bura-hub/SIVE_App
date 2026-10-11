@@ -1,4 +1,5 @@
 import logging
+import time
 from celery import shared_task
 from django.utils.dateparse import parse_datetime
 from django.utils.timezone import make_aware, is_naive
@@ -8,6 +9,8 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from django.utils import timezone as dj_timezone
 import pytz
 from django.db import models
+from collections import namedtuple
+from celery.exceptions import SoftTimeLimitExceeded
 
 # Importa tu cliente SCADA y tus modelos
 from django.conf import settings
@@ -266,11 +269,15 @@ def _parse_measurement_date(date_str):
     return dt.astimezone(COLOMBIA_TZ)
 
 
-def _iter_measurement_pages(token, device_scada_id, from_dt, to_dt, page_size=1000):
-    """Itera las páginas del connector y entrega listas de (dt, data_dict) válidas."""
+def _iter_measurement_pages(token, device_scada_id, from_dt, to_dt, page_size=1000, client=None):
+    """Itera las páginas del connector y entrega listas de (dt, data_dict) válidas.
+
+    `client` permite inyectar otro ScadaConnectorClient (la reconciliación y los
+    tests); por defecto, el cliente del módulo."""
+    client = client or scada_client
     offset = 0
     while True:
-        response = scada_client.get_measurements(
+        response = client.get_measurements(
             token,
             device_id=device_scada_id,
             from_date=from_dt.isoformat(timespec='seconds'),
@@ -511,55 +518,329 @@ def fetch_historical_measurements_for_all_devices(self, time_range_seconds: int)
     logger.info(f"chord despachado: {len(signatures)} dispositivos; cálculos al completar.")
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=120, max_retries=2,
-             soft_time_limit=1500, time_limit=1700)
-@single_instance('refetch-verify-yesterday', ttl=3000)
-def refetch_and_verify_yesterday(self):
-    """Backfill automático: re-descarga TODO el día de ayer (Bogotá) para cada
-    dispositivo (idempotente, ~12k filas) y verifica los conteos contra el
-    connector. Cubre caídas del SCADA de hasta 24 h sin pérdida permanente.
-    Al terminar, recalcula el chart diario de ayer.
-    """
-    yesterday = (get_colombia_now() - timedelta(days=1)).date()
-    day_start = COLOMBIA_TZ.localize(datetime.combine(yesterday, datetime.min.time()))
-    day_end = day_start + timedelta(days=1)
+# ============================================================================
+# Reconciliación de mediciones (D1 del diseño 2026-10-10)
+# ----------------------------------------------------------------------------
+# Las RPi guardan en cola cuando pierden conexión y envían días después; la
+# ingesta horaria solo pide las últimas 3 h, así que esas lecturas nunca
+# entraban a SIVE (hasta 72 % de filas perdidas en algunos meses). Aquí se
+# compara, por dispositivo y día de Bogotá, el conteo local con `meta.total`
+# del connector y se re-descarga (upsert idempotente) solo el día distinto.
+# ============================================================================
 
-    token = scada_client.get_token()
-    devices = list(Device.objects.filter(is_active=True).select_related('category'))
-    mismatches = []
-    total = 0
-    for device in devices:
-        rows = 0
-        for page in _iter_measurement_pages(token, device.scada_id, day_start, day_end):
-            rows += upsert_measurements_page(device, page)
-        total += rows
-        # Verificación de conteo contra el connector (fuente de verdad)
-        r = scada_client.get_measurements(
-            token, device.scada_id,
-            day_start.isoformat(timespec='seconds'), day_end.isoformat(timespec='seconds'),
-            limit=1,
-        )
-        remote = (r.get('meta') or {}).get('total', r.get('total'))
+# Límites de la tarea periódica: la primera corrida tras el despliegue puede
+# re-descargar muchos días; las siguientes solo tocan lo que llegó tarde.
+RECONCILE_SOFT_TIME_LIMIT = 5400   # 1,5 h
+RECONCILE_TIME_LIMIT = 6000
+# Margen antes del soft limit en que se deja de empezar días nuevos, para que
+# lo ya reconciliado se recalcule aunque la corrida quede incompleta.
+RECONCILE_DEADLINE_MARGIN = 600
+
+
+class ReconcileResult(namedtuple('ReconcileResult',
+                                  'device day local_before remote local_after')):
+    """(dispositivo, día, local_antes, remoto, local_después).
+
+    `remoto` es None si el connector no respondió para ese día (error ya
+    registrado)."""
+    __slots__ = ()
+
+    @property
+    def refetched(self):
+        return self.remote is not None and self.local_before != self.remote
+
+    @property
+    def changed(self):
+        """Hubo filas nuevas en SIVE: el día debe recalcularse."""
+        return self.local_after != self.local_before
+
+    @property
+    def mismatch(self):
+        """Sigue distinto del connector tras re-descargar (o no se pudo verificar)."""
+        return self.remote is None or self.local_after != self.remote
+
+
+def _bogota_day_window(day):
+    """[inicio, fin) del día de Bogotá y el `to` que se envía al connector.
+
+    El connector recibe `to` = fin − 1 s para que, sea su `to` inclusivo o
+    exclusivo, no cuente la lectura de las 00:00:00 del día siguiente (que
+    localmente pertenece a ese otro día)."""
+    start = COLOMBIA_TZ.localize(datetime.combine(day, datetime.min.time()))
+    end = COLOMBIA_TZ.localize(datetime.combine(day + timedelta(days=1), datetime.min.time()))
+    return start, end, end - timedelta(seconds=1)
+
+
+def _remote_count(client, token, device, from_dt, to_dt):
+    """Conteo de mediciones del connector (`meta.total`, con limit=1)."""
+    r = client.get_measurements(
+        token, device.scada_id,
+        from_dt.isoformat(timespec='seconds'), to_dt.isoformat(timespec='seconds'),
+        limit=1,
+    )
+    remote = (r.get('meta') or {}).get('total', r.get('total'))
+    if remote is None:
+        raise ValueError(f"el connector no devolvió meta.total para {device.scada_id}: {str(r)[:200]}")
+    return int(remote)
+
+
+def _notify(source, detail):
+    """Alerta por core.alerting si está disponible (nunca lanza)."""
+    try:
+        from core.alerting import notify_failure
+    except ImportError:
+        logger.error("core.alerting no disponible; alerta solo en log: %s | %s", source, detail)
+        return
+    notify_failure(source, detail)
+
+
+def reconcile_measurements(from_date, to_date, devices=None, recalc=True, client=None, deadline=None,
+                           force_recalc_days=()):
+    """Reconcilia las mediciones de SIVE con el connector, día a día (Bogotá).
+
+    Para cada dispositivo activo (o los de `devices`: ids Django u objetos
+    Device) y cada día de [from_date, to_date] (ambos inclusive, `date`),
+    compara el conteo local con `meta.total` del connector; si difieren,
+    re-descarga ese día con upsert y vuelve a contar. Una diferencia que
+    persiste se registra con logger.error y alerta, y se sigue con el resto.
+
+    Si `recalc`, encola el recálculo SOLO de lo tocado (ver
+    enqueue_recalc_for_reconciled). `force_recalc_days` (fechas) se
+    recalculan SIEMPRE para todos los dispositivos revisados, aunque los
+    conteos coincidan: cierra C15, porque las filas que la ingesta horaria trae
+    después del último recálculo del día dejan los conteos iguales. `deadline`
+    (time.monotonic) corta la corrida antes de empezar un día nuevo,
+    registrándolo como error.
+
+    Devuelve la lista de ReconcileResult (dispositivo, día, local_antes,
+    remoto, local_después), un elemento por dispositivo y día revisado.
+    """
+
+    client = client or scada_client
+    if from_date > to_date:
+        raise ValueError(f"Rango inválido: {from_date} posterior a {to_date}")
+
+    qs = Device.objects.filter(is_active=True).select_related('category')
+    if devices is not None:
+        ids = [d.id if isinstance(d, Device) else int(d) for d in devices]
+        qs = qs.filter(id__in=ids)
+    device_list = list(qs.order_by('id'))
+
+    days = []
+    cursor = from_date
+    while cursor <= to_date:
+        days.append(cursor)
+        cursor += timedelta(days=1)
+
+    token = client.get_token()
+    results = []
+    errors = []
+    persistent = []
+    interrupted = False
+
+    for device in device_list:
         category_name = device.category.name if device.category_id else None
         model = measurement_model_for_category(category_name)
-        if model is not None and remote is not None:
-            local = model.objects.filter(device=device, date__gte=day_start, date__lt=day_end).count()
-            if local != remote:
-                mismatches.append((device.name, local, remote))
-
-    if mismatches:
-        for name, local, remote in mismatches:
-            logger.error(
-                f"refetch_and_verify_yesterday: conteo distinto tras refetch en "
-                f"'{name}' {yesterday}: local={local} connector={remote}"
+        if model is None:
+            logger.warning(
+                f"reconcile_measurements: se omite '{device.name}' (id {device.id}): "
+                f"categoría '{category_name}' sin tabla de mediciones."
             )
-    else:
-        logger.info(f"refetch_and_verify_yesterday: {yesterday} verificado OK ({total} filas upserted).")
+            continue
+        for day in days:
+            if deadline is not None and time.monotonic() > deadline:
+                interrupted = True
+                break
+            day_start, day_end, remote_to = _bogota_day_window(day)
+            local_before = model.objects.filter(
+                device=device, date__gte=day_start, date__lt=day_end).count()
+            try:
+                remote = _remote_count(client, token, device, day_start, remote_to)
+                local_after = local_before
+                if remote != local_before:
+                    rows = 0
+                    for page in _iter_measurement_pages(
+                            token, device.scada_id, day_start, remote_to, client=client):
+                        rows += upsert_measurements_page(device, page)
+                    local_after = model.objects.filter(
+                        device=device, date__gte=day_start, date__lt=day_end).count()
+                    # El connector puede haber recibido más filas mientras se
+                    # descargaba: se compara con su conteo más reciente.
+                    if local_after != remote:
+                        remote = _remote_count(client, token, device, day_start, remote_to)
+                    logger.info(
+                        f"reconcile_measurements: '{device.name}' {day}: local {local_before} → "
+                        f"{local_after}, connector {remote} ({rows} filas descargadas)."
+                    )
+            except SoftTimeLimitExceeded:
+                raise
+            except Exception as exc:  # noqa: BLE001 — se registra, se alerta y se sigue con el resto
+                logger.error(
+                    f"reconcile_measurements: no se pudo reconciliar '{device.name}' "
+                    f"(id {device.id}) el {day}: {exc}", exc_info=True,
+                )
+                errors.append(f"{device.name} {day}: {exc}")
+                local_after = model.objects.filter(
+                    device=device, date__gte=day_start, date__lt=day_end).count()
+                results.append(ReconcileResult(device, day, local_before, None, local_after))
+                continue
 
-    # Recalcular el chart diario de ayer con los datos ya completos
-    from indicators.tasks import calculate_and_save_daily_data
-    calculate_and_save_daily_data.delay(yesterday.isoformat(), yesterday.isoformat())
-    return f'{yesterday}: {total} filas, {len(mismatches)} discrepancias'
+            result = ReconcileResult(device, day, local_before, remote, local_after)
+            if result.mismatch:
+                logger.error(
+                    f"reconcile_measurements: diferencia persistente en '{device.name}' "
+                    f"(id {device.id}) el {day}: local={local_after} connector={remote}."
+                )
+                persistent.append(f"{device.name} {day}: local={local_after} connector={remote}")
+            results.append(result)
+        if interrupted:
+            break
+
+    if interrupted:
+        logger.error(
+            "reconcile_measurements: corrida INCOMPLETA por límite de tiempo; "
+            f"revisados {len(results)} de {len(device_list) * len(days)} dispositivo-días."
+        )
+        errors.append("corrida incompleta por límite de tiempo")
+    if persistent:
+        _notify("reconciliación de mediciones",
+                f"{len(persistent)} diferencia(s) persistente(s): " + "; ".join(persistent[:20]))
+    if errors:
+        _notify("reconciliación de mediciones (errores)",
+                f"{len(errors)} error(es): " + "; ".join(errors[:20]))
+
+    changed = [r for r in results if r.changed]
+    logger.info(
+        f"reconcile_measurements {from_date}→{to_date}: {len(results)} dispositivo-días, "
+        f"{sum(1 for r in results if r.refetched)} re-descargados, {len(changed)} con filas nuevas, "
+        f"{len(persistent)} diferencias persistentes, {len(errors)} errores."
+    )
+    forced = set(force_recalc_days or ())
+    to_recalc = [r for r in results if r.changed or r.day in forced]
+    if forced:
+        logger.info(f"reconcile_measurements: recálculo forzado de {sorted(forced)} (C15).")
+    if recalc and to_recalc:
+        enqueue_recalc_for_reconciled(to_recalc)
+    return results
+
+
+def _contiguous_ranges(days):
+    """Agrupa fechas en rangos contiguos [(inicio, fin)], ambos inclusive."""
+    ranges = []
+    for day in sorted(set(days)):
+        if ranges and day == ranges[-1][1] + timedelta(days=1):
+            ranges[-1][1] = day
+        else:
+            ranges.append([day, day])
+    return [(a, b) for a, b in ranges]
+
+
+def _month_end(day):
+    nxt = (day.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return nxt - timedelta(days=1)
+
+
+def enqueue_recalc_for_reconciled(changed):
+    """Encadena el recálculo de lo que la reconciliación tocó, y nada más.
+
+    Por dispositivo y rango contiguo de días con filas nuevas: indicadores
+    diarios de su componente y rollup horario de esas horas. Por rango de días
+    (todos los dispositivos): chart diario. Por dispositivo y mes tocado:
+    indicadores mensuales (del día 1 al último día del mes, o hasta hoy). Al
+    final, el KPI mensual una vez. Misma cadena con errback que
+    run_post_ingest_pipeline. Devuelve la lista de firmas encoladas.
+    """
+    from celery import chain
+    from indicators.tasks import (
+        calculate_monthly_consumption_kpi, calculate_and_save_daily_data,
+        calculate_electrical_data, calculate_inverter_data,
+        calculate_weather_station_indicators, calculate_hourly_rollup,
+    )
+    calc_by_category = {
+        'electricmeter': calculate_electrical_data,
+        'inverter': calculate_inverter_data,
+        'weatherstation': calculate_weather_station_indicators,
+    }
+
+    now = get_colombia_now()
+    today = now.date()
+    last_closed_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
+
+    days_by_device = {}
+    for r in changed:
+        days_by_device.setdefault(r.device, set()).add(r.day)
+
+    daily_sigs, rollup_sigs, monthly_sigs = [], [], []
+    for device, days in sorted(days_by_device.items(), key=lambda kv: kv[0].id):
+        calc = calc_by_category.get((device.category.name if device.category_id else '').lower())
+        if calc is None:
+            logger.error(f"reconcile: sin cálculo para la categoría de '{device.name}'; no se recalcula.")
+            continue
+        for start, end in _contiguous_ranges(days):
+            daily_sigs.append(calc.si(
+                time_range='daily', start_date_str=start.isoformat(),
+                end_date_str=end.isoformat(), device_id=device.scada_id))
+            first_hour = COLOMBIA_TZ.localize(datetime.combine(start, datetime.min.time()))
+            last_hour = COLOMBIA_TZ.localize(datetime.combine(end, datetime.min.time())) + timedelta(hours=23)
+            last_hour = min(last_hour, last_closed_hour)
+            if last_hour >= first_hour:
+                rollup_sigs.append(calculate_hourly_rollup.si(
+                    start_hour_str=first_hour.isoformat(), end_hour_str=last_hour.isoformat(),
+                    device_id=device.scada_id))
+        for month_start in sorted({d.replace(day=1) for d in days}):
+            month_end = min(_month_end(month_start), today)
+            monthly_sigs.append(calc.si(
+                time_range='monthly', start_date_str=month_start.isoformat(),
+                end_date_str=month_end.isoformat(), device_id=device.scada_id))
+
+    all_days = set().union(*days_by_device.values()) if days_by_device else set()
+    chart_sigs = [calculate_and_save_daily_data.si(a.isoformat(), b.isoformat())
+                  for a, b in _contiguous_ranges(all_days)]
+
+    sigs = daily_sigs + chart_sigs + monthly_sigs + rollup_sigs
+    if not sigs:
+        return []
+    sigs.append(calculate_monthly_consumption_kpi.si())
+    logger.info(
+        f"reconcile: encolando recálculo de {len(all_days)} día(s): {len(daily_sigs)} diarios, "
+        f"{len(chart_sigs)} chart, {len(monthly_sigs)} mensuales, {len(rollup_sigs)} rollup + KPI mensual."
+    )
+    chain(*sigs).apply_async(link_error=log_pipeline_error.s())
+    return sigs
+
+
+@shared_task(bind=True, soft_time_limit=RECONCILE_SOFT_TIME_LIMIT, time_limit=RECONCILE_TIME_LIMIT)
+@single_instance('reconcile-measurements', ttl=2 * RECONCILE_TIME_LIMIT)
+def reconcile_recent_measurements(self, days=35, force_recalc_days=0):
+    """Tarea periódica de D1: reconcilia hoy y los `days` días anteriores (Bogotá).
+
+    `force_recalc_days`=N recalcula siempre los N días anteriores a hoy (todos
+    los dispositivos), aunque sus conteos coincidan. La corrida de las 00:40 usa
+    N=1 para cerrar el día de ayer completo (C15).
+
+    Sin autoretry: lo ya reconciliado queda guardado (upserts) y la siguiente
+    corrida retoma lo que falte. Programada en CELERY_BEAT_SCHEDULE: 01:30 con
+    days=35; 00:40 con days=2 y force_recalc_days=1; 06:40, 12:40 y 18:40 con days=2.
+    """
+    today = get_colombia_now().date()
+    deadline = time.monotonic() + RECONCILE_SOFT_TIME_LIMIT - RECONCILE_DEADLINE_MARGIN
+    forced = [today - timedelta(days=i) for i in range(1, force_recalc_days + 1)]
+    results = reconcile_measurements(today - timedelta(days=days), today, deadline=deadline,
+                                     force_recalc_days=forced)
+    refetched = sum(1 for r in results if r.refetched)
+    changed = sum(1 for r in results if r.changed)
+    mismatches = sum(1 for r in results if r.mismatch)
+    return (f'{today - timedelta(days=days)}→{today}: {len(results)} dispositivo-días, '
+            f'{refetched} re-descargados, {changed} con filas nuevas, {mismatches} con diferencia')
+
+
+@shared_task(bind=True, soft_time_limit=RECONCILE_SOFT_TIME_LIMIT, time_limit=RECONCILE_TIME_LIMIT)
+def refetch_and_verify_yesterday(self):
+    """Alias de compatibilidad: la entrada vieja del beat (o una llamada manual)
+    sigue funcionando y delega en la reconciliación con days=1 (ayer y hoy).
+    Sustituida en el beat por reconcile-measurements-daily (D1)."""
+    return reconcile_recent_measurements.run(days=1)
+
 
 @shared_task(bind=True, retry_backoff=30, max_retries=3)
 def check_devices_status(self):

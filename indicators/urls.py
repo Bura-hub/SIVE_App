@@ -30,6 +30,7 @@ from .views import (
     DeleteReportView
 )
 from .views_availability import DataAvailabilityView
+from .views_solar import SolarIndicatorsView, SolarInstitutionsView
 
 router = DefaultRouter()
 router.register(r'electric-meter-indicators', ElectricMeterIndicatorsViewSet, basename='electric-meter-indicators')
@@ -69,6 +70,10 @@ urlpatterns = [
     path('reports/delete/', DeleteReportView.as_view(), name='delete-report'),
     
     path('data-availability/', DataAvailabilityView.as_view(), name='data-availability'),
+
+    # Indicadores del sistema fotovoltaico por institución
+    path('solar-indicators/', SolarIndicatorsView.as_view(), name='solar-indicators'),
+    path('solar-indicators/institutions/', SolarInstitutionsView.as_view(), name='solar-institutions'),
 
     path('', include(router.urls)),
 ]

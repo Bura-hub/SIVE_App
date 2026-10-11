@@ -17,9 +17,19 @@ class DashboardSummaryCacheTests(APITestCase):
     def tearDown(self):
         cache.clear()
 
-    def test_anonymous_gets_401_and_never_cached_data(self):
-        """Un request sin token NO recibe datos de flota cacheados: 401."""
+    def test_guest_reads_cached_summary(self):
+        """Modo invitado: sin token se lee el resumen de flota (lectura pública) desde la caché."""
+        cache.set('dashboard:summary:v1', {'totalConsumption': {'value': '123'}}, 300)
+        with patch('indicators.views.scada_client') as mock_scada:
+            response = self.client.get(DASHBOARD_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['totalConsumption']['value'], '123')
+        mock_scada.get_token.assert_not_called()
+
+    def test_invalid_token_gets_401_and_never_cached_data(self):
+        """Un token inválido NO se trata como invitado: 401, sin datos cacheados."""
         cache.set('dashboard:summary:v1', {'totalConsumption': {'value': 'SECRETO'}}, 300)
+        self.client.credentials(HTTP_AUTHORIZATION='Token no-existe')
         response = self.client.get(DASHBOARD_URL)
         self.assertEqual(response.status_code, 401)
 

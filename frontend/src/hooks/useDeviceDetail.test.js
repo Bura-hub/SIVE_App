@@ -21,3 +21,21 @@ test('modo horario envia start_datetime/end_datetime', async () => {
   expect(calledUrl).toContain('end_datetime=');
   expect(calledUrl).not.toContain('start_date=');
 });
+
+test('modo invitado: el GET va sin Authorization y recalcular pide iniciar sesión', async () => {
+  const onRequireLogin = vi.fn();
+  window.addEventListener('sive:require-login', onRequireLogin);
+  const { result } = renderHook(() => useDeviceDetail({
+    indicatorsEndpoint: '/api/electric-meter-indicators/',
+    calculateEndpoint: '/api/x/', authToken: null,
+  }));
+  await act(async () => {
+    result.current.fetchData({ timeRange: 'daily', institutionId: 1 });
+  });
+  expect(global.fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
+  global.fetch.mockClear();
+  await act(async () => { await result.current.calculate(); });
+  window.removeEventListener('sive:require-login', onRequireLogin);
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(onRequireLogin).toHaveBeenCalledTimes(1);
+});

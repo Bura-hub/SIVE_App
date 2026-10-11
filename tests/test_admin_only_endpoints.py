@@ -6,6 +6,10 @@ tests verifican el control REAL en el servidor: un usuario autenticado NO superu
 403, y un superusuario NO recibe 403 (200 o el código de negocio que corresponda).
 
 El permiso aplicado es `core.permissions.IsSuperUser` (comprueba `is_superuser`, no `is_staff`).
+
+Modo invitado (2026-10): los GET de datos de XM («Datos Externos») pasan a lectura pública
+(`IsAuthenticatedOrPublicRead`): los ve cualquiera, invitado incluido. La sincronización con
+XM (POST) y todo «Exportar Reportes» siguen siendo solo de superusuario.
 """
 
 from unittest.mock import patch
@@ -35,9 +39,17 @@ class AdminOnlyEndpointsTests(APITestCase):
     # -------------------------------------------------------------------------
     # external_energy — pantalla «Datos Externos»
     # -------------------------------------------------------------------------
-    def test_external_energy_prices_forbidden_for_normal_user(self):
+    def test_external_energy_prices_readable_by_normal_user(self):
+        # Antes: 403. Desde el modo invitado los GET de XM son de lectura pública.
         self.client.force_authenticate(user=self.normal_user)
-        response = self.client.get('/api/external-energy/prices/')
+        with patch('external_energy.views.XMEnergyService') as mock_service:
+            mock_service.return_value.fetch_energy_prices.return_value = []
+            response = self.client.get('/api/external-energy/prices/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_external_energy_sync_forbidden_for_normal_user(self):
+        self.client.force_authenticate(user=self.normal_user)
+        response = self.client.post('/api/external-energy/sync/', {}, format='json')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_external_energy_prices_allowed_for_superuser(self):
@@ -78,11 +90,19 @@ class AdminOnlyEndpointsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     # -------------------------------------------------------------------------
-    # Sin autenticar -> 401/403 (nunca 200)
+    # Sin autenticar -> 401/403 (nunca 200) en lo admin-only
     # -------------------------------------------------------------------------
     def test_anonymous_is_rejected(self):
-        response = self.client.get('/api/external-energy/prices/')
-        self.assertIn(
-            response.status_code,
-            (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
-        )
+        # Antes se probaba con /external-energy/prices/, que ahora es lectura pública
+        # (modo invitado); los endpoints admin-only siguen cerrados al anónimo.
+        for method, url in (
+            ('get', '/api/reports/history/'),
+            ('post', '/api/reports/generate/'),
+            ('post', '/api/external-energy/sync/'),
+        ):
+            response = getattr(self.client, method)(url)
+            self.assertIn(
+                response.status_code,
+                (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+                f'{method.upper()} {url}',
+            )

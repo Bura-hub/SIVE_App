@@ -4,6 +4,7 @@ import LoginPage from './components/LoginPage'; // Eager: la pantalla de login d
 import Sidebar from './components/Sidebar'; // Componente de barra lateral
 import UserMenu from './components/UserMenu'; // Menú de usuario flotante (esquina superior derecha)
 import ErrorBoundary from './components/ErrorBoundary'; // Límite de error global de pantallas
+import { REQUIRE_LOGIN_EVENT } from './utils/apiConfig'; // Evento «pide iniciar sesión» (modo invitado)
 
 // Code-splitting: cada pantalla se carga bajo demanda en su propio chunk
 const Home = lazy(() => import('./components/Home'));
@@ -12,6 +13,7 @@ const ElectricalDetails = lazy(() => import('./components/ElectricalDetails'));
 const InverterDetails = lazy(() => import('./components/InverterDetails'));
 const WeatherStationDetails = lazy(() => import('./components/WeatherStationDetails'));
 const ExternalEnergyData = lazy(() => import('./components/ExternalEnergyData'));
+const SolarIndicators = lazy(() => import('./components/SolarIndicators'));
 const ExportReports = lazy(() => import('./components/ExportReports'));
 
 // Fallback discreto mientras se descarga el chunk de una pantalla
@@ -25,18 +27,52 @@ const PageLoader = () => (
   </div>
 );
 
+// Pantallas que no tienen sentido sin sesión (el invitado ve todo lo demás en solo lectura).
+const LOGIN_REQUIRED_PAGES = {
+  exportReports: 'Inicia sesión como administrador para exportar reportes.',
+};
+
 function App() {
   // Estados para gestionar la sesión del usuario
   const [authToken, setAuthToken] = useState(localStorage.getItem('authToken')); // Token de autenticación
   const [username, setUsername] = useState(localStorage.getItem('username')); // Nombre de usuario
   const [isSuperuser, setIsSuperuser] = useState(localStorage.getItem('isSuperuser') === 'true'); // Rol de superusuario
 
-  // Estado para determinar la vista actual (login, dashboard, etc.)
-  // Persistir la página actual en localStorage
+  // Estado para determinar la vista actual (inicio, dashboard, etc.)
+  // Persistir la página actual en localStorage. Sin token se entra como «Invitado»
+  // (solo lectura) directamente, sin pasar por el login.
   const [currentPage, setCurrentPage] = useState(() => {
     const savedPage = localStorage.getItem('currentPage');
-    return authToken ? (savedPage || 'home') : 'login';
+    if (!savedPage || savedPage === 'login') return 'home';
+    if (!authToken && LOGIN_REQUIRED_PAGES[savedPage]) return 'home';
+    return savedPage;
   });
+
+  // Modo invitado: el inicio de sesión se despliega bajo demanda (botón «Iniciar sesión»
+  // o una acción que pide sesión). `loginReason` explica por qué se pidió;
+  // `pendingPage` es la pantalla a la que se quería ir antes de iniciar sesión.
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginReason, setLoginReason] = useState('');
+  const [pendingPage, setPendingPage] = useState(null);
+
+  const openLogin = (reason = '', page = null) => {
+    setLoginReason(reason || '');
+    setPendingPage(page);
+    setShowLogin(true);
+  };
+
+  const continueAsGuest = () => {
+    setShowLogin(false);
+    setLoginReason('');
+    setPendingPage(null);
+  };
+
+  // Cualquier componente puede pedir el login con requestLogin() (utils/apiConfig.js).
+  useEffect(() => {
+    const onRequireLogin = (e) => openLogin(e.detail?.reason || '');
+    window.addEventListener(REQUIRE_LOGIN_EVENT, onRequireLogin);
+    return () => window.removeEventListener(REQUIRE_LOGIN_EVENT, onRequireLogin);
+  }, []);
 
   // Estado para controlar si la barra lateral está minimizada
   // Persistir el estado de la sidebar en localStorage
@@ -58,11 +94,19 @@ function App() {
     localStorage.setItem('authToken', token);
     localStorage.setItem('username', user);
     localStorage.setItem('isSuperuser', superuser);
-    setCurrentPage('home'); // Redirige a la presentación (Inicio)
-    localStorage.setItem('currentPage', 'home'); // Persistir la página
+    // Vuelve a la pantalla donde estaba el invitado, o a la que quería abrir
+    // (p. ej. Exportar reportes) si el usuario tiene permiso para ella.
+    const target = pendingPage && (superuser || !LOGIN_REQUIRED_PAGES[pendingPage])
+      ? pendingPage
+      : (LOGIN_REQUIRED_PAGES[currentPage] && !superuser ? 'home' : currentPage);
+    setCurrentPage(target);
+    localStorage.setItem('currentPage', target); // Persistir la página
+    setShowLogin(false);
+    setLoginReason('');
+    setPendingPage(null);
   };
 
-  // Cierra sesión limpiando los datos de sesión y redirigiendo al login
+  // Cierra sesión limpiando los datos de sesión y volviendo al modo invitado
   const performLogout = () => {
     setAuthToken(null);
     setUsername(null);
@@ -71,7 +115,8 @@ function App() {
     localStorage.removeItem('username');
     localStorage.removeItem('isSuperuser');
     localStorage.removeItem('currentPage'); // Limpiar la página persistida
-    setCurrentPage('login'); // Redirige a la vista de login
+    setShowLogin(false);
+    setCurrentPage('home'); // Vuelve al inicio en modo invitado
   };
 
   // Cierra sesión directamente
@@ -81,17 +126,16 @@ function App() {
 
   // Cambia de vista dentro de la aplicación
   const navigateTo = (page) => {
+    // Invitado intentando abrir una pantalla que pide sesión: desplegar el login.
+    if (!authToken && LOGIN_REQUIRED_PAGES[page]) {
+      openLogin(LOGIN_REQUIRED_PAGES[page], page);
+      return;
+    }
     setCurrentPage(page);
     localStorage.setItem('currentPage', page); // Persistir la nueva página
   };
 
-  // Efecto que asegura que si no hay token, se redirige a login
-  useEffect(() => {
-    if (!authToken) {
-      setCurrentPage('login');
-      localStorage.removeItem('currentPage'); // Limpiar la página persistida
-    }
-  }, [authToken]);
+  // Sin token ya no se fuerza el login: la app sigue en modo invitado.
 
   // Función que decide qué componente renderizar según la vista actual
   const renderPageContent = () => {
@@ -109,8 +153,6 @@ function App() {
     };
 
     switch (currentPage) {
-      case 'login':
-        return <LoginPage onLoginSuccess={handleLoginSuccess} />;
       case 'home':
         return <Home {...commonProps} />;
       case 'dashboard':
@@ -123,19 +165,26 @@ function App() {
         return <WeatherStationDetails {...commonProps} />;
       case 'externalEnergy':
         return <ExternalEnergyData {...commonProps} />;
+      case 'solarIndicators':
+        return <SolarIndicators {...commonProps} />;
       case 'exportReports':
-        return <ExportReports {...commonProps} />;
+        // Sin sesión no se exporta (navigateTo ya despliega el login); por si acaso, inicio.
+        return authToken ? <ExportReports {...commonProps} /> : <Home {...commonProps} />;
       default:
-        return <LoginPage onLoginSuccess={handleLoginSuccess} />; // Fallback en caso de error
+        return <Home {...commonProps} />; // Fallback en caso de página desconocida
     }
   };
 
-  // Si el usuario está en la página de login, no muestra la barra lateral ni animaciones
-  if (currentPage === 'login') {
+  // Inicio de sesión desplegado (a petición del invitado): pantalla de login normal,
+  // con la opción de volver como invitado.
+  if (showLogin) {
     return (
       <div className="App">
-        {renderPageContent()}
-        {/* La animación de logout no aplica en login */}
+        <LoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onContinueAsGuest={continueAsGuest}
+          reason={loginReason}
+        />
       </div>
     );
   }
@@ -147,10 +196,13 @@ function App() {
       <UserMenu
         username={username}
         isSuperuser={isSuperuser}
+        isGuest={!authToken}
+        onLogin={() => openLogin()}
         onLogout={handleLogoutWithAnimation}
       />
       <Sidebar
         isSuperuser={isSuperuser}
+        isGuest={!authToken}
         isSidebarMinimized={isSidebarMinimized}
         setIsSidebarMinimized={(minimized) => {
           setIsSidebarMinimized(minimized);

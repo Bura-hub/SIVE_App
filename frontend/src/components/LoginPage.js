@@ -5,7 +5,9 @@ import TransitionOverlay from './TransitionOverlay';
 import { fetchWithAuth, handleApiResponse } from '../utils/apiConfig';
 import { buildApiUrl, getEndpoint } from '../config';
 
-function LoginPage({ onLoginSuccess }) {
+// onContinueAsGuest (opcional): vuelve a la app en modo invitado sin iniciar sesión.
+// reason (opcional): por qué se pidió iniciar sesión (p. ej. «para exportar reportes»).
+function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [message, setMessage] = useState({ text: '', type: '' });
@@ -467,6 +469,13 @@ function LoginPage({ onLoginSuccess }) {
                     </p>
                 </div>
 
+                {/* Modo invitado: motivo por el que se pidió iniciar sesión */}
+                {reason && (
+                    <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800" role="status">
+                        {reason}
+                    </div>
+                )}
+
                 {/* Formulario mejorado */}
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Campo de usuario */}
@@ -632,6 +641,22 @@ function LoginPage({ onLoginSuccess }) {
                         Crear una cuenta
                     </button>
                 </div>
+
+                {/* Modo invitado: volver a la app sin iniciar sesión (solo lectura) */}
+                {onContinueAsGuest && (
+                    <div className="mt-4 text-center">
+                        <button
+                            type="button"
+                            onClick={onContinueAsGuest}
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-gray-50"
+                        >
+                            Continuar como invitado
+                        </button>
+                        <p className="mt-2 text-xs text-gray-600">
+                            Como invitado puedes ver los datos; exportar reportes, recalcular y tu perfil piden iniciar sesión.
+                        </p>
+                    </div>
+                )}
 
                 {/* Footer profesional integrado */}
                 <div className="mt-6 pt-4 border-t border-gray-200">

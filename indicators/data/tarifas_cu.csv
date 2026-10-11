@@ -1,0 +1,30 @@
+# CU mensual (COP/kWh), categoría «oficial» (sin contribución), nivel de tensión 2, propiedad del operador.
+# Copia de sistemabl/data/tarifas_asc_mensual.csv y tarifas_cedenar_mensual.csv (tesis de B. S. López-Méndez, CAL-47),
+# extraídas de los PDF publicados por cada comercializador. ASC atiende a Udenar, Mariana, UCC y HUDN; Cedenar a Cesmag.
+comercializador,mes,cu_cop_kwh,fuente
+asc,2025-04,734.3008,tarifa_2025-04.pdf
+asc,2025-05,731.1268,tarifa_2025-05.pdf
+asc,2025-06,753.3909,tarifa_2025-06.pdf
+asc,2025-07,703.6291,tarifa_2025-07.pdf
+asc,2025-08,726.9124,tarifa_2025-08.pdf
+asc,2025-09,711.1348,tarifa_2025-09.pdf
+asc,2025-10,715.6201,tarifa_2025-10.pdf
+asc,2025-11,720.1180,tarifa_2025-11.pdf
+asc,2025-12,703.9718,tarifa_2025-12.pdf
+asc,2026-01,701.8440,tarifa_2026-01.pdf
+asc,2026-02,709.9928,tarifa_2026-02.pdf
+asc,2026-03,734.2587,tarifa_2026-03.pdf
+asc,2026-04,728.7648,tarifa_2026-04.pdf
+cedenar,2025-04,794.62,tarifa_2025-04.pdf
+cedenar,2025-05,777.17,tarifa_2025-05.pdf
+cedenar,2025-06,802.27,tarifa_2025-06.pdf
+cedenar,2025-07,814.91,tarifa_2025-07.pdf
+cedenar,2025-08,816.98,tarifa_2025-08.pdf
+cedenar,2025-09,797.94,tarifa_2025-09.pdf
+cedenar,2025-10,790.07,tarifa_2025-10.pdf
+cedenar,2025-11,793.65,tarifa_2025-11.pdf
+cedenar,2025-12,773.52,tarifa_2025-12.pdf
+cedenar,2026-01,766.80,tarifa_2026-01.pdf
+cedenar,2026-02,774.53,tarifa_2026-02.pdf
+cedenar,2026-03,795.15,tarifa_2026-03.pdf
+cedenar,2026-04,799.16,tarifa_2026-04.pdf

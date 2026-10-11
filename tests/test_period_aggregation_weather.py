@@ -35,5 +35,7 @@ class WeatherAggregationViewTest(TestCase):
             'start_date': '2026-07-01', 'end_date': '2026-07-31'})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data['results']), 1)
-        self.assertEqual(resp.data['results'][0]['daily_irradiance_kwh_m2'], 10.0)  # suma
+        # C8 (corrección de octubre de 2026): se promedia entre estaciones; antes este test
+        # fijaba la suma (10,0), que es el defecto.
+        self.assertAlmostEqual(resp.data['results'][0]['daily_irradiance_kwh_m2'], 5.0)
         self.assertAlmostEqual(resp.data['results'][0]['avg_temperature_c'], 22.0)  # promedio

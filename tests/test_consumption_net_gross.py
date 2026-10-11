@@ -1,99 +1,66 @@
 """
-Tests del consumo NETO vs BRUTO de los medidores eléctricos.
+Tests de la gráfica diaria del inicio (DailyChartData) con la convención de la tesis y del mercado P2P
+(diseño, C10 y D2):
 
-- NETO  = Σ(totalActivePower)              (incluye inyección negativa; net metering)
-- BRUTO = Σ(max(totalActivePower, 0))      (solo energía tomada de la red)
+- daily_consumption        = demanda D de los circuitos del Medidor 1 de cada institución. En medidores netos
+                             (Mariana, UCC, Udenar) se reconstruye: D = max(0, P_M1 + FV aguas abajo).
+- daily_gross_consumption  = energía tomada de la red = D − autoconsumo.
+- daily_generation         = generación del inversor de la institución.
+- daily_balance            = generación − demanda.
 
-Ambos comparten la misma conversión a kWh (totalActivePower ya está en kW → factor 1)
-y la integración Δt de indicators/energy.py.
+Antes se sumaban todos los medidores de todas las sedes con su signo (C10).
 """
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from django.test import TestCase
 
-from scada_proxy.models import Device, Institution, DeviceCategory, MeterMeasurement
-from scada_proxy.tasks import upsert_measurements_page
+from indicators.institution_config import INSTITUCIONES
 from indicators.models import DailyChartData
-from indicators.energy import SAMPLE_INTERVAL_HOURS
-from indicators.tasks import calculate_and_save_daily_data, COLOMBIA_TZ
+from indicators.tasks import COLOMBIA_TZ, calculate_and_save_daily_data
+from scada_proxy.models import Device, DeviceCategory, Institution
+from scada_proxy.tasks import upsert_measurements_page
+
+MARIANA = '0357e3a6-ebdd-45f2-bd1a-0c384c522df3'
 
 
-class ConsumptionNetGrossTests(TestCase):
+class DailyChartPlantasTests(TestCase):
     def setUp(self):
-        self.category = DeviceCategory.objects.create(scada_id='CAT_EM', name='electricMeter')
-        self.institution = Institution.objects.create(scada_id='INST', name='Test')
-        self.device = Device.objects.create(
-            scada_id='EM1', name='Meter',
-            category=self.category, institution=self.institution, is_active=True,
-        )
-        # Fecha fija (sin now(): determinista). Mediodía Bogotá → mismo día calendario en UTC y Bogotá.
+        cat_med = DeviceCategory.objects.create(scada_id='CAT_EM', name='electricMeter')
+        cat_inv = DeviceCategory.objects.create(scada_id='CAT_INV', name='inverter')
+        inst = Institution.objects.create(scada_id=MARIANA, name='Mariana')
+        cfg = INSTITUCIONES[MARIANA]
+        self.m1 = Device.objects.create(scada_id=cfg['medidor_demanda'], name='M1', category=cat_med,
+                                        institution=inst)
+        self.m2 = Device.objects.create(scada_id='otro', name='M2', category=cat_med, institution=inst)
+        self.inv = Device.objects.create(scada_id=cfg['inversores_generacion'][0], name='Fronius',
+                                         category=cat_inv, institution=inst)
         self.date = datetime(2026, 6, 15).date()
-        base = COLOMBIA_TZ.localize(datetime.combine(self.date, time(12, 0)))
-        # totalActivePower en kW: +150 (importa), -40 (inyecta/exporta), +100 (importa)
-        # Insertadas por el helper real de ingesta (dual-write v1+v2): las
-        # tareas migradas leen las tablas tipadas v2.
-        upsert_measurements_page(self.device, [
-            (base.replace(minute=i * 2), {'totalActivePower': power})
-            for i, power in enumerate([150.0, -40.0, 100.0])
-        ])
 
-    def test_daily_net_and_gross_consumption(self):
-        calculate_and_save_daily_data(
-            start_date_str=self.date.isoformat(),
-            end_date_str=self.date.isoformat(),
-        )
-        obj = DailyChartData.objects.get(date=self.date)
+    def _hora(self, device, hora, campo, valor):
+        base = COLOMBIA_TZ.localize(datetime.combine(self.date, time(hora, 0)))
+        upsert_measurements_page(device, [(base + timedelta(minutes=2 * i), {campo: valor}) for i in range(30)])
 
-        dt = SAMPLE_INTERVAL_HOURS
-        # NETO = (150 - 40 + 100) · Δt = 210 · Δt ; BRUTO = (150 + 100) · Δt = 250 · Δt
-        self.assertAlmostEqual(obj.daily_consumption, 210.0 * dt, places=6)
-        self.assertAlmostEqual(obj.daily_gross_consumption, 250.0 * dt, places=6)
-        # El bruto ignora la inyección, así que siempre es ≥ neto cuando hay exportación.
-        self.assertGreater(obj.daily_gross_consumption, obj.daily_consumption)
+    def _calcular(self):
+        calculate_and_save_daily_data(start_date_str=self.date.isoformat(), end_date_str=self.date.isoformat())
+        return DailyChartData.objects.get(date=self.date)
 
-    def test_gross_equals_net_without_export(self):
-        # Sin valores negativos, neto y bruto coinciden.
-        MeterMeasurement.objects.all().delete()
+    def test_medidor_neto_con_exportacion(self):
+        # Mediodía: la FV da 12 kW y el M1 (punto de conexión) marca −4 kW: se exportan 4 y la carga es 8.
+        self._hora(self.inv, 12, 'acPower', 12000.0)
+        self._hora(self.m1, 12, 'totalActivePower', -4.0)
+        # Noche: sin FV, el M1 importa 5 kW.
+        self._hora(self.m1, 20, 'totalActivePower', 5.0)
+        self._hora(self.m2, 20, 'totalActivePower', 50.0)       # otro circuito: no entra
+        obj = self._calcular()
+        self.assertAlmostEqual(obj.daily_generation, 12.0)
+        self.assertAlmostEqual(obj.daily_consumption, 8.0 + 5.0)
+        self.assertAlmostEqual(obj.daily_gross_consumption, 5.0)   # de la red solo la noche
+        self.assertAlmostEqual(obj.daily_balance, 12.0 - 13.0)
+
+    def test_hora_de_medidor_incompleta_no_suma_demanda(self):
         base = COLOMBIA_TZ.localize(datetime.combine(self.date, time(9, 0)))
-        upsert_measurements_page(self.device, [
-            (base.replace(minute=i * 2), {'totalActivePower': power})
-            for i, power in enumerate([80.0, 120.0])
-        ])
-        calculate_and_save_daily_data(
-            start_date_str=self.date.isoformat(),
-            end_date_str=self.date.isoformat(),
-        )
-        obj = DailyChartData.objects.get(date=self.date)
-        self.assertAlmostEqual(obj.daily_gross_consumption, obj.daily_consumption, places=6)
-
-    def test_net_negativo_por_exceso_de_exportacion(self):
-        # Se exporta más de lo que se importa: el NETO puede ser negativo (net metering),
-        # el BRUTO solo cuenta lo tomado de la red.
-        MeterMeasurement.objects.all().delete()
-        base = COLOMBIA_TZ.localize(datetime.combine(self.date, time(9, 0)))
-        upsert_measurements_page(self.device, [
-            (base.replace(minute=i * 2), {'totalActivePower': power})
-            for i, power in enumerate([100.0, -150.0, 20.0])
-        ])
-        calculate_and_save_daily_data(
-            start_date_str=self.date.isoformat(), end_date_str=self.date.isoformat())
-        obj = DailyChartData.objects.get(date=self.date)
-        dt = SAMPLE_INTERVAL_HOURS
-        # NETO = (100 - 150 + 20)·dt = -30·dt ; BRUTO = (100 + 20)·dt = 120·dt
-        self.assertAlmostEqual(obj.daily_consumption, -30.0 * dt, places=6)
-        self.assertAlmostEqual(obj.daily_gross_consumption, 120.0 * dt, places=6)
-
-    def test_solo_exportacion_bruto_es_cero(self):
-        # Todas las lecturas negativas (solo inyección): BRUTO = 0, NETO < 0.
-        MeterMeasurement.objects.all().delete()
-        base = COLOMBIA_TZ.localize(datetime.combine(self.date, time(9, 0)))
-        upsert_measurements_page(self.device, [
-            (base.replace(minute=i * 2), {'totalActivePower': power})
-            for i, power in enumerate([-50.0, -30.0])
-        ])
-        calculate_and_save_daily_data(
-            start_date_str=self.date.isoformat(), end_date_str=self.date.isoformat())
-        obj = DailyChartData.objects.get(date=self.date)
-        dt = SAMPLE_INTERVAL_HOURS
-        self.assertAlmostEqual(obj.daily_gross_consumption, 0.0, places=6)
-        self.assertAlmostEqual(obj.daily_consumption, -80.0 * dt, places=6)
+        upsert_measurements_page(self.m1, [(base + timedelta(minutes=2 * i), {'totalActivePower': 7.0})
+                                           for i in range(10)])  # 10 < 15 muestras
+        obj = self._calcular()
+        self.assertAlmostEqual(obj.daily_consumption, 0.0)
+        self.assertAlmostEqual(obj.daily_gross_consumption, 0.0)

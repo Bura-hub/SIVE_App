@@ -1,10 +1,9 @@
 """
-Tests del clamp de eficiencia DC-AC de inversores (arreglo de la Ola 1).
+Tests de los indicadores de inversor.
 
-El dato crudo del connector trae dcPower < acPower en ~92% de las filas (físicamente
-imposible: la entrada DC debe superar a la salida AC), lo que producía eficiencias
->100% (hasta 185%). El cálculo acota dc_ac_efficiency_pct a [0,100]. Estos tests
-verifican end-to-end que el clamp engancha cuando toca y NO altera los valores normales.
+La eficiencia DC-AC se acotaba a [0, 100] (Ola 1) porque dcPower < acPower en ~92 % de las
+filas. La corrección de octubre de 2026 (C3/D6) explica por qué: dcPower mide una sola entrada
+MPPT. Desde entonces la eficiencia no se calcula (NULL).
 """
 from datetime import datetime, time, timedelta
 
@@ -21,7 +20,12 @@ from indicators.tasks import calculate_inverter_indicators
 from scada_proxy.models import Device, Institution, DeviceCategory
 
 
-class InverterEfficiencyClampTests(TestCase):
+class InverterEfficiencyNotComputedTests(TestCase):
+    """C3/D6 (corrección de octubre de 2026): la eficiencia DC-AC ya no se calcula ni se acota.
+    `dcPower` mide una sola entrada MPPT (tesis H-12), así que el cociente no es una eficiencia.
+    Antes estos tests comprobaban el recorte a 100 % (200 % -> 100) y un 80 % «normal»; ahora la
+    eficiencia queda en NULL y no dispara la anomalía de eficiencia baja."""
+
     def setUp(self):
         self.category = DeviceCategory.objects.create(
             scada_id='CAT_INVERTER', name='inverter', description='Inversor')
@@ -42,15 +46,16 @@ class InverterEfficiencyClampTests(TestCase):
         return InverterIndicators.objects.get(
             device=self.device, date=self.test_date, time_range='daily')
 
-    def test_eficiencia_imposible_se_acota_a_100(self):
-        # acPower (1000) > dcPower (500): eficiencia cruda = 200% -> debe quedar en 100.
+    def test_eficiencia_queda_en_null_aunque_dc_sea_menor_que_ac(self):
         ind = self._run(ac_power=1000.0, dc_power=500.0)
-        self.assertEqual(ind.dc_ac_efficiency_pct, 100.0)
+        self.assertIsNone(ind.dc_ac_efficiency_pct)
+        self.assertNotIn('low_efficiency', ind.anomaly_details)
 
-    def test_eficiencia_normal_no_se_altera(self):
-        # acPower (400) < dcPower (500): eficiencia = 80% (dentro de rango físico).
+    def test_eficiencia_queda_en_null_con_valores_normales(self):
         ind = self._run(ac_power=400.0, dc_power=500.0)
-        self.assertAlmostEqual(ind.dc_ac_efficiency_pct, 80.0, places=1)
+        self.assertIsNone(ind.dc_ac_efficiency_pct)
+        # La energía AC sí se integra: 2 muestras × 400 W × 2/60 h = 26,67 Wh.
+        self.assertAlmostEqual(ind.energy_ac_daily_kwh, 2 * 400 * (2 / 60) / 1000)
 
 
 def _inverter_row(**overrides):

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { buildApiUrl } from '../utils/apiConfig';
+import { buildApiUrl, getDefaultFetchOptions, requestLogin } from '../utils/apiConfig';
 
 /**
  * Hook compartido por las 3 pantallas de detalle (Eléctricos/Inversores/Estaciones).
@@ -61,9 +61,8 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
         baseParams.end_date = f.endDate || defaultEndDate.toISOString().split('T')[0];
       }
 
-      const resp = await fetch(buildApiUrl(indicatorsEndpoint, baseParams), {
-        headers: { 'Authorization': `Token ${authToken}`, 'Content-Type': 'application/json' },
-      });
+      // Sin token (modo invitado) va sin cabecera Authorization: GET de lectura pública.
+      const resp = await fetch(buildApiUrl(indicatorsEndpoint, baseParams), getDefaultFetchOptions(authToken));
       if (!resp.ok) {
         const errText = await resp.text();
         throw new Error(errText || resp.statusText);
@@ -102,6 +101,11 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
   }, [fetchData, debounceMs]);
 
   const calculate = useCallback(async () => {
+    // Recalcular dispara trabajo en el servidor: el invitado debe iniciar sesión.
+    if (!authToken) {
+      requestLogin('Inicia sesión para recalcular los datos.');
+      return;
+    }
     try {
       if (!filters.institutionId) {
         notify('error', 'Debe seleccionar una institución primero', 3000);
@@ -116,7 +120,7 @@ export function useDeviceDetail({ indicatorsEndpoint, calculateEndpoint, authTok
 
       const resp = await fetch(buildApiUrl(calculateEndpoint), {
         method: 'POST',
-        headers: { 'Authorization': `Token ${authToken}`, 'Content-Type': 'application/json' },
+        ...getDefaultFetchOptions(authToken),
         body: JSON.stringify({
           time_range: filters.timeRange,
           start_date: filters.startDate,

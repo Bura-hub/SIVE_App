@@ -76,30 +76,8 @@ class EnergySavings(models.Model):
     def __str__(self):
         return f"{self.date} - Ahorro: {self.total_savings_cop} COP"
     
-    def save(self, *args, **kwargs):
-        # Calcular ahorros automáticamente
-        if self.total_consumed_kwh > 0 and self.total_generated_kwh > 0:
-            # Calcular ahorro total
-            consumed_cost = self.total_consumed_kwh * self.average_price_kwh
-            generated_value = self.total_generated_kwh * self.average_price_kwh
-            self.total_savings_cop = min(generated_value, consumed_cost)
-            
-            # Calcular porcentaje de ahorro
-            if consumed_cost > 0:
-                self.savings_percentage = (self.total_savings_cop / consumed_cost) * 100
-            
-            # Calcular autoconsumo
-            self.self_consumption_percentage = min(
-                (self.total_generated_kwh / self.total_consumed_kwh) * 100, 100
-            )
-            
-            # Calcular excedentes
-            if self.total_generated_kwh > self.total_consumed_kwh:
-                self.excess_energy_kwh = self.total_generated_kwh - self.total_consumed_kwh
-            else:
-                self.excess_energy_kwh = 0
-        
-        super().save(*args, **kwargs)
+    # Sin save() propio: antes recalculaba el ahorro como min(generación, consumo) × precio, lo que pisaba el
+    # cálculo con la tarifa al usuario y el autoconsumo real (external_energy.tasks.calculate_energy_savings, C13).
 
 
 class EnergyPriceForecast(models.Model):

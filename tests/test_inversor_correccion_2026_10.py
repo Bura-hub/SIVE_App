@@ -1,0 +1,220 @@
+"""
+Indicadores de inversor, corrección de octubre de 2026 (C1, C2, C4, C5 y C7).
+"""
+from datetime import date, datetime, timedelta
+
+import pytz
+from django.test import SimpleTestCase, TestCase
+
+from indicators.models import InverterChartData, InverterIndicators
+from indicators.services.date_ranges import COLOMBIA_TZ
+from indicators.services.inverter_calc import (
+    INVERTER_FIELDS,
+    PR_REASON_NO_PLANT,
+    PR_REASON_NO_VALID_DAYS,
+    compute_inverter_hourly_chart,
+    compute_inverter_indicators,
+    compute_performance_ratio,
+    daily_ac_energy_kwh,
+)
+from indicators.services.weather_calc import daily_irradiation_for_pr
+from indicators.tasks import calculate_inverter_indicators
+from scada_proxy.models import (
+    Device, DeviceCategory, Institution, InverterMeasurement, WeatherStationMeasurement,
+)
+
+HUDN = '40a047f8-295a-4b8a-8d2c-649ddc18e600'
+HUDN_INV = 'f6893ba9-7175-44ea-8624-a47bf55158c9'
+HUDN_EST = '49435c0b-ada3-4ced-ad15-9418013a30d1'
+UDENAR = '04abaa1c-9f61-4ae4-8b53-44f66cce93c6'
+UDENAR_INV = 'c03a5f4a-f78e-47d7-8818-b50544b3f531'
+
+
+def _row(**kw):
+    row = {f: None for f in INVERTER_FIELDS}
+    row.update(kw)
+    return row
+
+
+def _bog(y, m, d, h, mi=0):
+    return COLOMBIA_TZ.localize(datetime(y, m, d, h, mi))
+
+
+class FrecuenciaYFactorDePotenciaTests(SimpleTestCase):
+    """C1 y C2/D7."""
+
+    def setUp(self):
+        # Noche: 0 Hz, acPower 0, FP 0. Día: 60 Hz, FP −98 % y +96 %.
+        self.rows = (
+            [_row(acPower=0.0, acFrequency=0.0, powerFactor=0.0)] * 10
+            + [_row(acPower=5000.0, acFrequency=59.98, powerFactor=-98.0)] * 5
+            + [_row(acPower=6000.0, acFrequency=60.02, powerFactor=96.0)] * 5
+        )
+
+    def test_frecuencia_solo_mientras_genera(self):
+        r = compute_inverter_indicators(self.rows)
+        # Antes: (10×0 + 5×59,98 + 5×60,02)/20 = 30,0 Hz.
+        self.assertAlmostEqual(r['avg_frequency_hz'], 60.0)
+
+    def test_estabilidad_no_salta_por_la_noche(self):
+        r = compute_inverter_indicators(self.rows)
+        self.assertGreater(r['frequency_stability_pct'], 99.9)
+        self.assertNotIn('frequency_instability', r['anomaly_details'])
+
+    def test_factor_de_potencia_es_media_de_abs_entre_100_mientras_genera(self):
+        r = compute_inverter_indicators(self.rows)
+        # Antes: media cruda con signo y con las noches = (5×−98 + 5×96)/20 = −0,5.
+        self.assertAlmostEqual(r['avg_power_factor'], 0.97)
+        self.assertNotIn('avg_power_factor_pct', r)
+
+    def test_sin_generacion_no_hay_frecuencia_ni_fp(self):
+        r = compute_inverter_indicators([_row(acPower=0.0, acFrequency=0.0, powerFactor=0.0)] * 3)
+        self.assertIsNone(r['avg_frequency_hz'])
+        self.assertIsNone(r['frequency_stability_pct'])
+        self.assertIsNone(r['avg_power_factor'])
+
+    def test_eficiencia_e_irradiancia_no_disponibles(self):
+        r = compute_inverter_indicators(self.rows)
+        self.assertIsNone(r['dc_ac_efficiency_pct'])
+        self.assertIsNone(r['avg_irradiance_wm2'])
+        self.assertIsNone(r['avg_temperature_c'])
+        self.assertIsNone(r['performance_ratio_pct'])
+
+
+class IrradiacionParaPRTests(SimpleTestCase):
+    """D5: H = Σ irradiancia de 06–18 h en [0, 1400] × 2/60 / 1000; día válido con ≥ 288
+    muestras diurnas (80 % de 360) y 0 < H ≤ 8 kWh/m²."""
+
+    def _dia(self, n, valor, y=2025, m=7, d=1):
+        start = _bog(y, m, d, 6)
+        return [{'date': start + timedelta(minutes=2 * i), 'irradiance': valor} for i in range(n)]
+
+    def test_dia_completo(self):
+        rows = self._dia(360, 500.0)
+        # Lecturas nocturnas y fuera de rango no cuentan.
+        rows += [{'date': _bog(2025, 7, 1, 20), 'irradiance': 900.0},
+                 {'date': _bog(2025, 7, 1, 12, 1), 'irradiance': 1500.0}]
+        h, ok = daily_irradiation_for_pr(rows)[date(2025, 7, 1)]
+        self.assertAlmostEqual(h, 360 * 500 * 2 / 60 / 1000)  # 6 kWh/m²
+        self.assertTrue(ok)
+
+    def test_cobertura_insuficiente(self):
+        h, ok = daily_irradiation_for_pr(self._dia(287, 500.0))[date(2025, 7, 1)]
+        self.assertFalse(ok)
+
+    def test_h_mayor_que_8_no_es_valido(self):
+        h, ok = daily_irradiation_for_pr(self._dia(360, 700.0))[date(2025, 7, 1)]
+        self.assertAlmostEqual(h, 8.4)
+        self.assertFalse(ok)
+
+    def test_dia_en_hora_de_bogota(self):
+        # 06:00 Bogotá = 11:00 UTC; las filas de Django vienen en UTC.
+        rows = [{'date': r['date'].astimezone(pytz.utc), 'irradiance': r['irradiance']}
+                for r in self._dia(360, 500.0)]
+        self.assertEqual(list(daily_irradiation_for_pr(rows)), [date(2025, 7, 1)])
+
+
+class PerformanceRatioPuroTests(SimpleTestCase):
+    def test_pr_mensual_es_suma_de_e_entre_suma_de_referencia(self):
+        energy = {date(2025, 7, 1): 70.0, date(2025, 7, 2): 50.0, date(2025, 7, 3): 99.0}
+        irr = {date(2025, 7, 1): (5.0, True), date(2025, 7, 2): (4.0, True),
+               date(2025, 7, 3): (6.0, False)}
+        r = compute_performance_ratio(energy, irr, 17.55)
+        self.assertAlmostEqual(r['performance_ratio_pct'], 120.0 / (9.0 * 17.55) * 100)
+        self.assertAlmostEqual(r['reference_energy_kwh'], 9.0 * 17.55)
+        self.assertEqual(r['performance_ratio_valid_days'], 2)
+        self.assertIsNone(r['performance_ratio_note'])
+
+    def test_sin_dias_validos_es_null_con_motivo(self):
+        r = compute_performance_ratio({date(2025, 7, 1): 70.0}, {date(2025, 7, 1): (5.0, False)}, 17.55)
+        self.assertIsNone(r['performance_ratio_pct'])
+        self.assertEqual(r['performance_ratio_note'], PR_REASON_NO_VALID_DAYS)
+
+    def test_energia_diaria_en_dias_de_bogota(self):
+        rows = [{'date': _bog(2025, 7, 1, 23, 58), 'acPower': 3000.0},
+                {'date': _bog(2025, 7, 2, 0, 0), 'acPower': 6000.0},
+                {'date': _bog(2025, 7, 2, 0, 2), 'acPower': None}]
+        e = daily_ac_energy_kwh(rows)
+        self.assertAlmostEqual(e[date(2025, 7, 1)], 0.1)
+        self.assertAlmostEqual(e[date(2025, 7, 2)], 0.2)
+
+
+class GraficaHorariaTests(SimpleTestCase):
+    """C5 y C7."""
+
+    def test_generacion_horaria_es_la_energia_de_la_hora_en_hora_de_bogota(self):
+        start = _bog(2025, 7, 1, 10)
+        rows = [{'date': start + timedelta(minutes=2 * i), 'acPower': 6000.0, 'dcPower': 3300.0}
+                for i in range(30)]
+        chart = compute_inverter_hourly_chart(rows)
+        # 30 muestras × 6000 W × 2/60 h = 6 kWh. Antes: media 6000 × 2/60 / 1000 = 0,2 kWh, en la hora 15 (UTC).
+        self.assertAlmostEqual(chart['hourly_generation'][10], 6.0)
+        self.assertAlmostEqual(chart['hourly_ac_power'][10], 6000.0)
+        self.assertIsNone(chart['hourly_generation'][15])
+        self.assertEqual(chart['hourly_efficiency'], [None] * 24)
+
+
+class PerformanceRatioTareaTests(TestCase):
+    """C4: PR de la tarea con la estación de la institución (institution_config)."""
+
+    def setUp(self):
+        inv_cat = DeviceCategory.objects.create(scada_id='C_INV', name='inverter')
+        ws_cat = DeviceCategory.objects.create(scada_id='C_WS', name='weatherStation')
+        self.hudn = Institution.objects.create(scada_id=HUDN, name='HUDN')
+        self.inv = Device.objects.create(name='Inversor 1 - HUDN', scada_id=HUDN_INV,
+                                         category=inv_cat, institution=self.hudn)
+        self.est = Device.objects.create(name='Estación - HUDN', scada_id=HUDN_EST,
+                                         category=ws_cat, institution=self.hudn)
+        self.udenar = Institution.objects.create(scada_id=UDENAR, name='Udenar')
+        self.inv_udenar = Device.objects.create(name='Inversor MTE', scada_id=UDENAR_INV,
+                                                category=inv_cat, institution=self.udenar)
+        self.otro = Device.objects.create(name='Prueba', scada_id='otro-inversor',
+                                          category=inv_cat, institution=self.hudn)
+        self.dia = date(2025, 7, 1)
+        # 12 h con 6000 W en el inversor (E = 360 × 6000 × 2/60 / 1000 = 72 kWh) y 500 W/m² en la
+        # estación (H = 6 kWh/m²): PR = 72 / (6 × 17,55) = 68,4 %.
+        start = _bog(2025, 7, 1, 6)
+        for dev in (self.inv, self.inv_udenar, self.otro):
+            InverterMeasurement.objects.bulk_create([
+                InverterMeasurement(device=dev, date=start + timedelta(minutes=2 * i), acPower=6000.0,
+                                    acFrequency=60.0, powerFactor=-99.0)
+                for i in range(360)])
+        WeatherStationMeasurement.objects.bulk_create([
+            WeatherStationMeasurement(device=self.est, date=start + timedelta(minutes=2 * i), irradiance=500.0)
+            for i in range(360)])
+
+    def _ind(self, dev, time_range='daily'):
+        calculate_inverter_indicators(dev.id, self.dia.isoformat(), time_range)
+        fecha = self.dia if time_range == 'daily' else self.dia.replace(day=1)
+        return InverterIndicators.objects.get(device=dev, date=fecha, time_range=time_range)
+
+    def test_pr_diario_del_hudn(self):
+        ind = self._ind(self.inv)
+        self.assertAlmostEqual(ind.performance_ratio_pct, 72.0 / (6.0 * 17.55) * 100)
+        self.assertEqual(ind.performance_ratio_valid_days, 1)
+        self.assertAlmostEqual(ind.avg_power_factor, 0.99)
+        self.assertAlmostEqual(ind.avg_frequency_hz, 60.0)
+
+    def test_pr_mensual_del_hudn(self):
+        ind = self._ind(self.inv, 'monthly')
+        self.assertAlmostEqual(ind.performance_ratio_pct, 72.0 / (6.0 * 17.55) * 100)
+        self.assertEqual(ind.performance_ratio_valid_days, 1)
+
+    def test_udenar_estacion_no_apta(self):
+        ind = self._ind(self.inv_udenar)
+        self.assertIsNone(ind.performance_ratio_pct)
+        self.assertIn('no es apta', ind.performance_ratio_note)
+
+    def test_inversor_sin_planta(self):
+        ind = self._ind(self.otro)
+        self.assertIsNone(ind.performance_ratio_pct)
+        self.assertEqual(ind.performance_ratio_note, PR_REASON_NO_PLANT)
+
+    def test_mensual_no_pisa_la_grafica_del_dia_1(self):
+        self._ind(self.inv)
+        diaria = InverterChartData.objects.get(device=self.inv, date=self.dia).hourly_generation
+        self._ind(self.inv, 'monthly')
+        self.assertEqual(InverterChartData.objects.get(device=self.inv, date=self.dia).hourly_generation, diaria)
+        # 30 muestras × 6000 W × 2/60 h = 6 kWh por hora, de 06 a 17 h de Bogotá.
+        self.assertAlmostEqual(diaria[6], 6.0)
+        self.assertIsNone(diaria[5])

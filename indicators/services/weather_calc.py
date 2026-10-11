@@ -5,7 +5,56 @@ Extraído verbatim de tasks.py: reciben filas dict de `.values()` y devuelven el
 de indicadores. Puras (no tocan la BD ni Celery). Descartan lecturas fuera de rango
 físico plausible antes de promediar (arreglo de datos de la Ola 1).
 """
+import math
+
 from indicators.services.date_ranges import COLOMBIA_TZ
+
+# Rangos físicos de las lecturas (mismos en el diario, el horario y la gráfica del día).
+IRRADIANCE_MAX_WM2 = 1100.0
+DAYLIGHT_START_HOUR = 6
+DAYLIGHT_END_HOUR = 18
+
+
+def _local_hour(ts):
+    """Hora de Bogotá de un datetime aware (Django devuelve UTC)."""
+    try:
+        return ts.astimezone(COLOMBIA_TZ).hour
+    except (ValueError, AttributeError):
+        return None
+
+
+def _valid_irradiance(data):
+    """Irradiancia (W/m²) de la fila si pasa el filtro físico del diario: 0–1100 W/m² y dentro de
+    06–18 h de Bogotá. None si no pasa o no se midió."""
+    irr = data['irradiance']
+    if irr is None or not (0.0 <= float(irr) <= IRRADIANCE_MAX_WM2):
+        return None
+    hour = _local_hour(data['date'])
+    if hour is not None and not (DAYLIGHT_START_HOUR <= hour < DAYLIGHT_END_HOUR):
+        return None
+    return float(irr)
+
+
+def _in_range(value, low, high=None):
+    if value is None:
+        return None
+    v = float(value)
+    if v < low or (high is not None and v > high):
+        return None
+    return v
+
+
+def circular_mean_deg(directions):
+    """Media circular de direcciones en grados (0–360). La media aritmética de 350° y 10° da 180°
+    (sur); la circular da 0° (norte). None si no hay direcciones o el viento no tiene dirección
+    dominante (resultante nula)."""
+    if not directions:
+        return None
+    s = sum(math.sin(math.radians(d)) for d in directions)
+    c = sum(math.cos(math.radians(d)) for d in directions)
+    if abs(s) < 1e-12 and abs(c) < 1e-12:
+        return None
+    return math.degrees(math.atan2(s, c)) % 360.0
 
 
 def calculate_single_day_weather_indicators(measurements):
@@ -33,15 +82,9 @@ def calculate_single_day_weather_indicators(measurements):
         # Fuera de ese horario un valor alto es un sensor pegado que inflaba la
         # acumulación diaria (llegaba a ~24 kWh/m² vs ~8 físico). Nariño es ~1°N, con
         # día solar estable ~06–18 todo el año, así que la ventana no recorta energía real.
-        irr = data['irradiance']
-        if irr is not None and 0.0 <= float(irr) <= 1100.0:
-            ts = data['date']
-            try:
-                hour = ts.astimezone(COLOMBIA_TZ).hour
-            except (ValueError, AttributeError):
-                hour = 12  # sin tz utilizable: no descartar por hora
-            if 6 <= hour < 18:
-                irradiance_values.append(float(irr))
+        irr = _valid_irradiance(data)
+        if irr is not None:
+            irradiance_values.append(irr)
 
         # Temperatura (°C): rango plausible -20–60
         temp = data['temperature']
@@ -68,9 +111,19 @@ def calculate_single_day_weather_indicators(measurements):
         if prec is not None and float(prec) >= 0.0:
             precipitation_values.append(float(prec))
     
-    # Calcular indicadores
-    indicators = {}
-    
+    # Calcular indicadores. Lo que no se midió queda en None («no disponible»), nunca en 0.
+    indicators = {
+        'daily_irradiance_kwh_m2': None,
+        'daily_hsp_hours': None,
+        'theoretical_pv_power_w': None,
+        'avg_wind_speed_kmh': None,
+        'daily_precipitation_cm': None,
+        'avg_temperature_c': None,
+        'max_temperature_c': None,
+        'min_temperature_c': None,
+        'avg_humidity_pct': None,
+    }
+
     # 5.1. Irradiancia Acumulada Diaria (kWh/m²)
     if irradiance_values:
         # Fórmula: Suma de irradiance (W/m²) × (2/60) horas × (1/1000) kW/W
@@ -136,7 +189,8 @@ def calculate_single_month_weather_indicators(measurements):
     day_measurements = []
 
     for measurement in measurements:
-        day = measurement['date'].date()
+        # Día de Bogotá (C7): `date.date()` daba el día UTC y partía cada día a las 19:00.
+        day = measurement['date'].astimezone(COLOMBIA_TZ).date()
         if current_day != day:
             if day_measurements:
                 daily_indicators.append(calculate_single_day_weather_indicators(day_measurements))
@@ -151,8 +205,12 @@ def calculate_single_month_weather_indicators(measurements):
     if not daily_indicators:
         return {}
     
-    # Calcular promedios mensuales
-    monthly_indicators = {}
+    # Calcular promedios mensuales. Lo que ningún día midió queda en None, no en 0.
+    monthly_indicators = {
+        'daily_irradiance_kwh_m2': None, 'daily_hsp_hours': None, 'avg_wind_speed_kmh': None,
+        'avg_temperature_c': None, 'avg_humidity_pct': None, 'daily_precipitation_cm': None,
+        'max_temperature_c': None, 'min_temperature_c': None,
+    }
     
     # Promedios de valores diarios (magnitudes intensivas: irradiancia media diaria,
     # HSP, viento, temperatura, humedad)
@@ -186,16 +244,17 @@ def calculate_single_month_weather_indicators(measurements):
 
 def calculate_single_hour_weather_indicators(measurements):
     """
-    Calcula indicadores meteorológicos para UNA hora específica (vista horaria, Opción B).
+    Calcula indicadores meteorológicos para UNA hora (vista horaria y gráfica del día).
 
-    Recibe filas dict de una sola hora (mismo formato que `calculate_single_day_weather_indicators`:
-    `.values('date', <columnas meteorológicas>)`) y devuelve el dict de campos de
-    `HourlyWeatherIndicators`. Extraída verbatim de la lógica que ya agrupaba por hora
-    dentro de `calculate_single_day_weather_chart_data`, para poder reutilizarla también
-    en el rollup horario dedicado sin duplicar código ni alterar la salida diaria existente.
+    Recibe filas dict de una sola hora (`.values('date', <columnas meteorológicas>)`) y devuelve
+    el dict de campos de `HourlyWeatherIndicators`.
 
-    Nota: `avg_wind_direction_deg` usa promedio aritmético simple (no circular), el mismo
-    criterio ya presente en el cálculo diario/mensual — defecto heredado, fuera de alcance.
+    Corrección de octubre de 2026:
+    - aplica los mismos filtros físicos que el diario a todas las variables (antes solo a la
+      irradiancia);
+    - la dirección del viento es la media circular (antes la aritmética: 350° y 10° daban 180°);
+    - lo que no se midió queda en None, no en 0. La irradiancia de una hora nocturna (fuera de
+      06–18 h, donde el método la descarta) es 0,0 W/m².
     """
     irradiance_values = []
     temperature_values = []
@@ -203,75 +262,55 @@ def calculate_single_hour_weather_indicators(measurements):
     wind_speed_values = []
     wind_direction_values = []
     precipitation_values = []
+    daylight = False
 
     for data in measurements:
-        if data['irradiance'] is not None:
-            irr = float(data['irradiance'])
-            # Mismo filtro que el cálculo diario: rango físico 0–1100 W/m² y solo en
-            # horas de luz (06–18 local), para no inflar el acumulado con sensores pegados.
-            ts = data['date']
-            try:
-                hour_of_day = ts.astimezone(COLOMBIA_TZ).hour
-            except (ValueError, AttributeError):
-                hour_of_day = 12  # sin tz utilizable: no descartar por hora
-            if 0.0 <= irr <= 1100.0 and 6 <= hour_of_day < 18:
-                irradiance_values.append(irr)
-        if data['temperature'] is not None:
-            temperature_values.append(float(data['temperature']))
-        if data['humidity'] is not None:
-            humidity_values.append(float(data['humidity']))
-        if data['windSpeed'] is not None:
-            wind_speed_values.append(float(data['windSpeed']))
-        if data['windDirection'] is not None:
-            wind_direction_values.append(float(data['windDirection']))
-        if data['precipitation'] is not None:
-            precipitation_values.append(float(data['precipitation']))
+        hour = _local_hour(data['date'])
+        if hour is None or DAYLIGHT_START_HOUR <= hour < DAYLIGHT_END_HOUR:
+            daylight = True
+        irr = _valid_irradiance(data)
+        if irr is not None:
+            irradiance_values.append(irr)
+        for key, low, high, bucket in (
+            ('temperature', -20.0, 60.0, temperature_values),
+            ('humidity', 0.0, 100.0, humidity_values),
+            ('windSpeed', 0.0, 150.0, wind_speed_values),
+            ('windDirection', 0.0, 360.0, wind_direction_values),
+            ('precipitation', 0.0, None, precipitation_values),
+        ):
+            v = _in_range(data[key], low, high)
+            if v is not None:
+                bucket.append(v)
 
     indicators = {}
 
-    # Irradiancia promedio de la hora (ya filtrada 06-18h y 0-1100 W/m²).
     if irradiance_values:
         indicators['avg_irradiance_wm2'] = sum(irradiance_values) / len(irradiance_values)
-    else:
-        indicators['avg_irradiance_wm2'] = 0.0
-
-    # Irradiancia acumulada de la hora (kWh/m²): igual criterio que el diario pero
-    # sobre el slice de 1 hora (lecturas de 2 min -> Wh/m² -> kWh/m²).
-    if irradiance_values:
-        total_irradiance_wh_m2 = sum(irradiance_values) * (2 / 60)  # Wh/m²
-        indicators['irradiance_energy_kwh_m2'] = total_irradiance_wh_m2 / 1000  # kWh/m²
-    else:
+        # Irradiación de la hora (kWh/m²): cada muestra de 2 min aporta W/m² × 2/60 h.
+        indicators['irradiance_energy_kwh_m2'] = sum(irradiance_values) * (2 / 60) / 1000
+    elif measurements and not daylight:
+        indicators['avg_irradiance_wm2'] = 0.0      # hora nocturna
         indicators['irradiance_energy_kwh_m2'] = 0.0
+    else:
+        indicators['avg_irradiance_wm2'] = None
+        indicators['irradiance_energy_kwh_m2'] = None
 
     if temperature_values:
         indicators['avg_temperature_c'] = sum(temperature_values) / len(temperature_values)
         indicators['max_temperature_c'] = max(temperature_values)
         indicators['min_temperature_c'] = min(temperature_values)
     else:
-        indicators['avg_temperature_c'] = 0.0
-        indicators['max_temperature_c'] = 0.0
-        indicators['min_temperature_c'] = 0.0
+        indicators['avg_temperature_c'] = None
+        indicators['max_temperature_c'] = None
+        indicators['min_temperature_c'] = None
 
-    if humidity_values:
-        indicators['avg_humidity_pct'] = sum(humidity_values) / len(humidity_values)
-    else:
-        indicators['avg_humidity_pct'] = 0.0
-
-    if wind_speed_values:
-        indicators['avg_wind_speed_kmh'] = sum(wind_speed_values) / len(wind_speed_values)
-    else:
-        indicators['avg_wind_speed_kmh'] = 0.0
-
-    if wind_direction_values:
-        indicators['avg_wind_direction_deg'] = sum(wind_direction_values) / len(wind_direction_values)
-    else:
-        indicators['avg_wind_direction_deg'] = 0.0
-
+    indicators['avg_humidity_pct'] = (
+        sum(humidity_values) / len(humidity_values) if humidity_values else None)
+    indicators['avg_wind_speed_kmh'] = (
+        sum(wind_speed_values) / len(wind_speed_values) if wind_speed_values else None)
+    indicators['avg_wind_direction_deg'] = circular_mean_deg(wind_direction_values)
     # Precipitación: último valor de la hora (acumulador), mismo criterio que el diario.
-    if precipitation_values:
-        indicators['precipitation_cm'] = precipitation_values[-1]
-    else:
-        indicators['precipitation_cm'] = 0.0
+    indicators['precipitation_cm'] = precipitation_values[-1] if precipitation_values else None
 
     indicators['measurement_count'] = len(measurements)
 
@@ -280,23 +319,24 @@ def calculate_single_hour_weather_indicators(measurements):
 
 def calculate_single_day_weather_chart_data(measurements):
     """
-    Calcula datos de gráficos para un día específico.
+    Calcula datos de gráficos para un día.
 
-    Recibe filas dict (v2: `.values('date', <columnas meteorológicas>)`).
+    Recibe filas dict de UN día de Bogotá (`.values('date', <columnas meteorológicas>)`).
+
+    Corrección de octubre de 2026:
+    - horas de Bogotá (C7; antes `date.hour` en UTC, 5 h corridas);
+    - `hourly_irradiance` es la media horaria con el filtro físico del diario, y
+      `daily_irradiance_kwh_m2` es Σ muestras válidas × 2/60 / 1000, igual que el indicador diario
+      (C6; antes se sumaban las 24 medias horarias × 2/60: 30 veces menos);
+    - los promedios del día salen de las muestras (no de 24 medias con las horas vacías en 0);
+    - las horas sin datos quedan en None.
     """
     if not measurements:
         return {}
 
-    # Agrupar mediciones por hora
     hourly_measurements = {i: [] for i in range(24)}
     for data in measurements:
-        hourly_measurements[data['date'].hour].append(data)
-
-    # Calcular indicadores por hora reutilizando la función pura horaria (Opción B)
-    # para temperatura/humedad/viento/precipitación: nunca tuvieron filtro y siguen
-    # sin él en `calculate_single_hour_weather_indicators`, así que su salida es
-    # bit-idéntica al cálculo previo in-line.
-    hourly_indicators = {hour: calculate_single_hour_weather_indicators(rows) for hour, rows in hourly_measurements.items()}
+        hourly_measurements[data['date'].astimezone(COLOMBIA_TZ).hour].append(data)
 
     chart_data = {
         'hourly_irradiance': [],
@@ -306,32 +346,27 @@ def calculate_single_day_weather_chart_data(measurements):
         'hourly_wind_direction': [],
         'hourly_precipitation': []
     }
-
     for hour in range(24):
         rows = hourly_measurements[hour]
-        ind = hourly_indicators[hour]
-
-        # Irradiancia: el chart diario históricamente promedia TODAS las lecturas de
-        # la hora sin filtro de rango físico ni ventana 06-18h (a diferencia del nuevo
-        # `avg_irradiance_wm2` horario, que sí filtra para no inflar el acumulado con
-        # sensores pegados). Se mantiene el cálculo original in-line para no alterar
-        # bit a bit la salida diaria existente; el filtro nuevo queda reservado al
-        # indicador horario dedicado (HourlyWeatherIndicators).
-        irr_values = [float(r['irradiance']) for r in rows if r['irradiance'] is not None]
-        chart_data['hourly_irradiance'].append(sum(irr_values) / len(irr_values) if irr_values else 0)
-
+        if not rows:
+            for key in chart_data:
+                chart_data[key].append(None)
+            continue
+        ind = calculate_single_hour_weather_indicators(rows)
+        chart_data['hourly_irradiance'].append(ind['avg_irradiance_wm2'])
         chart_data['hourly_temperature'].append(ind['avg_temperature_c'])
         chart_data['hourly_humidity'].append(ind['avg_humidity_pct'])
         chart_data['hourly_wind_speed'].append(ind['avg_wind_speed_kmh'])
         chart_data['hourly_wind_direction'].append(ind['avg_wind_direction_deg'])
         chart_data['hourly_precipitation'].append(ind['precipitation_cm'])
 
-    # Calcular valores diarios
-    chart_data['daily_irradiance_kwh_m2'] = sum(chart_data['hourly_irradiance']) * (2/60) / 1000  # kWh/m²
-    chart_data['avg_daily_temperature_c'] = sum(chart_data['hourly_temperature']) / 24
-    chart_data['avg_daily_humidity_pct'] = sum(chart_data['hourly_humidity']) / 24
-    chart_data['avg_daily_wind_speed_kmh'] = sum(chart_data['hourly_wind_speed']) / 24
-    chart_data['daily_precipitation_cm'] = chart_data['hourly_precipitation'][len(chart_data['hourly_precipitation'])-1] if chart_data['hourly_precipitation'] else 0
+    # Valores del día: los mismos del indicador diario (mismas muestras y filtros).
+    day = calculate_single_day_weather_indicators(measurements)
+    chart_data['daily_irradiance_kwh_m2'] = day['daily_irradiance_kwh_m2']
+    chart_data['avg_daily_temperature_c'] = day['avg_temperature_c']
+    chart_data['avg_daily_humidity_pct'] = day['avg_humidity_pct']
+    chart_data['avg_daily_wind_speed_kmh'] = day['avg_wind_speed_kmh']
+    chart_data['daily_precipitation_cm'] = day['daily_precipitation_cm']
 
     return chart_data
 
@@ -392,3 +427,48 @@ def calculate_wind_speed_distribution(wind_speeds):
             speed_ranges['30+'] += 1
     
     return speed_ranges
+
+
+# ---------------------------------------------------------------------------------------------
+# Irradiación diaria para el Performance Ratio (D5, corrección de octubre de 2026)
+# ---------------------------------------------------------------------------------------------
+
+PR_IRRADIANCE_MAX_WM2 = 1400.0         # tope físico de una muestra (con realce por nubes)
+PR_DAYLIGHT_START_HOUR = 6             # ventana diurna en hora de Bogotá: [06:00, 18:00)
+PR_DAYLIGHT_END_HOUR = 18
+PR_EXPECTED_DAYLIGHT_SAMPLES = 360     # 12 h × 30 muestras/h (Δt = 2 min)
+PR_MIN_COVERAGE = 0.80                 # ≥ 80 % de las muestras diurnas esperadas
+PR_MAX_DAILY_KWH_M2 = 8.0              # por encima, el día no es físico (sensor descalibrado)
+
+
+def daily_irradiation_for_pr(rows):
+    """Irradiación diurna por día de Bogotá para el PR, a partir de filas
+    `.values('date', 'irradiance')` de la estación.
+
+        H_día = Σ irradiancia (W/m²) de las muestras de 06:00–18:00 en [0, 1400] × (2/60) / 1000
+
+    Devuelve {día: (H en kWh/m², válido)}; un día es válido si tiene al menos el 80 % de las 360
+    muestras diurnas esperadas y 0 < H ≤ 8 kWh/m²."""
+    sums = {}
+    counts = {}
+    for row in rows:
+        irr = row['irradiance']
+        local = row['date'].astimezone(COLOMBIA_TZ)
+        if not (PR_DAYLIGHT_START_HOUR <= local.hour < PR_DAYLIGHT_END_HOUR):
+            continue
+        day = local.date()
+        sums.setdefault(day, 0.0)
+        counts.setdefault(day, 0)
+        if irr is None or not (0.0 <= float(irr) <= PR_IRRADIANCE_MAX_WM2):
+            continue
+        sums[day] += float(irr)
+        counts[day] += 1
+
+    result = {}
+    min_samples = PR_MIN_COVERAGE * PR_EXPECTED_DAYLIGHT_SAMPLES
+    for day, total in sums.items():
+        h = total * (2 / 60) / 1000
+        # H = 0 con cobertura completa es un sensor muerto, no un día sin sol.
+        ok = counts[day] >= min_samples and 0.0 < h <= PR_MAX_DAILY_KWH_M2
+        result[day] = (h, ok)
+    return result

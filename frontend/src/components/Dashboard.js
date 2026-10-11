@@ -204,11 +204,11 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
 
   // Estados para los datos
   const [kpiData, setKpiData] = useState({
-    totalConsumption: { title: "Consumo total", value: "Cargando...", unit: "", change: "", status: "normal", icon: Icons.consumption },
-    totalGeneration: { title: "Generación total", value: "Cargando...", unit: "", change: "", status: "normal", icon: Icons.generation },
-    energyBalance: { title: "Equilibrio energético", value: "Cargando...", unit: "", description: "", status: "normal", icon: Icons.balance },
-    activeInverters: { title: "Inversores activos", value: "Cargando...", unit: "", description: "", status: "normal", icon: Icons.inverters },
-    averageInstantaneousPower: { title: "Pot. instan. promedio", value: "Cargando...", unit: "kW", description: "", status: "normal", icon: Icons.power },
+    totalConsumption: { title: "Demanda (circuitos medidos)", value: "Cargando...", unit: "", change: "", status: "normal", icon: Icons.consumption },
+    totalGeneration: { title: "Generación (plantas FV)", value: "Cargando...", unit: "", change: "", status: "normal", icon: Icons.generation },
+    energyBalance: { title: "Balance generación − demanda", value: "Cargando...", unit: "", description: "", status: "normal", icon: Icons.balance },
+    activeInverters: { title: "Inversores con datos", value: "Cargando...", unit: "", description: "", status: "normal", icon: Icons.inverters },
+    averageInstantaneousPower: { title: "Potencia media de la flota", value: "Cargando...", unit: "kW", description: "", status: "normal", icon: Icons.power },
     avgDailyTemp: { title: "Temp. prom. diaria", value: "Cargando...", unit: "°C", description: "Rango normal", status: "normal", icon: Icons.temperature },
     relativeHumidity: { title: "Humedad relativa", value: "Cargando...", unit: "%", description: "", status: "normal", icon: Icons.humidity },
     windSpeed: { title: "Velocidad del viento", value: "Cargando...", unit: "km/h", description: "Moderado", status: "moderado", icon: Icons.wind },
@@ -238,6 +238,11 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   // Función mejorada para ejecutar todas las tareas
   const executeAllTasks = async () => {
     if (taskExecuting) return;
+    // Sincronizar/recalcular escribe en el servidor: el invitado debe iniciar sesión.
+    if (!authToken) {
+      apiUtils.requestLogin('Inicia sesión para sincronizar y recalcular los datos.');
+      return;
+    }
     setTaskExecuting(true);
 
     try {
@@ -668,7 +673,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
 
   // Agregar un useEffect que se ejecute cuando el componente se monta o cambie el token
   useEffect(() => {
-    if (!authToken) return;
+    // Modo invitado: también se carga sin token (los GET del dashboard son de lectura pública).
     const controller = new AbortController();
     setLoading(true);
     // Simular un pequeño delay para mostrar la animación

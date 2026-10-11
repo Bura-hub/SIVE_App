@@ -106,6 +106,57 @@ const SectionHeader = ({ title, icon, infoText }) => (
   </div>
 );
 
+// ---------------------------------------------------------------------------------------
+// Resumen de los indicadores del rango (puro, exportado para las pruebas).
+// Corrección de octubre de 2026: lo que el backend no puede calcular llega en null y se
+// muestra «No disponible» con su motivo; nunca se convierte en 0.
+// ---------------------------------------------------------------------------------------
+export const DC_AC_EFFICIENCY_UNAVAILABLE =
+  'No disponible: el inversor solo reporta una entrada MPPT';
+export const PR_HOURLY_UNAVAILABLE =
+  'No disponible: el PR se calcula por día con la irradiación de la estación';
+
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+const mean = (values) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null);
+
+export function summarizeInverterResults(results, timeRange) {
+  const rows = Array.isArray(results) ? results : [];
+  const hourly = timeRange === 'hourly';
+  const energyKWh = rows.reduce(
+    (sum, item) => sum + ((hourly ? item.energy_ac_kwh : item.total_generated_energy_kwh) || 0), 0);
+  const maxPowers = rows.map(item => item.max_power_w).filter(isNum);
+
+  // PR del rango = Σ E_días válidos / Σ (H × kWp) = Σ(PR × referencia) / Σ referencia.
+  const prRows = rows.filter(item => isNum(item.performance_ratio_pct) && isNum(item.reference_energy_kwh)
+    && item.reference_energy_kwh > 0);
+  const prReference = prRows.reduce((sum, item) => sum + item.reference_energy_kwh, 0);
+  const performanceRatioPct = prReference > 0
+    ? prRows.reduce((sum, item) => sum + item.performance_ratio_pct * item.reference_energy_kwh, 0) / prReference
+    : null;
+  const prValidDays = prRows.reduce((sum, item) => sum + (item.performance_ratio_valid_days || 0), 0);
+  const prNote = performanceRatioPct === null
+    ? (hourly ? PR_HOURLY_UNAVAILABLE
+      : (rows.map(item => item.performance_ratio_note).find(Boolean)
+        || 'No disponible: sin días válidos de la estación en el rango'))
+    : null;
+
+  return {
+    energyKWh,
+    maxPowerKW: maxPowers.length ? Math.max(...maxPowers) / 1000 : null,
+    avgPowerFactor: mean(rows.map(item => item.avg_power_factor).filter(isNum)),
+    avgFrequencyHz: mean(rows.map(item => item.avg_frequency_hz).filter(isNum)),
+    avgVoltageUnbalancePct: mean(rows.map(item => item.max_voltage_unbalance_pct).filter(isNum)),
+    maxCurrentUnbalancePct: (() => {
+      const v = rows.map(item => item.max_current_unbalance_pct).filter(isNum);
+      return v.length ? Math.max(...v) : null;
+    })(),
+    performanceRatioPct,
+    prValidDays,
+    prNote,
+    dcAcEfficiencyNote: DC_AC_EFFICIENCY_UNAVAILABLE,
+  };
+}
+
 // Componente principal de detalles de inversores
 function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateTo, isSidebarMinimized, setIsSidebarMinimized }) {
   // Estados para control de carga y errores
@@ -132,7 +183,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   const activeIcon = <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-cpu" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><path d="M9 1v3"></path><path d="M15 1v3"></path><path d="M9 21v3"></path><path d="M15 21v3"></path><path d="M1 9h3"></path><path d="M1 15h3"></path><path d="M21 9h3"></path><path d="M21 15h3"></path></svg>;
 
   // Función para calcular KPIs dinámicamente basándose en los datos reales
-  const calculateDynamicKPIs = useCallback((data) => {
+  const calculateDynamicKPIs = useCallback((data, timeRange) => {
     if (!data || !data.results || data.results.length === 0) {
       return {
         totalGeneration: { 
@@ -166,6 +217,24 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
             <path d="M8 17v-3"></path>
           </svg>,
           color: "text-red-700"
+        },
+        performanceRatio: {
+          title: "Performance Ratio",
+          value: "No disponible",
+          unit: "",
+          change: "Sin datos",
+          status: "normal",
+          icon: generationIcon,
+          color: "text-green-700"
+        },
+        dcAcEfficiency: {
+          title: "Eficiencia DC/AC",
+          value: "No disponible",
+          unit: "",
+          change: DC_AC_EFFICIENCY_UNAVAILABLE,
+          status: "normal",
+          icon: activeIcon,
+          color: "text-orange-700"
         },
         powerFactor: { 
           title: "Factor de Potencia", 
@@ -207,34 +276,21 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     }
 
     const results = data.results;
-    
-    // Calcular total de generación (convertir de kWh a MWh)
-    const totalGenerationKWh = results.reduce((sum, item) => sum + (item.total_generated_energy_kwh || 0), 0);
-    const totalGenerationMWh = totalGenerationKWh / 1000;
-    
-    // Calcular eficiencia promedio
-    // Contar inversores únicos activos
+    const summary = summarizeInverterResults(results, timeRange);
+    const NA = 'No disponible';
+
+    // Generación del rango (kWh -> MWh).
+    const totalGenerationMWh = summary.energyKWh / 1000;
+
+    // Inversores distintos con registros en el rango.
     const uniqueInverters = new Set(results.map(item => item.device_id || item.device_name).filter(id => id));
     const activeInvertersCount = uniqueInverters.size;
-    
-    // Potencia máxima del rango (max_power_w en W -> kW). Reemplaza al Performance Ratio,
-    // irreparable en inversores (no miden irradiancia -> siempre 0).
-    const maxPowerKW = Math.max(0, ...results.map(item => (item.max_power_w || 0))) / 1000;
 
-    // Calcular factor de potencia promedio (el serializer expone avg_power_factor_pct, escala 0-1).
-    const powerFactors = results.map(item => item.avg_power_factor_pct || 0).filter(pf => pf > 0);
-    const averagePowerFactor = powerFactors.length > 0 ? powerFactors.reduce((sum, pf) => sum + pf, 0) / powerFactors.length : 0;
-
-    // Calcular desbalance de fases promedio
-    const phaseUnbalances = results.map(item => item.max_voltage_unbalance_pct || item.voltage_unbalance_pct || 0).filter(unb => unb > 0);
-    const averagePhaseUnbalance = phaseUnbalances.length > 0 ? phaseUnbalances.reduce((sum, unb) => sum + unb, 0) / phaseUnbalances.length : 0;
-
-    // Calcular frecuencia promedio
-    const frequencies = results.map(item => item.avg_frequency_hz || item.frequency_hz || 0).filter(freq => freq > 0);
-    const averageFrequency = frequencies.length > 0 ? frequencies.reduce((sum, freq) => sum + freq, 0) / frequencies.length : 0;
-
-    // Desbalance de corriente máximo del rango. Reemplaza al THD de voltaje (inexistente en el modelo).
-    const maxCurrentUnbalance = Math.max(0, ...results.map(item => (item.max_current_unbalance_pct || 0)));
+    const maxPowerKW = summary.maxPowerKW;
+    const averagePowerFactor = summary.avgPowerFactor;
+    const averagePhaseUnbalance = summary.avgVoltageUnbalancePct;
+    const averageFrequency = summary.avgFrequencyHz;
+    const maxCurrentUnbalance = summary.maxCurrentUnbalancePct;
 
     // Determinar cambios y estados basándose en los datos
     const getChangeText = (value, unit, isPercentage = false) => {
@@ -280,10 +336,10 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       },
       maxPower: {
         title: "Potencia Máxima",
-        value: maxPowerKW.toFixed(1),
-        unit: "kW",
-        change: maxPowerKW > 0 ? `${maxPowerKW.toFixed(1)} kW` : "Sin datos",
-        status: maxPowerKW > 0 ? "positivo" : "normal",
+        value: maxPowerKW === null ? NA : maxPowerKW.toFixed(1),
+        unit: maxPowerKW === null ? "" : "kW",
+        change: maxPowerKW ? `${maxPowerKW.toFixed(1)} kW` : "Sin datos",
+        status: maxPowerKW ? "positivo" : "normal",
         icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M3 3v18h18"></path>
           <path d="M18 17V9"></path>
@@ -292,39 +348,68 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         </svg>,
         color: "text-red-700"
       },
-      powerFactor: { 
-        title: "Factor de Potencia", 
-        value: averagePowerFactor.toFixed(2), 
-        unit: "", 
-        change: getChangeText(averagePowerFactor, "", true), 
-        status: getStatus(averagePowerFactor, { excellent: 0.95, good: 0.9, warning: 0.85 }), 
+      performanceRatio: {
+        title: "Performance Ratio",
+        value: summary.performanceRatioPct === null ? NA : summary.performanceRatioPct.toFixed(1),
+        unit: summary.performanceRatioPct === null ? "" : "%",
+        change: summary.performanceRatioPct === null
+          ? summary.prNote
+          : `${summary.prValidDays} día(s) válido(s); irradiancia horizontal`,
+        status: summary.performanceRatioPct === null ? "normal"
+          : getStatus(summary.performanceRatioPct, { excellent: 80, good: 75, warning: 60 }),
+        icon: generationIcon,
+        color: "text-green-700"
+      },
+      dcAcEfficiency: {
+        title: "Eficiencia DC/AC",
+        value: NA,
+        unit: "",
+        change: summary.dcAcEfficiencyNote,
+        status: "normal",
+        icon: activeIcon,
+        color: "text-orange-700"
+      },
+      powerFactor: {
+        title: "Factor de Potencia",
+        value: averagePowerFactor === null ? NA : averagePowerFactor.toFixed(3),
+        unit: "",
+        change: averagePowerFactor === null
+          ? "No disponible: sin muestras con el inversor generando"
+          : "|FP| medio mientras genera (0–1)",
+        status: averagePowerFactor === null ? "normal"
+          : getStatus(averagePowerFactor, { excellent: 0.95, good: 0.9, warning: 0.85 }),
         icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>,
         color: "text-indigo-700"
       },
-      phaseUnbalance: { 
-        title: "Desbalance de Fases", 
-        value: averagePhaseUnbalance.toFixed(1), 
-        unit: "%", 
-        change: getChangeText(averagePhaseUnbalance, "%"), 
-        status: getStatus(averagePhaseUnbalance, { excellent: 1, good: 2, warning: 5 }, true), // Invertir lógica para desbalance
+      phaseUnbalance: {
+        title: "Desbalance de Fases",
+        value: averagePhaseUnbalance === null ? NA : averagePhaseUnbalance.toFixed(1),
+        unit: averagePhaseUnbalance === null ? "" : "%",
+        change: averagePhaseUnbalance === null ? "Sin datos" : getChangeText(averagePhaseUnbalance, "%"),
+        status: averagePhaseUnbalance === null ? "normal"
+          : getStatus(averagePhaseUnbalance, { excellent: 1, good: 2, warning: 5 }, true), // Invertir lógica para desbalance
         icon: <IconScale size={24} />,
         color: "text-orange-700"
       },
       avgFrequency: {
         title: "Frecuencia Promedio",
-        value: averageFrequency.toFixed(1),
-        unit: "Hz",
-        change: averageFrequency > 0 ? `Δ ${(averageFrequency - 60).toFixed(2)} Hz vs 60` : "Sin datos",
-        status: getStatus(Math.abs(averageFrequency - 60), { excellent: 0.1, good: 0.5, warning: 1 }, true), // Invertir lógica para frecuencia
+        value: averageFrequency === null ? NA : averageFrequency.toFixed(2),
+        unit: averageFrequency === null ? "" : "Hz",
+        change: averageFrequency === null
+          ? "No disponible: sin muestras con el inversor generando"
+          : `Δ ${(averageFrequency - 60).toFixed(2)} Hz vs 60 (mientras genera)`,
+        status: averageFrequency === null ? "normal"
+          : getStatus(Math.abs(averageFrequency - 60), { excellent: 0.1, good: 0.5, warning: 1 }, true), // Invertir lógica para frecuencia
         icon: <IconActivity size={24} />,
         color: "text-teal-700"
       },
       currentUnbalance: {
         title: "Desbalance de Corriente",
-        value: maxCurrentUnbalance.toFixed(1),
-        unit: "%",
-        change: getChangeText(maxCurrentUnbalance, "%"),
-        status: getStatus(maxCurrentUnbalance, { excellent: 2, good: 5, warning: 10 }, true), // Invertir lógica para desbalance
+        value: maxCurrentUnbalance === null ? NA : maxCurrentUnbalance.toFixed(1),
+        unit: maxCurrentUnbalance === null ? "" : "%",
+        change: maxCurrentUnbalance === null ? "Sin datos" : getChangeText(maxCurrentUnbalance, "%"),
+        status: maxCurrentUnbalance === null ? "normal"
+          : getStatus(maxCurrentUnbalance, { excellent: 2, good: 5, warning: 10 }, true), // Invertir lógica para desbalance
         icon: <IconWaveform size={24} />,
         color: "text-pink-600"
       }
@@ -417,8 +502,8 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
 
   // Recalcular KPIs cuando cambian los datos (null → {results:[]} al montar)
   useEffect(() => {
-    setKpiData(calculateDynamicKPIs(inverterData || { results: [] }));
-  }, [inverterData, calculateDynamicKPIs]);
+    setKpiData(calculateDynamicKPIs(inverterData || { results: [] }, filters.timeRange));
+  }, [inverterData, calculateDynamicKPIs, filters.timeRange]);
 
   // Función para mostrar transición
 
@@ -497,7 +582,8 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     datasets: [
       {
         label: 'Factor de Potencia Promedio',
-        data: invRows.map(item => item.avg_power_factor_pct || 0),
+        // |FP| medio mientras genera (0–1). null = no disponible: hueco en la gráfica, no un 0.
+        data: invRows.map(item => (isNum(item.avg_power_factor) ? item.avg_power_factor : null)),
         borderColor: '#3B82F6',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         fill: true,
@@ -533,7 +619,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       },
       {
         label: 'Frecuencia Promedio (Hz)',
-        data: invRows.map(item => item.avg_frequency_hz || item.frequency_hz || item.frequency || item.freq || 0),
+        data: invRows.map(item => (isNum(item.avg_frequency_hz) ? item.avg_frequency_hz : null)),
         borderColor: '#8B5CF6',
         backgroundColor: 'rgba(139, 92, 246, 0.1)',
         fill: false,
@@ -1143,7 +1229,8 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                           { label: 'Inversor', width: 'w-24 lg:w-28 xl:w-36' },
                           { label: 'Energía Generada (kWh)', width: 'w-32 lg:w-36 xl:w-40' },
                           { label: 'Potencia Máx (kW)', width: 'w-28 lg:w-32 xl:w-36' },
-                          { label: 'Factor de Potencia', width: 'w-24 lg:w-28 xl:w-32' }
+                          { label: 'Factor de Potencia', width: 'w-24 lg:w-28 xl:w-32' },
+                          { label: 'Performance Ratio (%)', width: 'w-28 lg:w-32 xl:w-36' }
                         ].map((header) => (
                           <th key={header.label} className={`${header.width} px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-5 text-left text-xs font-bold text-red-700 uppercase tracking-wider border-b border-red-100`}>
                             {header.label}
@@ -1178,7 +1265,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-semibold text-green-700">
-                                {(item.total_generated_energy_kwh || 0).toFixed(2)}
+                                {((filters.timeRange === 'hourly' ? item.energy_ac_kwh : item.total_generated_energy_kwh) || 0).toFixed(2)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
@@ -1188,20 +1275,41 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="flex items-center">
-                                <div className="text-xs lg:text-sm font-semibold text-gray-900">
-                                  {(item.avg_power_factor_pct || 0).toFixed(2)}
-                                </div>
-                                <div className={`ml-2 w-2 h-2 rounded-full ${
-                                  (item.avg_power_factor_pct || 0) > 0.95 ? 'bg-green-500' :
-                                  (item.avg_power_factor_pct || 0) > 0.85 ? 'bg-yellow-500' : 'bg-red-500'
-                                }`}></div>
+                                {isNum(item.avg_power_factor) ? (
+                                  <>
+                                    <div className="text-xs lg:text-sm font-semibold text-gray-900">
+                                      {item.avg_power_factor.toFixed(3)}
+                                    </div>
+                                    <div className={`ml-2 w-2 h-2 rounded-full ${
+                                      item.avg_power_factor > 0.95 ? 'bg-green-500' :
+                                      item.avg_power_factor > 0.85 ? 'bg-yellow-500' : 'bg-red-500'
+                                    }`}></div>
+                                  </>
+                                ) : (
+                                  <div className="text-xs text-gray-500" title="Sin muestras con el inversor generando">
+                                    No disponible
+                                  </div>
+                                )}
                               </div>
+                            </td>
+                            <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
+                              {isNum(item.performance_ratio_pct) ? (
+                                <div className="text-xs lg:text-sm font-semibold text-green-700"
+                                     title={`${item.performance_ratio_valid_days ?? '?'} día(s) válido(s); irradiancia horizontal`}>
+                                  {item.performance_ratio_pct.toFixed(1)}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-500"
+                                     title={item.performance_ratio_note || PR_HOURLY_UNAVAILABLE}>
+                                  No disponible
+                                </div>
+                              )}
                             </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="5" className="px-4 lg:px-6 py-8 lg:py-12 text-center">
+                          <td colSpan="6" className="px-4 lg:px-6 py-8 lg:py-12 text-center">
                             <div className="flex flex-col items-center">
                               <svg className="w-10 h-10 lg:w-12 lg:h-12 text-gray-400 mb-3 lg:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
