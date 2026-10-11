@@ -116,10 +116,26 @@ class EnergiaHorariaTests(_Base):
 
 
 class IrradiacionYPRTests(_Base):
-    def _dia_soleado(self, devs, cfg, dia, wm2=500.0, gen_w=8000.0):
+    def _referencia(self, dia, wm2=500.0):
+        """Estación de referencia (Alvernia, de Mariana) con un día completo."""
+        inst = Institution.objects.create(scada_id=MARIANA, name='Mariana')
+        est = Device.objects.create(name='Alvernia', scada_id=INSTITUCIONES[MARIANA]['estacion'],
+                                    category=self.cat_est, institution=inst)
+        for hora in range(6, 18):
+            self._serie(WeatherStationMeasurement, est, 'irradiance', dia, hora, wm2)
+
+    def _dia_soleado(self, devs, cfg, dia, wm2=500.0, gen_w=8000.0, ref_wm2=500.0):
+        self._referencia(dia, ref_wm2)
         for hora in range(6, 18):
             self._serie(WeatherStationMeasurement, devs[cfg['estacion']], 'irradiance', dia, hora, wm2)
             self._serie(InverterMeasurement, devs[cfg['inversores_generacion'][0]], 'acPower', dia, hora, gen_w)
+
+    def test_dia_que_difiere_de_la_referencia_no_cuenta(self):
+        inst, devs = self._institucion(HUDN, 'HUDN')
+        self._dia_soleado(devs, INSTITUCIONES[HUDN], DIA, wm2=500.0, ref_wm2=300.0)   # +67 % frente a Alvernia
+        r = solar_kpis.calcular(inst, DIA, DIA, 'day')
+        self.assertIsNone(r['total']['performance_ratio'])
+        self.assertIn('referencia', r['total']['pr_motivo'])
 
     def test_pr_con_dia_valido(self):
         inst, devs = self._institucion(HUDN, 'HUDN')
@@ -145,6 +161,7 @@ class IrradiacionYPRTests(_Base):
     def test_dia_sin_datos_del_inversor_no_cuenta_en_pr(self):
         inst, devs = self._institucion(HUDN, 'HUDN')
         cfg = INSTITUCIONES[HUDN]
+        self._referencia(DIA)
         for hora in range(6, 18):                           # estación completa, inversor sin datos
             self._serie(WeatherStationMeasurement, devs[cfg['estacion']], 'irradiance', DIA, hora, 500.0)
         r = solar_kpis.calcular(inst, DIA, DIA, 'day')

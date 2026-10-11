@@ -16,6 +16,9 @@ Las claves son el `scada_id` del conector (UUID), que es estable; el `id` de Dja
 - respaldo_generacion: antes de `desde`, G = inversor de respaldo × factor (CAL-44: el Inversor MTE de Udenar
   existe desde el 2025-09-03; antes se escala el Fronius 1 por la razón de energías, k ≈ 1,2054, r = 0,997).
 - estacion_apta_pr: False si la estación no sirve para el PR (Udenar: 7–12 kWh/m²/día, físicamente imposible).
+- Validación cruzada del PR: un día de la estación de una institución solo cuenta si su irradiación queda a ±25 % de
+  la de la estación de referencia (ESTACION_REFERENCIA_PR, Alvernia) ese mismo día. La del HUDN, por ejemplo, marcaba
+  un 50–75 % más que Alvernia en abr–jun 2025 y un 20 % menos en feb–mar 2026, y solo coincidía en jul–nov 2025.
 """
 from datetime import date
 
@@ -25,6 +28,11 @@ DISENO_IRRADIACION_KWH_M2_DIA = 4.5
 DISENO_PERDIDAS = 0.20
 FACTOR_CO2_KG_KWH = 0.112         # Factor del SIN, UPME Res. 0705/2024
 ARBOLES_POR_TONELADA_CO2 = 545 / 12   # Informe Técnico 2: 545 árboles por 12 t
+
+# Estación de referencia para validar la irradiación de las demás (la de Alvernia, Universidad Mariana: completa
+# y coherente con la de Cesmag) y tolerancia diaria admitida.
+INSTITUCION_REFERENCIA_PR = '0357e3a6-ebdd-45f2-bd1a-0c384c522df3'
+TOLERANCIA_REFERENCIA_PR = 0.25
 
 INSTITUCIONES = {
     '04abaa1c-9f61-4ae4-8b53-44f66cce93c6': {

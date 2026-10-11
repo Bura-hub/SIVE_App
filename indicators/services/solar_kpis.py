@@ -204,11 +204,13 @@ def _resumen(clave, acc, kwp, acumulada, cfg):
 def _supuestos(cfg):
     s = [
         f'Capacidad instalada: {cfg["kwp"]} kWp (30 módulos de 585 Wp).',
-        'Energía = Σ potencia × 2 min. Una lectura que no llegó no suma (no se rellena); la disponibilidad y la '
-        'cobertura de muestras dicen cuánto falta.',
+        'Energía de cada hora = Σ potencia × 2 min. Si la hora tiene al menos 15 de sus 30 lecturas, las que faltan '
+        'se reponen con la media de las presentes; con menos (amanecer, caídas de datos) no se repone nada. La '
+        'disponibilidad y la cobertura de lecturas dicen cuánto falta.',
         'Demanda: circuito medido por el Medidor 1 de la institución, no el consumo total de la institución.',
         'Performance Ratio con la irradiancia de la estación meteorológica de la institución, medida en plano '
-        'horizontal (no en el plano de los módulos); solo días con ≥ 80 % de lecturas diurnas.',
+        'horizontal (no en el plano de los módulos). Solo cuentan los días con ≥ 80 % de lecturas diurnas de la '
+        'estación y del inversor, y cuya irradiación queda a ±25 % de la de la estación de referencia (Alvernia).',
         MOTIVO_EFICIENCIA,
         f'Ahorro = energía autoconsumida × CU mensual de {cfg["comercializador"].upper()} (nivel de tensión 2, sin '
         'contribución). Los meses sin tarifa publicada usan la última disponible (marcados como extrapolados).',

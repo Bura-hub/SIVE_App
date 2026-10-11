@@ -530,12 +530,14 @@ def _inverter_performance_ratio(device, first_day, last_day, measurements):
     if station is None:
         return pr_unavailable(PR_REASON_NO_STATION.format(institucion=config['nombre']))
 
-    start_dt, end_dt = colombia_day_range(first_day, last_day)
-    irradiation = daily_irradiation_for_pr(
-        WeatherStationMeasurement.objects.filter(
-            device=station, date__gte=start_dt, date__lt=end_dt,
-        ).values('date', 'irradiance').iterator(chunk_size=2000)
-    )
+    # Misma irradiación diaria que «Indicadores Solares» (institution_energy.irradiacion_diaria): cobertura, tope
+    # físico y validación cruzada con la estación de referencia (Alvernia), para que las dos pantallas den el mismo PR.
+    from indicators.services.institution_energy import irradiacion_diaria
+    irradiation = {
+        day: (d['h_kwh_m2'], d['valido'])
+        for day, d in irradiacion_diaria(device.institution.scada_id,
+                                         first_day, last_day).items()
+    }
     energy = {
         day: e for day, e in daily_ac_energy_kwh(
             measurements.values('date', 'acPower').iterator(chunk_size=2000)

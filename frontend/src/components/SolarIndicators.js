@@ -175,7 +175,7 @@ const SolarIndicators = () => {
             <Tarjeta titulo="Producción frente al diseño" valor={num(t.produccion_vs_diseno_pct, 1)} unidad="%"
                      detalle={`Diseño: ${datos.parametros.diseno_kwh_dia} kWh/día`} />
             <Tarjeta titulo="Performance Ratio" valor={num(t.performance_ratio, 2)}
-                     detalle={t.performance_ratio !== null ? `${t.pr_dias_validos} días con estación válida · irradiancia horizontal` : undefined}
+                     detalle={t.performance_ratio !== null ? `${t.pr_dias_validos} días válidos (estación contrastada con Alvernia) · irradiancia horizontal` : undefined}
                      nota={t.performance_ratio === null ? t.pr_motivo : undefined} />
             <Tarjeta titulo="Eficiencia del inversor" valor="—" nota={t.eficiencia_inversor_motivo} />
             <Tarjeta titulo="Demanda del circuito medido" valor={num(t.demanda_kwh, 0)} unidad="kWh"

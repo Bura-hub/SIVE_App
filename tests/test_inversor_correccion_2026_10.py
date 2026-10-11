@@ -182,6 +182,16 @@ class PerformanceRatioTareaTests(TestCase):
         WeatherStationMeasurement.objects.bulk_create([
             WeatherStationMeasurement(device=self.est, date=start + timedelta(minutes=2 * i), irradiance=500.0)
             for i in range(360)])
+        # Estación de referencia (Alvernia): el PR solo cuenta días que coinciden con ella a ±25 %.
+        from django.core.cache import cache
+        from indicators.institution_config import INSTITUCION_REFERENCIA_PR, INSTITUCIONES
+        cache.clear()
+        mariana = Institution.objects.create(scada_id=INSTITUCION_REFERENCIA_PR, name='Mariana')
+        alvernia = Device.objects.create(name='Estación Alvernia', category=ws_cat, institution=mariana,
+                                         scada_id=INSTITUCIONES[INSTITUCION_REFERENCIA_PR]['estacion'])
+        WeatherStationMeasurement.objects.bulk_create([
+            WeatherStationMeasurement(device=alvernia, date=start + timedelta(minutes=2 * i), irradiance=480.0)
+            for i in range(360)])
 
     def _ind(self, dev, time_range='daily'):
         calculate_inverter_indicators(dev.id, self.dia.isoformat(), time_range)

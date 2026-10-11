@@ -146,7 +146,7 @@ def _clave_energia(institution_scada_id, mes):
 
 
 def _clave_irradiacion(institution_scada_id, mes):
-    return f'irradiacion-diaria:v1:{institution_scada_id}:{mes:%Y-%m}'
+    return f'irradiacion-diaria:v2:{institution_scada_id}:{mes:%Y-%m}'
 
 
 def invalidar_cache_energia(institution_scada_id, mes):
@@ -212,6 +212,11 @@ def _irradiacion_diaria_sin_cache(institution_scada_id, start_date, end_date):
             acc[0] += f['s']
             acc[1] += f['n']
     esperadas = (HORA_FIN_DIA_SOLAR - HORA_INICIO_DIA_SOLAR) * MUESTRAS_HORA
+    # Validación cruzada con la estación de referencia (institution_config.INSTITUCION_REFERENCIA_PR).
+    from indicators.institution_config import INSTITUCION_REFERENCIA_PR, TOLERANCIA_REFERENCIA_PR
+    referencia = None
+    if str(institution_scada_id) != INSTITUCION_REFERENCIA_PR:
+        referencia = _irradiacion_diaria_sin_cache(INSTITUCION_REFERENCIA_PR, start_date, end_date)
     resultado = {}
     for dia, (s, n) in por_dia.items():
         h_dia = s * DT_H / 1000.0
@@ -221,6 +226,16 @@ def _irradiacion_diaria_sin_cache(institution_scada_id, start_date, end_date):
             valido, motivo = False, f'cobertura diurna {n}/{esperadas} muestras'
         elif h_dia > IRRADIACION_MAX_DIA_KWH_M2:
             valido, motivo = False, f'irradiación {h_dia:.2f} kWh/m² > {IRRADIACION_MAX_DIA_KWH_M2}'
+        elif referencia is not None:
+            ref = referencia.get(dia)
+            if ref is None or not ref['valido']:
+                valido, motivo = False, 'sin dato válido de la estación de referencia (Alvernia) para contrastar'
+            elif abs(h_dia / ref['h_kwh_m2'] - 1) > TOLERANCIA_REFERENCIA_PR:
+                valido = False
+                motivo = (f'la estación difiere más de {int(TOLERANCIA_REFERENCIA_PR * 100)} % de la de referencia '
+                          f'(Alvernia) ese día')
+            else:
+                valido, motivo = True, None
         else:
             valido, motivo = True, None
         resultado[dia] = {'h_kwh_m2': h_dia, 'muestras': n, 'valido': valido, 'motivo': motivo}
