@@ -5,6 +5,7 @@ import { useIsMobile } from '../hooks/useMediaQuery';
 
 function Sidebar({
   isSuperuser,
+  isGuest = false,
   isSidebarMinimized,
   setIsSidebarMinimized,
   navigateTo,
@@ -152,11 +153,14 @@ function Sidebar({
         <nav>
           <div className="space-y-2">
             {navItems.map((item) => {
-              // Verificar si el elemento requiere permisos de administrador
-              const requiresAdmin = item.page === 'externalEnergy' || item.page === 'exportReports';
+              // Exportar Reportes es solo de administradores. «Datos Externos» (XM) ya es
+              // de lectura pública (modo invitado), así que lo ve todo el mundo.
+              const requiresAdmin = item.page === 'exportReports';
+              // El invitado ve la opción con candado: al pulsarla se despliega el login
+              // (App.navigateTo). Un usuario con sesión sin permisos no la ve, como antes.
+              const lockedForGuest = requiresAdmin && isGuest;
 
-              // Si requiere admin y el usuario no es superuser, no mostrar el elemento
-              if (requiresAdmin && !isSuperuser) {
+              if (requiresAdmin && !isSuperuser && !isGuest) {
                 return null;
               }
 
@@ -164,8 +168,8 @@ function Sidebar({
                 <div key={item.page} className="relative">
                   <button
                     type="button"
-                    title={item.name}
-                    aria-label={item.name}
+                    title={lockedForGuest ? `${item.name} (inicia sesión)` : item.name}
+                    aria-label={lockedForGuest ? `${item.name}: inicia sesión para usarlo` : item.name}
                     aria-current={currentPage === item.page ? 'page' : undefined}
                     className={`w-full flex items-center p-4 rounded-xl text-left transition-colors duration-150 ${effectiveMinimized ? 'justify-center' : ''} ${
                       currentPage === item.page ? item.activeClasses : item.inactiveClasses
@@ -177,6 +181,12 @@ function Sidebar({
                       <span className="font-medium ml-3 whitespace-nowrap sidebar-fade-in">
                         {item.name}
                       </span>
+                    )}
+                    {!effectiveMinimized && lockedForGuest && (
+                      <svg className="w-4 h-4 ml-auto shrink-0 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="5" y="11" width="14" height="10" rx="2" strokeWidth="2" />
+                        <path d="M8 11V7a4 4 0 0 1 8 0v4" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
                     )}
                   </button>
                 </div>

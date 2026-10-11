@@ -89,14 +89,40 @@ export const buildApiUrl = (endpoint, params = {}) => {
   return url.toString();
 };
 
+// ========================= Modo invitado =========================
+// Sin token la app funciona como «Invitado»: ve en solo lectura las pantallas de datos
+// (el backend abre sus GET con IsAuthenticatedOrPublicRead). Las acciones que piden
+// sesión llaman a requestLogin(), que App.js escucha para desplegar el inicio de sesión.
+
+/** Evento global con el que cualquier componente pide abrir el inicio de sesión. */
+export const REQUIRE_LOGIN_EVENT = 'sive:require-login';
+
+/** ¿Hay sesión iniciada? (token en localStorage) */
+export const hasSession = () => {
+  try {
+    return Boolean(localStorage.getItem('authToken'));
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Pide abrir el inicio de sesión (p. ej. al pulsar «Exportar reportes» o «Recalcular»
+ * como invitado). `reason` se muestra en la pantalla de login.
+ */
+export const requestLogin = (reason = '') => {
+  window.dispatchEvent(new CustomEvent(REQUIRE_LOGIN_EVENT, { detail: { reason } }));
+};
+
 /**
  * Opciones por defecto para las peticiones fetch
- * @param {string} authToken - Token de autenticación
- * @returns {Object} - Opciones de configuración
+ * @param {string|null} authToken - Token de autenticación (null/vacío en modo invitado)
+ * @returns {Object} - Opciones de configuración. Sin token NO se envía la cabecera
+ *                     Authorization (enviar «Token null» haría que el backend respondiera 401).
  */
 export const getDefaultFetchOptions = (authToken) => ({
   headers: {
-    'Authorization': `Token ${authToken}`,
+    ...(authToken ? { 'Authorization': `Token ${authToken}` } : {}),
     'Content-Type': 'application/json'
   }
 });
@@ -106,12 +132,21 @@ export const getDefaultFetchOptions = (authToken) => ({
  * @param {Response} response - Respuesta de fetch
  * @param {Function} onAuthError - Callback para errores de autenticación
  * @returns {Promise} - Promesa resuelta con los datos o rechazada con error.
- *                      En 401 limpia la sesión, redirige al login y rechaza con un
+ *                      Con sesión, en 401 limpia la sesión, vuelve al modo invitado y rechaza con un
  *                      error marcado con `isAuthError = true` para que los callers
  *                      puedan ignorarlo (nunca resuelve con undefined).
  */
 export const handleApiResponse = async (response, onAuthError = null) => {
   if (!response.ok) {
+    // Modo invitado: sin sesión, un 401/403 significa que ese recurso pide iniciar sesión.
+    // No se borra nada ni se recarga (recargar volvería a pedir lo mismo, en bucle).
+    if ((response.status === 401 || response.status === 403) && !hasSession()) {
+      const guestError = new Error('Inicia sesión para acceder a esta información.');
+      guestError.isAuthError = true;
+      guestError.requiresLogin = true;
+      throw guestError;
+    }
+
     // Manejar errores de autenticación específicamente
     if (response.status === 401) {
       console.warn('Token expirado o inválido');
@@ -123,9 +158,9 @@ export const handleApiResponse = async (response, onAuthError = null) => {
       localStorage.removeItem('username');
       localStorage.removeItem('isSuperuser');
       // Recargar la MISMA ruta de la app (no la raíz del dominio). La app es un SPA
-      // por estado: al recargar con el token ya borrado, App.js no encuentra authToken
-      // y renderiza el login. Antes, href='/' expulsaba al usuario a la raíz del
-      // dominio (el portal WordPress), fuera de la app.
+      // por estado: al recargar con el token ya borrado, App.js entra en modo invitado.
+      // Antes, href='/' expulsaba al usuario a la raíz del dominio (el portal
+      // WordPress), fuera de la app.
       window.location.reload();
       // Rechazar con un error controlado para que los callers no procesen datos undefined
       const authError = new Error('Token expirado. Por favor, inicie sesión nuevamente.');

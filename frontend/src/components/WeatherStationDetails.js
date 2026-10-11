@@ -483,7 +483,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   // Efecto para carga inicial de datos cuando se selecciona una institución
   useEffect(() => {
     // Solo cargar datos si hay institución seleccionada y no hay datos ya cargados
-    if (filters.institutionId && authToken && !weatherData) {
+    if (filters.institutionId && !weatherData) { // también en modo invitado (sin token)
       fetchWeatherData(filters);
     }
     // Se omiten `filters` y `weatherData` de las deps a propósito: incluirlos provocaría

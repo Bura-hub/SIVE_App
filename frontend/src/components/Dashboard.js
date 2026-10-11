@@ -238,6 +238,11 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
   // Función mejorada para ejecutar todas las tareas
   const executeAllTasks = async () => {
     if (taskExecuting) return;
+    // Sincronizar/recalcular escribe en el servidor: el invitado debe iniciar sesión.
+    if (!authToken) {
+      apiUtils.requestLogin('Inicia sesión para sincronizar y recalcular los datos.');
+      return;
+    }
     setTaskExecuting(true);
 
     try {
@@ -668,7 +673,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
 
   // Agregar un useEffect que se ejecute cuando el componente se monta o cambie el token
   useEffect(() => {
-    if (!authToken) return;
+    // Modo invitado: también se carga sin token (los GET del dashboard son de lectura pública).
     const controller = new AbortController();
     setLoading(true);
     // Simular un pequeño delay para mostrar la animación

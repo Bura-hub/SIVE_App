@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { buildApiUrl } from '../config';
+import { requestLogin } from '../utils/apiConfig';
 import TransitionOverlay from './TransitionOverlay';
 import ProfileSettings from './ProfileSettings';
 import HelpSupport from './HelpSupport';
@@ -18,7 +19,7 @@ import {
  * final-widget-C.html. Contiene la lógica de perfil que antes vivía en el
  * Sidebar: imagen de perfil, modales (Configuración / Ayuda) y cierre de sesión.
  */
-function UserMenu({ username, isSuperuser, onLogout }) {
+function UserMenu({ username, isSuperuser, isGuest = false, onLogin = () => {}, onLogout }) {
   const [open, setOpen] = useState(false);
   const [profileImageUrl, setProfileImageUrl] = useState(null);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
@@ -40,7 +41,8 @@ function UserMenu({ username, isSuperuser, onLogout }) {
   useEffect(() => () => { timeoutsRef.current.forEach(clearTimeout); }, []);
   const scheduleTimeout = (fn, ms) => { timeoutsRef.current.push(setTimeout(fn, ms)); };
 
-  const rol = isSuperuser ? 'Administrador' : 'Usuario Aliado';
+  // Modo invitado: sin sesión se muestra «Invitado» (solo lectura).
+  const rol = isGuest ? 'Solo lectura' : (isSuperuser ? 'Administrador' : 'Usuario Aliado');
 
   const getInitials = (name) => {
     if (!name) return 'G';
@@ -72,10 +74,12 @@ function UserMenu({ username, isSuperuser, onLogout }) {
   }, []);
 
   useEffect(() => {
-    if (username) {
+    if (username && !isGuest) {
       loadProfileImage();
+    } else {
+      setProfileImageUrl(null);
     }
-  }, [username, loadProfileImage]);
+  }, [username, isGuest, loadProfileImage]);
 
   const closeMenu = useCallback((returnFocus) => {
     setOpen(false);
@@ -139,8 +143,18 @@ function UserMenu({ username, isSuperuser, onLogout }) {
   };
 
   const openProfileSettings = () => {
-    setShowProfileSettings(true);
     closeMenu(false);
+    if (isGuest) {
+      // El perfil es de la cuenta: pide iniciar sesión.
+      requestLogin('Inicia sesión para ver y editar tu perfil.');
+      return;
+    }
+    setShowProfileSettings(true);
+  };
+
+  const handleLoginClick = () => {
+    closeMenu(false);
+    onLogin();
   };
 
   const openHelpSupport = () => {
@@ -190,7 +204,7 @@ function UserMenu({ username, isSuperuser, onLogout }) {
     }
   };
 
-  const displayName = username || 'Invitado';
+  const displayName = isGuest ? 'Invitado' : (username || 'Invitado');
 
   const avatar = (
     <span className="u-ava" aria-hidden="true">
@@ -211,6 +225,17 @@ function UserMenu({ username, isSuperuser, onLogout }) {
   return (
     <>
       <div className="u-float">
+        <div className="flex items-center gap-2">
+        {/* Modo invitado: acceso directo al inicio de sesión junto al chip */}
+        {isGuest && (
+          <button
+            type="button"
+            onClick={handleLoginClick}
+            className="h-12 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg transition-colors duration-150 hover:bg-blue-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-300"
+          >
+            Iniciar sesión
+          </button>
+        )}
         <button
           ref={triggerRef}
           className="u-chip"
@@ -234,6 +259,7 @@ function UserMenu({ username, isSuperuser, onLogout }) {
             {displayName}, {rol}. {open ? 'Cerrar' : 'Abrir'} menú de usuario
           </span>
         </button>
+        </div>
 
         <div
           ref={menuRef}
@@ -256,10 +282,28 @@ function UserMenu({ username, isSuperuser, onLogout }) {
           </div>
 
           <ul className="u-list">
+            {isGuest && (
+              <li>
+                <button className="u-item" type="button" role="menuitem" onClick={handleLoginClick}>
+                  <IconLogOut size={17} style={{ transform: 'scaleX(-1)' }} />
+                  <span className="u-lbl">Iniciar sesión</span>
+                  <IconChevronRight className="u-go" size={14} />
+                </button>
+              </li>
+            )}
             <li>
-              <button className="u-item" type="button" role="menuitem" onClick={openProfileSettings}>
+              <button
+                className="u-item"
+                type="button"
+                role="menuitem"
+                onClick={openProfileSettings}
+                title={isGuest ? 'Inicia sesión para ver tu perfil' : undefined}
+              >
                 <IconSettings size={17} />
-                <span className="u-lbl">Configuración</span>
+                <span className="u-lbl">
+                  Configuración
+                  {isGuest && <span className="block text-xs text-gray-600">Inicia sesión para ver tu perfil</span>}
+                </span>
                 <IconChevronRight className="u-go" size={14} />
               </button>
             </li>
@@ -272,8 +316,9 @@ function UserMenu({ username, isSuperuser, onLogout }) {
             </li>
           </ul>
 
-          <hr className="u-sep" aria-hidden="true" />
+          {!isGuest && <hr className="u-sep" aria-hidden="true" />}
 
+          {!isGuest && (
           <ul className="u-list">
             <li>
               <button
@@ -287,6 +332,7 @@ function UserMenu({ username, isSuperuser, onLogout }) {
               </button>
             </li>
           </ul>
+          )}
 
           <div className="u-menu__foot">
             <b>SIVE</b>

@@ -27,12 +27,9 @@ const ExternalEnergyData = () => {
   const fetchExternalEnergyData = async () => {
     try {
       setLoading(true);
+      // Modo invitado: sin token las peticiones van sin cabecera Authorization
+      // (los GET de XM son de lectura pública).
       const authToken = localStorage.getItem('authToken');
-      
-      if (!authToken) {
-        throw new Error('No hay token de autenticación');
-      }
-
       const options = getDefaultFetchOptions(authToken);
 
       // Devuelve el JSON de la respuesta o null si la respuesta no fue exitosa
