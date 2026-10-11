@@ -770,6 +770,14 @@ def enqueue_recalc_for_reconciled(changed):
     for r in changed:
         days_by_device.setdefault(r.device, set()).add(r.day)
 
+    # Los indicadores solares y el inicio leen la energía horaria por institución con caché por mes
+    # (indicators/services/institution_energy.py): se invalidan los meses que ganaron lecturas.
+    from indicators.services.institution_energy import invalidar_cache_energia
+    for device, days in days_by_device.items():
+        if device.institution_id:
+            for mes in {d.replace(day=1) for d in days}:
+                invalidar_cache_energia(device.institution.scada_id, mes)
+
     daily_sigs, rollup_sigs, monthly_sigs = [], [], []
     for device, days in sorted(days_by_device.items(), key=lambda kv: kv[0].id):
         calc = calc_by_category.get((device.category.name if device.category_id else '').lower())

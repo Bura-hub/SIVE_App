@@ -5,6 +5,7 @@ energía autoconsumida × CU mensual del comercializador, recalculando los días
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.test import TestCase
 
 from external_energy.models import EnergySavings
@@ -21,6 +22,7 @@ DIA = date(2025, 7, 15)
 
 class AhorroConCUTests(TestCase):
     def setUp(self):
+        cache.clear()   # la energía por institución se guarda en caché por mes
         cat_med = DeviceCategory.objects.create(scada_id='c-med', name='electricMeter')
         cat_inv = DeviceCategory.objects.create(scada_id='c-inv', name='inverter')
         inst = Institution.objects.create(scada_id=MARIANA, name='Mariana')

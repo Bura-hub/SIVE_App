@@ -2572,3 +2572,19 @@ def get_report_file(task_id, user_id=None):
         
     except GeneratedReport.DoesNotExist:
         return None
+
+@shared_task(bind=True, soft_time_limit=1800, time_limit=2000)
+@single_instance('warm-solar-cache', ttl=2100)
+def warm_solar_cache(self, desde_str='2024-12-01'):
+    """Recalcula y guarda en caché, mes a mes, la energía horaria y la irradiación diaria de todas las instituciones
+    configuradas (indicators/services/institution_energy.py). Programada tras la reconciliación nocturna para que la
+    pantalla «Indicadores Solares» y el inicio respondan en milisegundos desde la primera consulta del día."""
+    from indicators.institution_config import INSTITUCIONES
+    from indicators.services.institution_energy import energia_horaria, irradiacion_diaria
+    desde = datetime.strptime(desde_str, '%Y-%m-%d').date()
+    hoy = get_colombia_date()
+    for scada_id, cfg in INSTITUCIONES.items():
+        energia_horaria(scada_id, desde, hoy, forzar=True)
+        irradiacion_diaria(scada_id, desde, hoy, forzar=True)
+        logger.info(f"warm_solar_cache: {cfg['nombre']} {desde} → {hoy} en caché")
+    return f'{len(INSTITUCIONES)} instituciones en caché ({desde} → {hoy})'

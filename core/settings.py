@@ -332,6 +332,11 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=1, minute=30),  # Diario 01:30 Bogotá: hoy + 35 días atrás
         'kwargs': {'days': 35},
     },
+    'warm-solar-cache-daily': {
+        # Tras la reconciliación de la 01:30: deja en caché la energía por institución (Indicadores Solares).
+        'task': 'indicators.tasks.warm_solar_cache',
+        'schedule': crontab(hour=2, minute=40),
+    },
     'reconcile-measurements-6h': {
         'task': 'scada_proxy.tasks.reconcile_recent_measurements',
         'schedule': crontab(hour='6,12,18', minute=40),  # Cada 6 h en :40: hoy + 2 días atrás

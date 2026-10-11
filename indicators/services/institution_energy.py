@@ -62,7 +62,7 @@ def _horas(inicio, fin):
         h += timedelta(hours=1)
 
 
-def energia_horaria(institution_scada_id, start_date, end_date):
+def _energia_horaria_sin_cache(institution_scada_id, start_date, end_date):
     """Lista de horas con G, D, exportación y autoconsumo de la institución.
 
     Cada elemento: {hora (naive, Bogotá), g_kwh, n_g, d_kwh (None si la hora del medidor no es válida), n_m,
@@ -120,7 +120,64 @@ def energia_horaria(institution_scada_id, start_date, end_date):
     return horas
 
 
-def irradiacion_diaria(institution_scada_id, start_date, end_date):
+CACHE_MES_CERRADO_S = 6 * 3600   # meses pasados: la reconciliación nocturna puede tocarlos, se refrescan cada 6 h
+CACHE_MES_EN_CURSO_S = 10 * 60
+
+
+def _meses(start_date, end_date):
+    d = start_date.replace(day=1)
+    while d <= end_date:
+        siguiente = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+        yield d, siguiente - timedelta(days=1)
+        d = siguiente
+
+
+def _clave_energia(institution_scada_id, mes):
+    return f'energia-horaria:v1:{institution_scada_id}:{mes:%Y-%m}'
+
+
+def _clave_irradiacion(institution_scada_id, mes):
+    return f'irradiacion-diaria:v1:{institution_scada_id}:{mes:%Y-%m}'
+
+
+def invalidar_cache_energia(institution_scada_id, mes):
+    """Borra la caché del mes (date) de la institución: energía horaria e irradiación diaria."""
+    from django.core.cache import cache
+    mes = mes.replace(day=1)
+    cache.delete_many([_clave_energia(institution_scada_id, mes), _clave_irradiacion(institution_scada_id, mes)])
+
+
+def _por_meses_con_cache(clave_fn, calcular, institution_scada_id, start_date, end_date, forzar=False):
+    """Une el resultado de `calcular(scada_id, ini, fin)` mes a mes, guardando cada mes completo en caché."""
+    from django.core.cache import cache
+    from indicators.services.date_ranges import get_colombia_date
+    hoy = get_colombia_date()
+    partes = []
+    for ini, fin in _meses(start_date, end_date):
+        clave = clave_fn(institution_scada_id, ini)
+        mes = None if forzar else cache.get(clave)
+        if mes is None:
+            mes = calcular(institution_scada_id, ini, fin)
+            cache.set(clave, mes, CACHE_MES_EN_CURSO_S if ini <= hoy <= fin else CACHE_MES_CERRADO_S)
+        partes.append(mes)
+    return partes
+
+
+def energia_horaria(institution_scada_id, start_date, end_date, forzar=False):
+    """Energía horaria de la institución (ver _energia_horaria_sin_cache), con caché por mes completo.
+
+    Calcular un rango largo cuesta varios segundos (agregación horaria de cientos de miles de lecturas); con la
+    caché por mes, cualquier rango que reutilice meses ya calculados responde en milisegundos. La tarea
+    warm_solar_cache la rellena cada noche tras la reconciliación.
+    """
+    horas = []
+    for mes in _por_meses_con_cache(_clave_energia, _energia_horaria_sin_cache, institution_scada_id,
+                                    start_date, end_date, forzar):
+        horas.extend(h for h in mes if start_date <= h['hora'].date() <= end_date)
+    return horas
+
+
+def _irradiacion_diaria_sin_cache(institution_scada_id, start_date, end_date):
     """{día: {'h_kwh_m2', 'muestras', 'valido', 'motivo'}} de la estación de la institución (decisión D5).
 
     H = Σ irradiancia de 06:00 a 17:59 (Bogotá) en [0, 1400] W/m² × Δt. Un día vale para el PR si tiene ≥ 80 % de
@@ -158,6 +215,15 @@ def irradiacion_diaria(institution_scada_id, start_date, end_date):
         else:
             valido, motivo = True, None
         resultado[dia] = {'h_kwh_m2': h_dia, 'muestras': n, 'valido': valido, 'motivo': motivo}
+    return resultado
+
+
+def irradiacion_diaria(institution_scada_id, start_date, end_date, forzar=False):
+    """Irradiación diaria de la estación de la institución (ver _irradiacion_diaria_sin_cache), con caché por mes."""
+    resultado = {}
+    for mes in _por_meses_con_cache(_clave_irradiacion, _irradiacion_diaria_sin_cache, institution_scada_id,
+                                    start_date, end_date, forzar):
+        resultado.update({d: v for d, v in mes.items() if start_date <= d <= end_date})
     return resultado
 
 

@@ -6,6 +6,7 @@ la generación la de su inversor, y el mes anterior se compara con el mismo tiem
 from datetime import datetime, timedelta
 from unittest import mock
 
+from django.core.cache import cache
 from django.test import TestCase
 
 from indicators.institution_config import INSTITUCIONES
@@ -21,6 +22,7 @@ AHORA = COLOMBIA_TZ.localize(datetime(2026, 7, 15, 12, 30))
 
 class MonthlyKpiTests(TestCase):
     def setUp(self):
+        cache.clear()   # la energía por institución se guarda en caché por mes
         cat_med = DeviceCategory.objects.create(scada_id='CAT_EM', name='electricMeter')
         cat_inv = DeviceCategory.objects.create(scada_id='CAT_INV', name='inverter')
         inst = Institution.objects.create(scada_id=HUDN, name='HUDN')

@@ -9,6 +9,7 @@ extrapolada cuando el mes no tiene CU publicado.
 from datetime import date, datetime, timedelta
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from rest_framework.test import APIClient
 
@@ -32,6 +33,7 @@ def _t(dia, hora, minuto=0):
 
 class _Base(TestCase):
     def setUp(self):
+        cache.clear()   # la energía por institución se guarda en caché por mes
         self.cat_inv = DeviceCategory.objects.create(scada_id='c-inv', name='inverter')
         self.cat_med = DeviceCategory.objects.create(scada_id='c-med', name='electricMeter')
         self.cat_est = DeviceCategory.objects.create(scada_id='c-est', name='weatherStation')
@@ -203,6 +205,7 @@ class TarifasTests(SimpleTestCase):
 
 class EndpointTests(_Base):
     def setUp(self):
+        cache.clear()   # la energía por institución se guarda en caché por mes
         super().setUp()
         self.inst, self.devs = self._institucion(HUDN, 'HUDN')
         self.client = APIClient()
@@ -223,3 +226,17 @@ class EndpointTests(_Base):
         r = self.client.get('/api/solar-indicators/institutions/')
         self.assertEqual(r.status_code, 200)
         self.assertEqual([x['name'] for x in r.json()], ['HUDN'])
+
+
+class CacheEnergiaTests(_Base):
+    def test_cache_por_mes_e_invalidacion_tras_lecturas_tardias(self):
+        from indicators.services.institution_energy import invalidar_cache_energia
+        inst, devs = self._institucion(HUDN, 'HUDN')
+        inv = devs[INSTITUCIONES[HUDN]['inversores_generacion'][0]]
+        self._serie(InverterMeasurement, inv, 'acPower', DIA, 12, 6000.0)
+        total = lambda: sum(h['g_kwh'] for h in energia_horaria(HUDN, DIA, DIA))
+        self.assertAlmostEqual(total(), 6.0)
+        self._serie(InverterMeasurement, inv, 'acPower', DIA, 13, 6000.0)   # llega tarde
+        self.assertAlmostEqual(total(), 6.0)                                # sigue la caché del mes
+        invalidar_cache_energia(HUDN, DIA)                                  # lo hace la reconciliación
+        self.assertAlmostEqual(total(), 12.0)
