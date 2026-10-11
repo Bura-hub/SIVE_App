@@ -594,7 +594,8 @@ def _notify(source, detail):
     notify_failure(source, detail)
 
 
-def reconcile_measurements(from_date, to_date, devices=None, recalc=True, client=None, deadline=None):
+def reconcile_measurements(from_date, to_date, devices=None, recalc=True, client=None, deadline=None,
+                           force_recalc_days=()):
     """Reconcilia las mediciones de SIVE con el connector, día a día (Bogotá).
 
     Para cada dispositivo activo (o los de `devices`: ids Django u objetos
@@ -604,8 +605,12 @@ def reconcile_measurements(from_date, to_date, devices=None, recalc=True, client
     persiste se registra con logger.error y alerta, y se sigue con el resto.
 
     Si `recalc`, encola el recálculo SOLO de lo tocado (ver
-    enqueue_recalc_for_reconciled). `deadline` (time.monotonic) corta la
-    corrida antes de empezar un día nuevo, registrándolo como error.
+    enqueue_recalc_for_reconciled). `force_recalc_days` (fechas) se
+    recalculan SIEMPRE para todos los dispositivos revisados, aunque los
+    conteos coincidan: cierra C15, porque las filas que la ingesta horaria trae
+    después del último recálculo del día dejan los conteos iguales. `deadline`
+    (time.monotonic) corta la corrida antes de empezar un día nuevo,
+    registrándolo como error.
 
     Devuelve la lista de ReconcileResult (dispositivo, día, local_antes,
     remoto, local_después), un elemento por dispositivo y día revisado.
@@ -710,8 +715,12 @@ def reconcile_measurements(from_date, to_date, devices=None, recalc=True, client
         f"{sum(1 for r in results if r.refetched)} re-descargados, {len(changed)} con filas nuevas, "
         f"{len(persistent)} diferencias persistentes, {len(errors)} errores."
     )
-    if recalc and changed:
-        enqueue_recalc_for_reconciled(changed)
+    forced = set(force_recalc_days or ())
+    to_recalc = [r for r in results if r.changed or r.day in forced]
+    if forced:
+        logger.info(f"reconcile_measurements: recálculo forzado de {sorted(forced)} (C15).")
+    if recalc and to_recalc:
+        enqueue_recalc_for_reconciled(to_recalc)
     return results
 
 
@@ -802,16 +811,22 @@ def enqueue_recalc_for_reconciled(changed):
 
 @shared_task(bind=True, soft_time_limit=RECONCILE_SOFT_TIME_LIMIT, time_limit=RECONCILE_TIME_LIMIT)
 @single_instance('reconcile-measurements', ttl=2 * RECONCILE_TIME_LIMIT)
-def reconcile_recent_measurements(self, days=35):
+def reconcile_recent_measurements(self, days=35, force_recalc_days=0):
     """Tarea periódica de D1: reconcilia hoy y los `days` días anteriores (Bogotá).
 
+    `force_recalc_days`=N recalcula siempre los N días anteriores a hoy (todos
+    los dispositivos), aunque sus conteos coincidan. La corrida de las 00:40 usa
+    N=1 para cerrar el día de ayer completo (C15).
+
     Sin autoretry: lo ya reconciliado queda guardado (upserts) y la siguiente
-    corrida retoma lo que falte. Programada a diario a la 01:30 con days=35 y
-    cada 6 h con days=2 (CELERY_BEAT_SCHEDULE).
+    corrida retoma lo que falte. Programada en CELERY_BEAT_SCHEDULE: 01:30 con
+    days=35; 00:40 con days=2 y force_recalc_days=1; 06:40, 12:40 y 18:40 con days=2.
     """
     today = get_colombia_now().date()
     deadline = time.monotonic() + RECONCILE_SOFT_TIME_LIMIT - RECONCILE_DEADLINE_MARGIN
-    results = reconcile_measurements(today - timedelta(days=days), today, deadline=deadline)
+    forced = [today - timedelta(days=i) for i in range(1, force_recalc_days + 1)]
+    results = reconcile_measurements(today - timedelta(days=days), today, deadline=deadline,
+                                     force_recalc_days=forced)
     refetched = sum(1 for r in results if r.refetched)
     changed = sum(1 for r in results if r.changed)
     mismatches = sum(1 for r in results if r.mismatch)

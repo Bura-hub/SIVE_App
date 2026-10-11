@@ -172,6 +172,33 @@ class ReconcileMeasurementsTests(ReconcileBase):
         self.assertEqual({(r.device.scada_id, r.day) for r in changed},
                          {("inv-1", self.day), ("m-1", self.day)})
 
+    def test_forced_day_recalculates_even_with_equal_counts(self):
+        # C15: ayer ya está completo en SIVE (la ingesta horaria trajo lo último),
+        # pero su diario se calculó a las 23:10: hay que recalcularlo igual.
+        yesterday, today = self.day, self.day + timedelta(days=1)
+        self._remote(self.inverter, yesterday, range(4))
+        self._local(self.inverter, yesterday, range(4), InverterMeasurement)
+
+        with patch.object(tasks, "enqueue_recalc_for_reconciled") as enqueue:
+            results = tasks.reconcile_measurements(
+                yesterday, today, devices=[self.inverter.id, self.meter.id],
+                client=self.connector, force_recalc_days=[yesterday])
+
+        self.assertEqual(self.connector.downloads(), [])
+        self.assertFalse(any(r.changed for r in results))
+        recalc = enqueue.call_args.args[0]
+        # Todos los dispositivos revisados en ayer; hoy (sin cambios) no.
+        self.assertEqual({(r.device.scada_id, r.day) for r in recalc},
+                         {("inv-1", yesterday), ("m-1", yesterday)})
+
+    def test_without_force_equal_counts_enqueue_nothing(self):
+        self._remote(self.inverter, self.day, range(2))
+        self._local(self.inverter, self.day, range(2), InverterMeasurement)
+        with patch.object(tasks, "enqueue_recalc_for_reconciled") as enqueue:
+            tasks.reconcile_measurements(self.day, self.day, devices=[self.inverter.id],
+                                         client=self.connector)
+        enqueue.assert_not_called()
+
     def test_no_recalc_flag(self):
         self._remote(self.inverter, self.day, range(3))
         with patch.object(tasks, "enqueue_recalc_for_reconciled") as enqueue:
@@ -264,6 +291,10 @@ class ReconcileTaskAndScheduleTests(ReconcileBase):
                 patch.object(tasks, "reconcile_measurements", return_value=[]) as rec:
             tasks.reconcile_recent_measurements.run(days=35)
             self.assertEqual(rec.call_args.args[:2], (date(2026, 9, 5), date(2026, 10, 10)))
+            self.assertEqual(list(rec.call_args.kwargs["force_recalc_days"]), [])
+            tasks.reconcile_recent_measurements.run(days=2, force_recalc_days=1)
+            self.assertEqual(rec.call_args.args[:2], (date(2026, 10, 8), date(2026, 10, 10)))
+            self.assertEqual(list(rec.call_args.kwargs["force_recalc_days"]), [date(2026, 10, 9)])
             tasks.refetch_and_verify_yesterday.run()
             self.assertEqual(rec.call_args.args[:2], (date(2026, 10, 9), date(2026, 10, 10)))
 
@@ -282,7 +313,7 @@ class ReconcileTaskAndScheduleTests(ReconcileBase):
 
         schedule = settings.CELERY_BEAT_SCHEDULE
         for name in ("refetch-verify-yesterday-daily", "reconcile-measurements-daily",
-                     "reconcile-measurements-6h"):
+                     "reconcile-measurements-6h", "reconcile-measurements-midnight"):
             ModelEntry.from_entry(name, app=app, **schedule[name])
 
         self.assertFalse(PeriodicTask.objects.get(name="refetch-verify-yesterday-daily").enabled)
@@ -292,7 +323,10 @@ class ReconcileTaskAndScheduleTests(ReconcileBase):
         self.assertEqual(daily.kwargs, '{"days": 35}')
         six = PeriodicTask.objects.get(name="reconcile-measurements-6h")
         self.assertEqual(six.kwargs, '{"days": 2}')
-        self.assertEqual((six.crontab.hour, six.crontab.minute), ("0,6,12,18", "40"))
+        self.assertEqual((six.crontab.hour, six.crontab.minute), ("6,12,18", "40"))
+        midnight = PeriodicTask.objects.get(name="reconcile-measurements-midnight")
+        self.assertEqual(midnight.kwargs, '{"days": 2, "force_recalc_days": 1}')
+        self.assertEqual((midnight.crontab.hour, midnight.crontab.minute), ("0", "40"))
 
 
 class ReconcileCommandTests(ReconcileBase):

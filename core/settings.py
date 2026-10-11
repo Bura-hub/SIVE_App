@@ -334,8 +334,17 @@ CELERY_BEAT_SCHEDULE = {
     },
     'reconcile-measurements-6h': {
         'task': 'scada_proxy.tasks.reconcile_recent_measurements',
-        'schedule': crontab(hour='0,6,12,18', minute=40),  # Cada 6 h en :40: hoy + 2 días atrás
+        'schedule': crontab(hour='6,12,18', minute=40),  # Cada 6 h en :40: hoy + 2 días atrás
         'kwargs': {'days': 2},
+    },
+    # La de las 00:40 es la misma reconciliación, pero recalcula SIEMPRE el día de
+    # ayer completo (diarios, chart, rollup y mensual de su mes) aunque los conteos
+    # coincidan: las filas que la ingesta horaria trae después del recálculo de las
+    # 23:10 no cambian los conteos y, sin esto, el diario de ayer quedaba a medias (C15).
+    'reconcile-measurements-midnight': {
+        'task': 'scada_proxy.tasks.reconcile_recent_measurements',
+        'schedule': crontab(hour=0, minute=40),
+        'kwargs': {'days': 2, 'force_recalc_days': 1},
     },
     # Sustituida por reconcile-measurements-daily. Se conserva DESHABILITADA:
     # el DatabaseScheduler crea/actualiza las PeriodicTask por nombre pero no
