@@ -98,16 +98,22 @@ como PR absoluto.)
 - Mariana mantiene su PR (0,70–0,77) y el HUDN baja de ~0,76–0,88 a ~0,51–0,67.
 - En abr–jun de 2026, la irradiación de Alvernia fue incluso mayor que en 2025.
 
-**Lado DC** (medias de 11:00 a 12:59, acPower > 0):
-- En 2025 el inversor del HUDN llegaba al techo de 15,13 kW (percentil 99) todos los meses. Desde mayo de 2026 se
-  queda en 13,0–13,8 kW. Mariana sigue llegando al techo.
-- La corriente del MPPT medido baja de unos 6,0 A (2025) a unos 4,5 A (may–oct 2026), un 25 %, en la misma
-  proporción que la energía.
-- Esto apunta a una **pérdida uniforme del arreglo**, típica de suciedad o sombra nueva, más que a un *string*
-  desconectado. El segundo MPPT no se mide y no se puede descartar del todo.
+**Pico de mediodía** (percentil 99 de la potencia AC entre 11:00 y 12:59):
+- En 2025 el inversor del HUDN llegaba al techo de 15,13 kW todos los meses.
+- Desde feb-2026 se queda en 12,7–14,4 kW.
+- Mariana sigue llegando al techo, salvo en jul-2026.
 
-**Recomendación:** inspección y limpieza de los módulos del HUDN, revisión de sombras nuevas y medición de la corriente
-de cada *string*.
+**Corriente del MPPT medido** (corrección del 2026-10-10: una versión anterior de este informe la presentaba como
+prueba de una pérdida uniforme del arreglo, y no lo es):
+- Baja de unos 6,0 A en 2025 a 4,0–5,0 A en may–oct de 2026.
+- La de Mariana también varía con el clima: 4,05 A en jul-2026.
+- Frente a Mariana, la caída se ve en may–jun y sep–oct, pero no en jul–ago.
+- El inversor solo reporta una de sus entradas MPPT (DC ≈ 0,55 × AC). Un *string* caído en la entrada que no se mide no
+  aparecería en esta corriente.
+- **Con estos datos no se puede distinguir entre suciedad o sombra del arreglo y una falla de *string*.**
+
+**Recomendación:** inspección en sitio: limpieza de los módulos, revisión de sombras nuevas y medición de la corriente
+de cada *string* en las dos entradas MPPT.
 
 ## 4. Fuentes
 
