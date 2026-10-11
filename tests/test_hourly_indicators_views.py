@@ -148,12 +148,13 @@ class HourlyIndicatorsViewsTestCase(TestCase):
         self.assertEqual(resp.status_code, 400)
 
     # ------------------------------------------------------------------
-    # (b) rango > 7 días -> 400 (resolve_indicators_hourly_range NO recorta: rechaza).
+    # (b) rango > 31 días -> 400 (resolve_indicators_hourly_range NO recorta: rechaza). El tope era 7 días y
+    #     pasó a 31 en 018e2a6 (2026-07-18); estas pruebas pedían 10 días y quedaron desfasadas.
     # ------------------------------------------------------------------
     def test_meter_hourly_rango_excesivo_da_400(self):
         resp = self._get_meter({
             'time_range': 'hourly', 'device_id': str(self.meter.id),
-            'start_date': '2026-07-01', 'end_date': '2026-07-10',  # 10 días > tope de 7
+            'start_date': '2026-06-01', 'end_date': '2026-07-10',  # 40 días > tope de 31
         })
         self.assertEqual(resp.status_code, 400)
 
@@ -161,14 +162,14 @@ class HourlyIndicatorsViewsTestCase(TestCase):
         resp = self._get_inverter({
             'time_range': 'hourly', 'institution_id': str(self.institution.id),
             'device_id': str(self.inverter.id),
-            'start_date': '2026-07-01', 'end_date': '2026-07-10',
+            'start_date': '2026-06-01', 'end_date': '2026-07-10',
         })
         self.assertEqual(resp.status_code, 400)
 
     def test_weather_hourly_rango_excesivo_da_400(self):
         resp = self._get_weather({
             'time_range': 'hourly', 'device_id': str(self.weather.id),
-            'start_date': '2026-07-01', 'end_date': '2026-07-10',
+            'start_date': '2026-06-01', 'end_date': '2026-07-10',
         })
         self.assertEqual(resp.status_code, 400)
 
@@ -248,12 +249,14 @@ class HourlyIndicatorsViewsTestCase(TestCase):
             imported_energy_kwh=10.0, exported_energy_kwh=1.0, net_energy_consumption_kwh=9.0,
             peak_demand_kw=5.0, avg_demand_kw=3.0, load_factor_pct=60.0, avg_power_factor=0.95,
         )
-        resp = self._get_meter({'institution_id': str(self.institution.id)})
+        resp = self._get_meter({'institution_id': str(self.institution.id), 'start_date': '2026-07-01', 'end_date': '2026-07-31'})
         self.assertEqual(resp.status_code, 200)
         data = self._json(resp)
         self.assertEqual(len(data['results']), 1)
         self.assertIn('date', data['results'][0])
-        self.assertIn('time_range_display', data['results'][0])
+        # Sin device_id la vista devuelve la serie consolidada «Todos» por periodo (32798ec, 2026-07-18), que no
+        # lleva time_range_display (el frontend no lo usa).
+        self.assertEqual(data['results'][0]['device_name'], 'Todos')
 
     def test_meter_monthly_sigue_funcionando(self):
         ElectricMeterIndicators.objects.create(
@@ -261,7 +264,7 @@ class HourlyIndicatorsViewsTestCase(TestCase):
             imported_energy_kwh=300.0, exported_energy_kwh=10.0, net_energy_consumption_kwh=290.0,
             peak_demand_kw=6.0, avg_demand_kw=3.5, load_factor_pct=55.0, avg_power_factor=0.94,
         )
-        resp = self._get_meter({'institution_id': str(self.institution.id), 'time_range': 'monthly'})
+        resp = self._get_meter({'institution_id': str(self.institution.id), 'time_range': 'monthly', 'start_date': '2026-07-01', 'end_date': '2026-07-31'})
         self.assertEqual(resp.status_code, 200)
         data = self._json(resp)
         self.assertEqual(len(data['results']), 1)
@@ -271,7 +274,7 @@ class HourlyIndicatorsViewsTestCase(TestCase):
             device=self.inverter, institution=self.institution, date=self.test_date, time_range='daily',
             dc_ac_efficiency_pct=90.0, energy_ac_daily_kwh=20.0, energy_dc_daily_kwh=22.0,
         )
-        resp = self._get_inverter({'institution_id': str(self.institution.id)})
+        resp = self._get_inverter({'institution_id': str(self.institution.id), 'start_date': '2026-07-01', 'end_date': '2026-07-31'})
         self.assertEqual(resp.status_code, 200)
         data = self._json(resp)
         self.assertEqual(len(data['results']), 1)
@@ -282,7 +285,7 @@ class HourlyIndicatorsViewsTestCase(TestCase):
             device=self.weather, institution=self.institution, date=self.test_date, time_range='daily',
             daily_irradiance_kwh_m2=5.0, avg_temperature_c=22.0,
         )
-        resp = self._get_weather({})
+        resp = self._get_weather({'start_date': '2026-07-01', 'end_date': '2026-07-31'})
         self.assertEqual(resp.status_code, 200)
         data = self._json(resp)
         self.assertEqual(len(data['results']), 1)
@@ -293,7 +296,7 @@ class HourlyIndicatorsViewsTestCase(TestCase):
             device=self.weather, institution=self.institution, date=self.test_date, time_range='monthly',
             daily_irradiance_kwh_m2=150.0, avg_temperature_c=22.0,
         )
-        resp = self._get_weather({'time_range': 'monthly'})
+        resp = self._get_weather({'time_range': 'monthly', 'start_date': '2026-07-01', 'end_date': '2026-07-31'})
         self.assertEqual(resp.status_code, 200)
         data = self._json(resp)
         self.assertEqual(len(data['results']), 1)
