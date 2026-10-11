@@ -5,7 +5,8 @@ Energía horaria por institución con la convención de la tesis y del mercado P
   Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes (Σ P·Δt × 30/n),
   como la tesis; con menos de 15 (amanecer, atardecer, caídas) rige «faltante = 0», como el mercado P2P. Así una RPi
   que pierde lecturas sueltas (HUDN perdió hasta un 25 % en sep-2026) no se lee como menos generación: con
-  «faltante = 0» puro, sep-2026 salía −25 % frente a Solar.web; reponiendo, cuadra (−0,7 %).
+  «faltante = 0» puro, sep-2026 salía −25 % frente a Solar.web; reponiendo, −16 % (ese mes muchas horas tienen
+  menos de 15 lecturas y no se reponen); may–nov 2025 queda a +0,1 %.
 - D (demanda del circuito medido): media de totalActivePower del medidor principal (M1) en la hora × 1 h, válida solo
   si la hora tiene ≥ 15 de 30 muestras (como el motor del mercado). En medidores netos se reconstruye
   D = max(0, P_M1 + Σ inversores aguas abajo).
