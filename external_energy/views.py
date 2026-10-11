@@ -1,8 +1,10 @@
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from core.permissions import IsSuperUser
+from core.permissions import IsAuthenticatedOrPublicRead, IsSuperUser
+from core.throttling import GuestXMAnonRateThrottle
+from rest_framework.throttling import UserRateThrottle
 from drf_spectacular.utils import extend_schema
 from django.conf import settings
 from django.utils import timezone
@@ -17,7 +19,8 @@ import logging
 # (no cambian intra-hora), así que 1 hora de caché es seguro y evita golpear la API de XM
 # en cada request. Nota: la respuesta cacheada es un agregado del mercado colombiano
 # compartido entre todos los usuarios (no contiene datos sensibles ni por-usuario), por lo
-# que compartir la entrada de caché entre usuarios autenticados es aceptable.
+# que compartir la entrada de caché entre usuarios (e invitados) es aceptable. Los GET que
+# pueden llamar a XM en vivo llevan además un cupo estricto para invitados (anon_xm).
 XM_CACHE_TTL = 60 * 60
 
 from .models import (
@@ -55,7 +58,8 @@ def _is_valid_number(value):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Precios de energía del mercado (XM)")
 @api_view(['GET'])
-@permission_classes([IsSuperUser])
+@permission_classes([IsAuthenticatedOrPublicRead])  # modo invitado: GET público
+@throttle_classes([GuestXMAnonRateThrottle, UserRateThrottle])
 def energy_prices(request):
     """
     Obtiene datos de precios de energía para el rango especificado
@@ -211,7 +215,7 @@ def energy_prices(request):
 
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Ahorros estimados por energía")
 @api_view(['GET'])
-@permission_classes([IsSuperUser])
+@permission_classes([IsAuthenticatedOrPublicRead])  # modo invitado: GET público
 def energy_savings(request):
     """
     Obtiene datos de ahorro de energía para el rango especificado
@@ -361,7 +365,7 @@ def sync_external_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Resumen del mercado energético")
 @api_view(['GET'])
-@permission_classes([IsSuperUser])
+@permission_classes([IsAuthenticatedOrPublicRead])  # modo invitado: GET público
 def market_overview(request):
     """
     Obtiene una vista general del mercado de energía
@@ -472,7 +476,8 @@ def _xm_metric_response(request, fetch_method, prefix, default_range, error_labe
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de generación del sistema (XM)")
 @api_view(['GET'])
-@permission_classes([IsSuperUser])
+@permission_classes([IsAuthenticatedOrPublicRead])  # modo invitado: GET público
+@throttle_classes([GuestXMAnonRateThrottle, UserRateThrottle])
 def generation_data(request):
     """Obtiene datos de generación de energía desde XM"""
     return _xm_metric_response(request, 'fetch_generation_data', 'generation', 'month', 'generación')
@@ -482,7 +487,8 @@ def generation_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de demanda del sistema (XM)")
 @api_view(['GET'])
-@permission_classes([IsSuperUser])
+@permission_classes([IsAuthenticatedOrPublicRead])  # modo invitado: GET público
+@throttle_classes([GuestXMAnonRateThrottle, UserRateThrottle])
 def demand_data(request):
     """Obtiene datos de demanda de energía desde XM"""
     return _xm_metric_response(request, 'fetch_demand_data', 'demand', 'month', 'demanda')
@@ -492,7 +498,8 @@ def demand_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de emisiones (XM)")
 @api_view(['GET'])
-@permission_classes([IsSuperUser])
+@permission_classes([IsAuthenticatedOrPublicRead])  # modo invitado: GET público
+@throttle_classes([GuestXMAnonRateThrottle, UserRateThrottle])
 def emissions_data(request):
     """Obtiene datos de emisiones de CO2 desde XM"""
     return _xm_metric_response(request, 'fetch_emissions_data', 'emissions', 'month', 'emisiones')
@@ -501,7 +508,8 @@ def emissions_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de exportaciones de energía (XM)")
 @api_view(['GET'])
-@permission_classes([IsSuperUser])
+@permission_classes([IsAuthenticatedOrPublicRead])  # modo invitado: GET público
+@throttle_classes([GuestXMAnonRateThrottle, UserRateThrottle])
 def exports_data(request):
     """Obtiene datos de exportaciones de energía desde XM"""
     return _xm_metric_response(request, 'fetch_exports_data', 'exports', 'week', 'exportaciones')
@@ -510,7 +518,8 @@ def exports_data(request):
 @vary_on_headers('Authorization')
 @extend_schema(tags=["Mercado Energético (XM)"], summary="Datos de importaciones de energía (XM)")
 @api_view(['GET'])
-@permission_classes([IsSuperUser])
+@permission_classes([IsAuthenticatedOrPublicRead])  # modo invitado: GET público
+@throttle_classes([GuestXMAnonRateThrottle, UserRateThrottle])
 def imports_data(request):
     """Obtiene datos de importaciones de energía desde XM"""
     return _xm_metric_response(request, 'fetch_imports_data', 'imports', 'week', 'importaciones')

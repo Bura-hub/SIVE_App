@@ -12,6 +12,7 @@ const ElectricalDetails = lazy(() => import('./components/ElectricalDetails'));
 const InverterDetails = lazy(() => import('./components/InverterDetails'));
 const WeatherStationDetails = lazy(() => import('./components/WeatherStationDetails'));
 const ExternalEnergyData = lazy(() => import('./components/ExternalEnergyData'));
+const SolarIndicators = lazy(() => import('./components/SolarIndicators'));
 const ExportReports = lazy(() => import('./components/ExportReports'));
 
 // Fallback discreto mientras se descarga el chunk de una pantalla
@@ -123,6 +124,8 @@ function App() {
         return <WeatherStationDetails {...commonProps} />;
       case 'externalEnergy':
         return <ExternalEnergyData {...commonProps} />;
+      case 'solarIndicators':
+        return <SolarIndicators {...commonProps} />;
       case 'exportReports':
         return <ExportReports {...commonProps} />;
       default:

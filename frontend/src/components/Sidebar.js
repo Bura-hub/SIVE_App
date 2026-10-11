@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import siveLogo from './sive-logo.svg';
-import { IconHome, IconDashboard, IconGauge, IconInverter, IconCloudSun, IconGlobe, IconFileDown } from './icons';
+import { IconSun, IconHome, IconDashboard, IconGauge, IconInverter, IconCloudSun, IconGlobe, IconFileDown } from './icons';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
 function Sidebar({
@@ -72,6 +72,13 @@ function Sidebar({
       icon: <IconCloudSun className="w-5 h-5 shrink-0" />,
       activeClasses: 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg shadow-orange-500/25',
       inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-orange-600'
+    },
+    {
+      name: 'Indicadores Solares',
+      page: 'solarIndicators',
+      icon: <IconSun className="w-5 h-5 shrink-0" />,
+      activeClasses: 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/25',
+      inactiveClasses: 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:text-amber-600'
     },
     {
       name: 'Datos Externos',

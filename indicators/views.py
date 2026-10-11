@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
-from core.permissions import IsSuperUser
+from core.permissions import IsAuthenticatedOrPublicRead, IsSuperUser
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiRequest, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 import logging
@@ -60,11 +60,11 @@ from indicators.services.queries import apply_device_filter, aggregate_indicator
 from indicators.serializers import DashboardChartPointSerializer  # noqa: E402
 
 class ConsumptionSummaryView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     # Caché GLOBAL (no por token): la respuesta es data de flota idéntica para todos los
-    # usuarios autenticados. Se consulta dentro de get(), DESPUÉS de que DRF autentique,
-    # para no exponer datos a anónimos (a diferencia de cache_page a nivel dispatch).
+    # usuarios, invitados incluidos (lectura pública). Se consulta dentro de get(), después
+    # de que DRF aplique permisos y throttling.
     CACHE_KEY = 'dashboard:summary:v1'
     CACHE_TTL = 60 * 5
 
@@ -328,7 +328,7 @@ class ConsumptionSummaryView(APIView):
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class ChartDataView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener datos diarios de consumo, generación, balance, temperatura, velocidad del viento e irradiancia",
@@ -572,7 +572,7 @@ class InstitutionsListView(APIView):
     """
     Vista para obtener la lista de instituciones disponibles
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener lista de instituciones",
@@ -616,7 +616,7 @@ class ElectricMetersListView(APIView):
     """
     Vista para obtener la lista de medidores eléctricos por institución
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener lista de medidores eléctricos",
@@ -763,7 +763,7 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
     Vista para obtener indicadores eléctricos de medidores.
     """
     serializer_class = ElectricMeterIndicatorsSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
     # Contrato con el frontend: ElectricalDetails.js consume {'summary', 'results'} con
     # 'results' como la lista COMPLETA del rango pedido. La paginación global de DRF no
     # debe alterar ese shape; el payload se acota por rango de fechas (31 días por
@@ -947,7 +947,7 @@ class InverterIndicatorsView(APIView):
     """
     Vista para obtener indicadores de inversores.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     def get(self, request, *args, **kwargs):
         """
@@ -1099,7 +1099,7 @@ class InverterChartDataView(APIView):
     """
     Vista para obtener datos de gráficos de inversores.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
     
     def get(self, request, *args, **kwargs):
         """
@@ -1320,7 +1320,7 @@ class InvertersListView(APIView):
     """
     Vista para listar inversores filtrados por institución.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
     
     def get(self, request, *args, **kwargs):
         """
@@ -1366,7 +1366,7 @@ class InvertersListView(APIView):
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class WeatherStationIndicatorsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener indicadores de estaciones meteorológicas",
@@ -1562,7 +1562,7 @@ class WeatherStationIndicatorsView(APIView):
 @method_decorator(cache_page(60 * 5), name='dispatch')
 @method_decorator(vary_on_headers('Authorization'), name='dispatch')
 class WeatherStationChartDataView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Obtener datos de gráficos de estaciones meteorológicas",
@@ -1755,7 +1755,7 @@ class CalculateWeatherStationDataView(APIView):
 
 
 class WeatherStationsListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary="Listar estaciones meteorológicas",

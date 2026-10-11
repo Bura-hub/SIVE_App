@@ -218,13 +218,25 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',  # Esquema OpenAPI
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
+        # Igual que AnonRateThrottle ('anon') salvo en las lecturas públicas del modo
+        # invitado, que usan su propio cupo ('anon_read' / 'anon_xm'). Ver core/throttling.py.
+        'core.throttling.GuestAwareAnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
-        'user': '1000/day'
+        'user': '1000/day',
+        # Modo invitado: lectura anónima de las pantallas de datos (por IP).
+        'anon_read': os.getenv('SIVE_GUEST_READ_RATE', '120/min'),
+        # Modo invitado: vistas que pueden consultar la API de XM en vivo (por IP).
+        'anon_xm': os.getenv('SIVE_GUEST_XM_RATE', '30/min'),
     },
+    # Proxies de confianza delante del backend (Apache -> backend = 1). DRF identifica al
+    # anónimo por el último salto de X-Forwarded-For (el que añade el proxy), no por la
+    # cabecera completa que el cliente puede falsear; sin esto todos los invitados
+    # compartirían la IP del gateway de Docker o podrían saltarse el cupo cambiando la cabecera.
+    # 0 = usar REMOTE_ADDR (despliegue sin proxy).
+    'NUM_PROXIES': int(os.getenv('SIVE_NUM_PROXIES', '1')),
     # Paginación global: acota el payload de los ViewSets/generics que devuelven listas.
     # Los endpoints cuyo shape plano/custom consume el frontend se eximen con
     # pagination_class = None en la vista (ver ElectricMeterIndicatorsViewSet).

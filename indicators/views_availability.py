@@ -1,7 +1,7 @@
 # indicators/views_availability.py
 from django.db.models import Min, Max
 from drf_spectacular.utils import extend_schema, OpenApiParameter
-from rest_framework.permissions import IsAuthenticated
+from core.permissions import IsAuthenticatedOrPublicRead
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -22,7 +22,7 @@ _CATEGORY_MODELS = {
 
 class DataAvailabilityView(APIView):
     """Reporta el rango real de datos disponibles por sede y categoría."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         tags=['Disponibilidad de datos'],
