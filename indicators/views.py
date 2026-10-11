@@ -872,16 +872,27 @@ class ElectricMeterIndicatorsViewSet(viewsets.ReadOnlyModelViewSet):
         # Sin device_id, daily/monthly consolida por periodo (Sum/Avg/Max entre
         # dispositivos) para no devolver N puntos duplicados por fecha (N=dispositivos).
         if not device_id and time_range in ('daily', 'monthly'):
+            # Conjunto de medidores («Todos»): la demanda media del conjunto es la SUMA de las medias, y el pico se
+            # toma como la suma de los picos de cada medidor (no coincidentes: los picos pueden no ocurrir a la
+            # vez, así que es una cota superior). El factor de carga es Σ medias / Σ picos. Antes se promediaban
+            # la demanda media y el factor de carga entre medidores y se tomaba el pico de uno solo: con un
+            # medidor a 50 kW constantes y otro a 1 kW salía 51 % aunque cada uno estuviera al 100 %.
             results = aggregate_indicators_by_period(
                 queryset,
                 sum_fields=['imported_energy_kwh', 'exported_energy_kwh',
-                            'net_energy_consumption_kwh', 'measurement_count'],
-                avg_fields=['avg_demand_kw', 'load_factor_pct', 'avg_power_factor'],
-                max_fields=['peak_demand_kw', 'max_voltage_unbalance_pct',
+                            'net_energy_consumption_kwh', 'measurement_count',
+                            'avg_demand_kw', 'peak_demand_kw'],
+                avg_fields=['avg_power_factor'],
+                max_fields=['max_voltage_unbalance_pct',
                             'max_current_unbalance_pct', 'max_voltage_thd_pct',
                             'max_current_thd_pct', 'max_current_tdd_pct',
                             'last_measurement_date'],
             )
+            for r in results:
+                avg_kw, peak_kw = r.get('avg_demand_kw'), r.get('peak_demand_kw')
+                r['load_factor_pct'] = (min(100.0, max(0.0, avg_kw / peak_kw * 100))
+                                        if avg_kw is not None and peak_kw else 0.0)
+                r['peak_demand_is_sum_of_devices'] = True
         else:
             results = self.get_serializer(queryset, many=True).data
 

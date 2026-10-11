@@ -413,7 +413,9 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
         peakDemand: {
           ...prev.peakDemand,
           value: peakDemand.toFixed(2),
-          change: peakRow?.date ? `Máx. ${new Date(peakRow.date).toLocaleDateString('es-ES')}` : 'Máximo del rango'
+          // Fecha sin hora: se formatea en UTC para no mostrar el día anterior en hora de Colombia.
+          change: (peakRow?.date ? `Máx. ${new Date(peakRow.date).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : 'Máximo del rango')
+            + (peakRow?.peak_demand_is_sum_of_devices ? ' · suma de los picos de cada medidor' : '')
         },
         loadFactor: {
           ...prev.loadFactor,

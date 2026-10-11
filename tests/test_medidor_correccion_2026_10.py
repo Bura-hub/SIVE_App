@@ -4,7 +4,7 @@ factor de potencia con |FP|.
 """
 from datetime import datetime, timedelta
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from indicators.energy import SAMPLE_INTERVAL_HOURS
 from indicators.services.date_ranges import COLOMBIA_TZ
@@ -47,3 +47,25 @@ class MedidorTests(SimpleTestCase):
     def test_factor_de_potencia_con_signo(self):
         rows = [_fila(0, 5.0, totalPowerFactor=-0.95), _fila(2, 5.0, totalPowerFactor=0.95)]
         self.assertAlmostEqual(compute_meter_indicators(rows)['avg_power_factor'], 0.95)
+
+
+class TodosMedidoresTests(TestCase):
+    def test_conjunto_suma_medias_y_picos(self):
+        from datetime import date
+        from django.contrib.auth.models import User
+        from rest_framework.test import APIClient
+        from indicators.models import ElectricMeterIndicators
+        from scada_proxy.models import Device, DeviceCategory, Institution
+        cat = DeviceCategory.objects.create(scada_id='c', name='electricMeter')
+        inst = Institution.objects.create(scada_id='i', name='Inst')
+        for sid, media, pico in (('a', 50.0, 50.0), ('b', 1.0, 1.0)):     # cada uno al 100 %
+            d = Device.objects.create(scada_id=sid, name=sid, category=cat, institution=inst)
+            ElectricMeterIndicators.objects.create(device=d, institution=inst, date=date(2026, 7, 5), time_range='daily',
+                                                   avg_demand_kw=media, peak_demand_kw=pico, load_factor_pct=100.0)
+        c = APIClient()
+        c.force_authenticate(User.objects.create_user('u', password='x'))
+        r = c.get('/api/electric-meter-indicators/', {'institution_id': inst.id, 'start_date': '2026-07-01',
+                                                       'end_date': '2026-07-31'}).json()['results'][0]
+        self.assertAlmostEqual(r['avg_demand_kw'], 51.0)
+        self.assertAlmostEqual(r['peak_demand_kw'], 51.0)
+        self.assertAlmostEqual(r['load_factor_pct'], 100.0)   # antes 51 %
