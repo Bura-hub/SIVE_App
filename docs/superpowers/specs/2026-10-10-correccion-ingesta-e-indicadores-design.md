@@ -47,7 +47,8 @@ Filas que faltaban en SIVE frente a `mte3` (2026-10-10):
 Hasta mayo de 2026 coinciden fila a fila, con diferencias de ±10 filas.
 
 Efecto en el HUDN: el inversor marcaba 564, 584 y 492 kWh en jul, ago y sep de 2026, cuando `mte3` tiene 960, 1076 y 875.
-Septiembre sigue por debajo de Solar.web porque `mte3` tampoco tiene el 4–17-sep: es un hueco permanente.
+Septiembre sigue por debajo de Solar.web, pero no por un hueco (corrección del 2026-10-10: hay lectura el 98 % de
+las horas de sol): la RPi del HUDN perdía lecturas sueltas dentro de cada hora y solo llegó el 75,6 % (ver C21).
 
 ### 2.3 Cálculos incorrectos (código en `0fc41a9`)
 
@@ -238,3 +239,10 @@ y sus pruebas).
 *Nota de git:* durante este trabajo, un `git commit --amend` lanzado por error tras un script fallido reescribió
 `e702429` (otro agente, «Registro de D1: C15 cerrado…») como `20d0d2d`, con el mismo árbol y el mismo mensaje; solo
 cambió la fecha de commit.
+
+**C21 — Lecturas perdidas sueltas** (`institution_energy.py`; regla verificada en producción el 2026-10-10).
+- Antes: G con «faltante = 0» puro. Las lecturas que la RPi perdía dentro de cada hora se leían como menos generación.
+  En sep-2026 el HUDN quedaba −25 % frente a Solar.web con el 98 % de las horas con dato.
+- Después: si la hora tiene ≥ 15 de 30 lecturas, se reponen las que faltan con la media de las presentes (como la
+  tesis); con menos, «faltante = 0» (como el mercado). HUDN: may–nov 2025 de −0,03 % a +0,12 % frente a Solar.web;
+  2026 en meses completos de −3,2 % a −1,4 %; sep-2026 de −25 % a −16 %. La caché de energía pasa a `v2`.
