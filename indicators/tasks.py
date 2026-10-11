@@ -399,6 +399,8 @@ def _calculate_hourly_consumption(measurements):
     for row in measurements:
         hour = row['date'].hour
         power_value = _row_get(row, 'totalActivePower')
+        if power_value is None:
+            continue  # NULL = no medido (C9): no entra al promedio
         hourly_data[hour].append(power_value)
     
     # Calcular promedio por hora
