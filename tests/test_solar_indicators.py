@@ -116,19 +116,47 @@ class EnergiaHorariaTests(_Base):
 
 
 class IrradiacionYPRTests(_Base):
-    def _referencia(self, dia, wm2=500.0):
-        """Estación de referencia (Alvernia, de Mariana) con un día completo."""
+    # El sesgo mensual de la estación se juzga con ≥ 5 días emparejados con la referencia: las estaciones se
+    # cargan 5 días seguidos (DIA y los 4 siguientes); el inversor, solo DIA.
+    DIAS_MES = [DIA + timedelta(days=i) for i in range(5)]
+
+    def _referencia(self, wm2=500.0):
+        """Estación de referencia (Alvernia, de Mariana) con 5 días completos."""
         inst = Institution.objects.create(scada_id=MARIANA, name='Mariana')
         est = Device.objects.create(name='Alvernia', scada_id=INSTITUCIONES[MARIANA]['estacion'],
                                     category=self.cat_est, institution=inst)
-        for hora in range(6, 18):
-            self._serie(WeatherStationMeasurement, est, 'irradiance', dia, hora, wm2)
+        for dia in self.DIAS_MES:
+            for hora in range(6, 18):
+                self._serie(WeatherStationMeasurement, est, 'irradiance', dia, hora, wm2)
+
+    def _estacion(self, devs, cfg, wm2=500.0):
+        for dia in self.DIAS_MES:
+            for hora in range(6, 18):
+                self._serie(WeatherStationMeasurement, devs[cfg['estacion']], 'irradiance', dia, hora, wm2)
 
     def _dia_soleado(self, devs, cfg, dia, wm2=500.0, gen_w=8000.0, ref_wm2=500.0):
-        self._referencia(dia, ref_wm2)
+        self._referencia(ref_wm2)
+        self._estacion(devs, cfg, wm2)
         for hora in range(6, 18):
-            self._serie(WeatherStationMeasurement, devs[cfg['estacion']], 'irradiance', dia, hora, wm2)
             self._serie(InverterMeasurement, devs[cfg['inversores_generacion'][0]], 'acPower', dia, hora, gen_w)
+
+    def test_mes_con_pocos_dias_para_contrastar_no_cuenta(self):
+        inst, devs = self._institucion(HUDN, 'HUDN')
+        cfg = INSTITUCIONES[HUDN]
+        self._referencia()
+        for hora in range(6, 18):                           # la estación del HUDN solo tiene 1 día
+            self._serie(WeatherStationMeasurement, devs[cfg['estacion']], 'irradiance', DIA, hora, 500.0)
+            self._serie(InverterMeasurement, devs[cfg['inversores_generacion'][0]], 'acPower', DIA, hora, 8000.0)
+        r = solar_kpis.calcular(inst, DIA, DIA, 'day')
+        self.assertIsNone(r['total']['performance_ratio'])
+        self.assertIn('para contrastar', r['total']['pr_motivo'])
+
+    def test_mes_con_sesgo_sistematico_no_cuenta(self):
+        inst, devs = self._institucion(HUDN, 'HUDN')
+        self._dia_soleado(devs, INSTITUCIONES[HUDN], DIA, wm2=400.0, ref_wm2=500.0)   # −20 % todo el mes
+        r = solar_kpis.calcular(inst, DIA, DIA, 'day')
+        self.assertIsNone(r['total']['performance_ratio'])
+        self.assertIn('sesgo', r['total']['pr_motivo'])
 
     def test_dia_que_difiere_de_la_referencia_no_cuenta(self):
         inst, devs = self._institucion(HUDN, 'HUDN')
@@ -161,9 +189,8 @@ class IrradiacionYPRTests(_Base):
     def test_dia_sin_datos_del_inversor_no_cuenta_en_pr(self):
         inst, devs = self._institucion(HUDN, 'HUDN')
         cfg = INSTITUCIONES[HUDN]
-        self._referencia(DIA)
-        for hora in range(6, 18):                           # estación completa, inversor sin datos
-            self._serie(WeatherStationMeasurement, devs[cfg['estacion']], 'irradiance', DIA, hora, 500.0)
+        self._referencia()
+        self._estacion(devs, cfg)                           # estación completa, inversor sin datos
         r = solar_kpis.calcular(inst, DIA, DIA, 'day')
         self.assertIsNone(r['total']['performance_ratio'])
         self.assertIn('inversor sin lecturas', r['total']['pr_motivo'])

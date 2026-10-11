@@ -19,6 +19,8 @@ Las claves son el `scada_id` del conector (UUID), que es estable; el `id` de Dja
 - Validación cruzada del PR: un día de la estación de una institución solo cuenta si su irradiación queda a ±25 % de
   la de la estación de referencia (ESTACION_REFERENCIA_PR, Alvernia) ese mismo día. La del HUDN, por ejemplo, marcaba
   un 50–75 % más que Alvernia en abr–jun 2025 y un 20 % menos en feb–mar 2026, y solo coincidía en jul–nov 2025.
+  Además, un mes solo vale si la mediana de la razón diaria estación/referencia queda a ±10 % (con ≥ 5 días para
+  contrastar): el filtro diario deja pasar un sesgo sistemático del 20 % que infla el PR en 1/0,8.
 """
 from datetime import date
 
@@ -32,7 +34,9 @@ ARBOLES_POR_TONELADA_CO2 = 545 / 12   # Informe Técnico 2: 545 árboles por 12 
 # Estación de referencia para validar la irradiación de las demás (la de Alvernia, Universidad Mariana: completa
 # y coherente con la de Cesmag) y tolerancia diaria admitida.
 INSTITUCION_REFERENCIA_PR = '0357e3a6-ebdd-45f2-bd1a-0c384c522df3'
-TOLERANCIA_REFERENCIA_PR = 0.25
+TOLERANCIA_REFERENCIA_PR = 0.25        # por día (las nubes difieren entre sedes)
+TOLERANCIA_SESGO_MENSUAL_PR = 0.10     # mediana mensual de la razón estación / referencia
+MIN_DIAS_SESGO_MENSUAL_PR = 5          # días emparejados mínimos para juzgar el sesgo del mes
 
 INSTITUCIONES = {
     '04abaa1c-9f61-4ae4-8b53-44f66cce93c6': {

@@ -146,7 +146,7 @@ def _clave_energia(institution_scada_id, mes):
 
 
 def _clave_irradiacion(institution_scada_id, mes):
-    return f'irradiacion-diaria:v2:{institution_scada_id}:{mes:%Y-%m}'
+    return f'irradiacion-diaria:v3:{institution_scada_id}:{mes:%Y-%m}'
 
 
 def invalidar_cache_energia(institution_scada_id, mes):
@@ -213,10 +213,23 @@ def _irradiacion_diaria_sin_cache(institution_scada_id, start_date, end_date):
             acc[1] += f['n']
     esperadas = (HORA_FIN_DIA_SOLAR - HORA_INICIO_DIA_SOLAR) * MUESTRAS_HORA
     # Validación cruzada con la estación de referencia (institution_config.INSTITUCION_REFERENCIA_PR).
-    from indicators.institution_config import INSTITUCION_REFERENCIA_PR, TOLERANCIA_REFERENCIA_PR
+    from statistics import median
+    from indicators.institution_config import (
+        INSTITUCION_REFERENCIA_PR, MIN_DIAS_SESGO_MENSUAL_PR, TOLERANCIA_REFERENCIA_PR, TOLERANCIA_SESGO_MENSUAL_PR,
+    )
     referencia = None
+    sesgo_mes = {}   # 'YYYY-MM' -> (mediana de la razón estación/referencia o None, días emparejados)
     if str(institution_scada_id) != INSTITUCION_REFERENCIA_PR:
         referencia = _irradiacion_diaria_sin_cache(INSTITUCION_REFERENCIA_PR, start_date, end_date)
+        razones = defaultdict(list)
+        for dia, (s_, n_) in por_dia.items():
+            ref = referencia.get(dia)
+            h_ = s_ * DT_H / 1000.0
+            if (ref and ref['valido'] and ref['h_kwh_m2'] > 0 and n_ >= COBERTURA_MIN_ESTACION * esperadas
+                    and h_ <= IRRADIACION_MAX_DIA_KWH_M2):
+                razones[dia.strftime('%Y-%m')].append(h_ / ref['h_kwh_m2'])
+        sesgo_mes = {m: (median(v) if len(v) >= MIN_DIAS_SESGO_MENSUAL_PR else None, len(v))
+                     for m, v in razones.items()}
     resultado = {}
     for dia, (s, n) in por_dia.items():
         h_dia = s * DT_H / 1000.0
@@ -228,7 +241,14 @@ def _irradiacion_diaria_sin_cache(institution_scada_id, start_date, end_date):
             valido, motivo = False, f'irradiación {h_dia:.2f} kWh/m² > {IRRADIACION_MAX_DIA_KWH_M2}'
         elif referencia is not None:
             ref = referencia.get(dia)
-            if ref is None or not ref['valido']:
+            mediana, n_pares = sesgo_mes.get(dia.strftime('%Y-%m'), (None, 0))
+            if mediana is None:
+                valido, motivo = False, (f'solo {n_pares} días del mes para contrastar la estación con la de '
+                                         f'referencia (Alvernia); hacen falta {MIN_DIAS_SESGO_MENSUAL_PR}')
+            elif abs(mediana - 1) > TOLERANCIA_SESGO_MENSUAL_PR:
+                valido, motivo = False, (f'en este mes la estación marca {mediana:.2f} veces la de referencia '
+                                         f'(Alvernia): sesgo mayor de {int(TOLERANCIA_SESGO_MENSUAL_PR * 100)} %')
+            elif ref is None or not ref['valido']:
                 valido, motivo = False, 'sin dato válido de la estación de referencia (Alvernia) para contrastar'
             elif abs(h_dia / ref['h_kwh_m2'] - 1) > TOLERANCIA_REFERENCIA_PR:
                 valido = False
