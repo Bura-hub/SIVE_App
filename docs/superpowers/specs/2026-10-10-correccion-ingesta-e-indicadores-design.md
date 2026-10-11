@@ -246,3 +246,14 @@ cambió la fecha de commit.
 - Después: si la hora tiene ≥ 15 de 30 lecturas, se reponen las que faltan con la media de las presentes (como la
   tesis); con menos, «faltante = 0» (como el mercado). HUDN: may–nov 2025 de −0,03 % a +0,12 % frente a Solar.web;
   2026 en meses completos de −3,2 % a −1,4 %; sep-2026 de −25 % a −16 %. La caché de energía pasa a `v2`.
+
+**C22 — Validación de la estación para el PR** (`institution_energy.py`, `institution_config.py`; verificado en
+producción el 2026-10-10).
+- Antes: el PR usaba la estación de cada institución tal cual. La del HUDN marcaba 1,26–1,68 veces Alvernia en abr–jun
+  2025 y 0,79–0,84 en feb–mar 2026, así que su PR (0,57 o 0,81–0,85) no medía la planta.
+- Después:
+  - un día cuenta solo si queda a ±25 % de la estación de referencia (Alvernia) y si su mes no tiene un sesgo
+    sistemático mayor del 10 % (mediana de la razón diaria, con ≥ 5 días emparejados);
+  - el PR de Inversores usa la misma irradiación;
+  - la API de indicadores solares ya no cachea la respuesta: servía cifras viejas tras cada despliegue.
+- Efecto en el HUDN: PR de 0,695 (101 días) a 0,752 (27 días: ago y nov 2025); 2026 sin PR, con su motivo.
