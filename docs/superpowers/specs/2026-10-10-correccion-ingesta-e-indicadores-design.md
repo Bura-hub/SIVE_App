@@ -170,3 +170,71 @@ que el otro tenía preparados. El contenido es el correcto.)
   administrar, el perfil y `/scada/`, `/tasks/` y `/local/` siguen pidiendo sesión. «Datos Externos» queda abierto en
   lectura para todos (confirmado por el autor el 2026-10-10). Sin token se entra como «Invitado · Solo lectura», y
   «Iniciar sesión» abre el login de siempre.
+
+**C9 — NULL ya no es 0** (`2c09c5f`; `indicators/services/rows.py`, `tests/test_correccion_nulos_c9.py`).
+- Antes: `_row_get` devolvía 0 si la columna venía NULL, y ese 0 entraba a promedios y desbalances: (230, 230, NULL) V
+  daba un desbalance del 100 %.
+- Después: devuelve None y los cálculos descartan la muestra (ese mismo caso: 0,87 %, el de la otra muestra).
+
+**C1, C2/D7, C3/D6, C4/D5 y C5 — Indicadores del inversor** (`325df2d`; `indicators/services/inverter_calc.py`,
+`weather_calc.daily_irradiation_for_pr`, `tasks.py`, `models.py`, migración `0028`, serializers, agregado «Todos»,
+informes, `tests/test_inversor_correccion_2026_10.py`). El mensaje del commit dice que la gráfica horaria «queda en su
+commit», pero C5 y C7 de `InverterChartData` van en ese mismo commit.
+- C1. Frecuencia media: solo muestras con acFrequency > 0 y acPower > 0; la estabilidad y el anomaly_score usan las
+  mismas. HUDN, cada mes de abr-2025 a sep-2026 en la copia: **54,4 Hz → 59,99 Hz**.
+- C2/D7. Factor de potencia: media de |FP|/100 mientras acPower > 0, en escala 0–1, en el campo `avg_power_factor`
+  (antes `avg_power_factor_pct`, en el modelo diario y el horario). HUDN: **−41,3 → 0,990–0,996** según el mes.
+- C3/D6. Eficiencia DC/AC: NULL siempre; ya no dispara la anomalía de eficiencia baja. Antes: 99,6–100 % (recortada).
+- C4/D5. PR = Σ E_AC / Σ (H × kWp) sobre los días válidos de la estación de la institución (`institution_config`),
+  H en 06–18 h Bogotá con muestras en [0, 1400] W/m², días con ≥ 288 muestras diurnas y 0 < H ≤ 8 kWh/m². Si no hay
+  días válidos, la estación no es apta (Udenar) o el inversor no es la generación de una planta, PR = NULL con el motivo
+  en `performance_ratio_note`; `performance_ratio_valid_days` guarda los días usados. Sin `pnom` fijo. HUDN, mensual
+  (antes 0 todos los meses):
+
+  | Mes | abr-25 | may-25 | jun-25 | jul-25 | ago-25 | sep-25 | oct-25 | nov-25 | dic-25 | ene-26 | feb-26 | mar-26 | abr–sep-26 |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | PR (%) | 59,3 | 57,4 | 76,9 | 74,4 | 75,4 | 71,3 | 69,0 | 73,0 | — | 80,5 | 80,6 | 85,2 | — |
+  | Días válidos | 9 | 13 | 4 | 20 | 11 | 20 | 3 | 21 | 0 | 2 | 18 | 20 | 0 |
+
+  Jul–nov de 2025 quedan en 69–75 %; abril y mayo, en 57–59 %, con H medio más alto en los días válidos (5,4 y
+  4,8 kWh/m²). Sin datos de la estación del HUDN desde marzo de 2026, el PR de abr–sep de 2026 es NULL (§2.4).
+  Es un PR con irradiancia horizontal (GHI).
+- C5 y C7 (`InverterChartData`). `hourly_generation` = Σ acPower × 2/60 / 1000 de cada hora de Bogotá (antes la media
+  horaria × 2/60: 30 veces menos, y la hora UTC). 6 kW constantes una hora: **0,2 → 6,0 kWh**. Las horas sin muestras y
+  la eficiencia horaria van en None. La corrida mensual ya no escribe la gráfica: con `unique (device, date)` sin
+  `time_range` pisaba la del día 1 con medias de todo el mes. No hizo falta migración.
+- El inversor no mide irradiancia ni temperatura: `avg_irradiance_wm2` y `avg_temperature_c` pasan de 0 a NULL.
+- La migración `0028` pone en NULL el FP, la eficiencia, el PR, la referencia, la irradiancia y la temperatura ya
+  guardados (no tienen sentido en la escala nueva). **Hay que recalcular los indicadores de inversor** (diarios y
+  mensuales; el rollup horario, para el FP horario) para rellenarlos.
+
+**C8 — «Todos» de estaciones** (`9b6daa2`; `indicators/views.py`).
+- Antes: sumaba irradiación, HSP y precipitación entre estaciones (4 + 6 kWh/m² = 10).
+- Después: las promedia (5 kWh/m²). Se actualizó `tests/test_period_aggregation_weather.py`, que fijaba la suma.
+
+**C6 y C7 — Estaciones: gráfica diaria, horas y días de Bogotá, media circular** (`da208be`;
+`indicators/services/weather_calc.py`, `tasks.py`, `models.py`, migración `0029`, `tests/test_estacion_correccion_2026_10.py`).
+- C6. `WeatherStationChartData.daily_irradiance_kwh_m2` = Σ muestras válidas × 2/60 / 1000, igual que el indicador
+  diario. Julio de 2025 en la copia (media de los días): Alvernia **0,130 → 3,32**, Cesmag **0,183 → 4,09**, HUDN
+  **0,169 → 3,50**, UCC **0,156 → 3,60** kWh/m²/día. Las horas y el rollup horario aplican los mismos rangos físicos que
+  el diario a todas las variables, y los promedios del día salen de las muestras (antes, 24 medias con las horas
+  vacías en 0).
+- C7. Horas de la gráfica y días del mensual en hora de Bogotá (antes UTC: el mensual partía cada día a las 19:00).
+- Dirección del viento horaria: media circular (350° y 10° daban 180°; ahora 0°).
+- Lo no medido queda en NULL (horas sin datos, días sin irradiancia válida) y los campos de `WeatherStationIndicators`
+  y `WeatherStationChartData` admiten NULL (migración `0029`). Los valores guardados se corrigen al recalcular.
+- Queda abierto: el indicador diario de irradiación filtra las muestras a 0–1100 W/m² y el PR a 0–1400 (D5). En el
+  HUDN, de abr a nov de 2025 hay entre 5 y 121 muestras al mes entre 1100 y 1400 W/m² (realce por nubes).
+
+**Pantallas de inversores y estaciones** (`9ce836f`; `InverterDetails.js`, `WeatherStationDetails.js`, `kpiInfo.js`
+y sus pruebas).
+- Inversores: el FP se lee de `avg_power_factor` (0–1); tarjeta y columna de PR con los días válidos y, si viene NULL,
+  «No disponible» con el motivo; tarjeta de eficiencia DC/AC «No disponible: el inversor solo reporta una entrada
+  MPPT»; los NULL son huecos en las gráficas, no 0.
+- Estaciones: la potencia FV teórica ya no pasa kWh/m²/día como W/m² (4,09 kWh/m² daban ~0,7 W; ahora el valor del
+  backend, `theoretical_pv_power_w`); los NULL se muestran «No disponible». C16: aviso de que la estación de Udenar está
+  descalibrada y no se usa para el PR.
+
+*Nota de git:* durante este trabajo, un `git commit --amend` lanzado por error tras un script fallido reescribió
+`e702429` (otro agente, «Registro de D1: C15 cerrado…») como `20d0d2d`, con el mismo árbol y el mismo mensaje; solo
+cambió la fecha de commit.
