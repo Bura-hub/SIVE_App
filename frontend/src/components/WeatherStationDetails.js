@@ -504,13 +504,13 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
 
   // Efectos
   useEffect(() => {
-    if (authToken) {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-      }, 300);
-    }
-  }, [authToken]);
+    // Modo invitado: la animación inicial no depende de la sesión (antes, sin token, `loading` se quedaba en
+    // true y la pantalla no salía nunca de «Cargando…»).
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+    }, 300);
+  }, []);
 
   // Efecto para carga inicial de datos cuando se selecciona una institución
   useEffect(() => {

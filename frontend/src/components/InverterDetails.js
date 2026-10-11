@@ -483,14 +483,14 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
 
   // Agregar un useEffect que se ejecute cuando el componente se monta
   useEffect(() => {
-    if (authToken) {
-      setLoading(true);
-      // Simular un pequeño delay para mostrar la animación
-      setTimeout(() => {
-        setLoading(false);
-      }, 300);
-    }
-  }, [authToken]); // Se ejecuta cuando cambie el token
+    // Modo invitado: la animación inicial no depende de la sesión (antes, sin token, `loading` se quedaba en
+    // true y la pantalla no salía nunca de «Cargando…»).
+    setLoading(true);
+    // Simular un pequeño delay para mostrar la animación
+    setTimeout(() => {
+      setLoading(false);
+    }, 300);
+  }, []); // Se ejecuta cuando cambie el token
 
   // Efecto para actualizar datos cuando cambien los filtros
   useEffect(() => {

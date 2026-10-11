@@ -353,14 +353,14 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
 
   // Cargar datos iniciales al montar el componente
   useEffect(() => {
-    if (authToken) {
-      setLoading(true);
-      // Simular un pequeño delay para mostrar la animación
-      setTimeout(() => {
-        setLoading(false);
-      }, 300);
-    }
-  }, [authToken]);
+    // Modo invitado: la animación inicial no depende de la sesión (antes, sin token, `loading` se quedaba en
+    // true y la pantalla no salía nunca de «Cargando…»).
+    setLoading(true);
+    // Simular un pequeño delay para mostrar la animación
+    setTimeout(() => {
+      setLoading(false);
+    }, 300);
+  }, []);
 
   // Efecto para actualizar datos cuando cambien los filtros
   useEffect(() => {
