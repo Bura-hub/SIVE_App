@@ -7,7 +7,6 @@ GET /api/solar-indicators/institutions/   instituciones con sistema FV configura
 import logging
 from datetime import datetime
 
-from django.core.cache import cache
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from core.permissions import IsAuthenticatedOrPublicRead
@@ -21,7 +20,6 @@ from scada_proxy.models import Institution
 
 logger = logging.getLogger(__name__)
 
-CACHE_SEGUNDOS = 10 * 60
 
 
 def _fecha(valor, nombre):
@@ -81,12 +79,10 @@ class SolarIndicatorsView(APIView):
         if institucion is None:
             return Response({'detail': 'Institución no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
-        clave = f'solar-indicators:{institution_id}:{desde}:{hasta}:{granularidad}'
-        datos = cache.get(clave)
-        if datos is None:
-            try:
-                datos = solar_kpis.calcular(institucion, desde, hasta, granularidad)
-            except ValueError as e:
-                return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-            cache.set(clave, datos, CACHE_SEGUNDOS)
+        # Sin caché propia de la respuesta: la energía y la irradiación ya se guardan por mes (institution_energy),
+        # así que el cálculo tarda décimas de segundo, y una caché aquí servía cifras viejas tras cada despliegue.
+        try:
+            datos = solar_kpis.calcular(institucion, desde, hasta, granularidad)
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(datos)
