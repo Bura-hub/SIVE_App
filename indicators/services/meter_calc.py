@@ -8,12 +8,12 @@ la BD ni Celery. La task queda como envoltorio (query + update_or_create).
 `measurement_count` y `last_measurement_date` NO se calculan aquí (dependen del queryset).
 """
 from indicators.energy import consumption_energy_kwh
+from indicators.services.date_ranges import COLOMBIA_TZ
 from indicators.services.rows import _row_get
-from indicators.services.sanitize import (
-    ROLLOVER_CAP_FACTOR,
-    ROLLOVER_CAP_MARGIN_KWH,
-    _accumulate_register_energy,
-)
+
+# Demanda pico: media de cada bloque de reloj de 15 min (00, 15, 30, 45) con al menos estas muestras (de 7–8).
+PEAK_BLOCK_MINUTES = 15
+PEAK_BLOCK_MIN_SAMPLES = 4
 
 # Umbral mínimo de corriente promedio (A) para evaluar desbalance/THD/TDD de corriente.
 # Por debajo de este umbral la carga es despreciable (equivalente a standby/vacío) y la
@@ -27,8 +27,7 @@ MIN_CURRENT_A_FOR_UNBALANCE = 1.0
 
 # Columnas v2 que consume el cálculo del medidor.
 METER_FIELDS = (
-    'importedActivePowerLow', 'importedActivePowerHigh',
-    'exportedActivePowerLow', 'exportedActivePowerHigh',
+    'date',
     'totalActivePower', 'totalPowerFactor',
     'voltagePhaseA', 'voltagePhaseB', 'voltagePhaseC',
     'currentPhaseA', 'currentPhaseB', 'currentPhaseC',
@@ -41,22 +40,8 @@ METER_FIELDS = (
 def compute_meter_indicators(rows):
     """Indicadores de un medidor a partir de un iterable de filas dict de `.values()`.
     Puro (no toca la BD). Devuelve el dict de campos calculados."""
-    # Energía acumulada (primer/último): heredado; hoy no interviene en el resultado
-    # (la energía sale del saneamiento de la serie de registros), se conserva verbatim.
-    imported_energy_low_start = None
-    imported_energy_high_start = None
-    exported_energy_low_start = None
-    exported_energy_high_start = None
-
-    imported_energy_low_end = None
-    imported_energy_high_end = None
-    exported_energy_low_end = None
-    exported_energy_high_end = None
-
     total_active_power_values = []
-    # Series ordenadas de los registros acumulados (para el saneamiento anti roll-over)
-    import_register_totals = []
-    export_register_totals = []
+    power_dates = []
     power_factor_values = []
     voltage_phases = []
     current_phases = []
@@ -65,31 +50,11 @@ def compute_meter_indicators(rows):
     current_tdd_values = []
 
     for data in rows:
-        # Energía acumulada (primer y último valor)
-        if imported_energy_low_start is None:
-            imported_energy_low_start = _row_get(data, 'importedActivePowerLow')
-            imported_energy_high_start = _row_get(data, 'importedActivePowerHigh')
-            exported_energy_low_start = _row_get(data, 'exportedActivePowerLow')
-            exported_energy_high_start = _row_get(data, 'exportedActivePowerHigh')
-
-        imported_energy_low_end = _row_get(data, 'importedActivePowerLow')
-        imported_energy_high_end = _row_get(data, 'importedActivePowerHigh')
-        exported_energy_low_end = _row_get(data, 'exportedActivePowerLow')
-        exported_energy_high_end = _row_get(data, 'exportedActivePowerHigh')
-
-        # Serie ordenada de registros acumulados para el saneamiento (solo
-        # lecturas con valor real; NULL se omite para no fabricar deltas falsos).
-        imp_high, imp_low = data['importedActivePowerHigh'], data['importedActivePowerLow']
-        if imp_high is not None and imp_low is not None:
-            import_register_totals.append(imp_high * 1000 + imp_low)
-        exp_high, exp_low = data['exportedActivePowerHigh'], data['exportedActivePowerLow']
-        if exp_high is not None and exp_low is not None:
-            export_register_totals.append(exp_high * 1000 + exp_low)
-
         # Potencia activa para demanda pico
         total_active_power = _row_get(data, 'totalActivePower')
         if total_active_power is not None:
             total_active_power_values.append(total_active_power)
+            power_dates.append(data.get('date'))
 
         # Factor de potencia
         power_factor = _row_get(data, 'totalPowerFactor')
@@ -144,31 +109,31 @@ def compute_meter_indicators(rows):
         ):
             current_tdd_values.extend([current_tdd_a, current_tdd_b, current_tdd_c])
 
-    # 3.2. Energía Consumida Acumulada (SANEADA contra roll-over/reset del contador).
-    # La energía integrada de la potencia (Σ|P|·Δt) es fiable y acota los saltos:
-    # un incremento de registro que la supere ampliamente es un glitch, no consumo.
-    pos_power_sum = sum(p for p in total_active_power_values if p and p > 0)
-    neg_power_sum = sum(-p for p in total_active_power_values if p and p < 0)
-    integrated_import_kwh = consumption_energy_kwh(pos_power_sum)
-    integrated_export_kwh = consumption_energy_kwh(neg_power_sum)
-    import_cap = ROLLOVER_CAP_FACTOR * integrated_import_kwh + ROLLOVER_CAP_MARGIN_KWH
-    export_cap = ROLLOVER_CAP_FACTOR * integrated_export_kwh + ROLLOVER_CAP_MARGIN_KWH
-
-    imported_energy_kwh = _accumulate_register_energy(import_register_totals, import_cap)
-    exported_energy_kwh = _accumulate_register_energy(export_register_totals, export_cap)
+    # 3.2. Energía importada y exportada = integración de la potencia activa (C17, como la tesis y el mercado P2P):
+    # Σ max(P, 0)·Δt y Σ max(−P, 0)·Δt con P = totalActivePower en kW. Antes salía de los registros acumulados
+    # importedActivePower*/exportedActivePower*, que en varios medidores están desescalados por la razón del TC
+    # (tesis H-16: Mariana M1 ×39,5, HUDN M3 ×38,6, Cesmag M1 y M3 ×78,5) y cuyo saneamiento aceptaba picos de ida
+    # y vuelta y tenía un tope que crecía con la ventana (el mensual no era la suma de los diarios). Una lectura
+    # que no llegó no suma: la energía del mes es la suma exacta de la de sus días y horas.
+    imported_energy_kwh = consumption_energy_kwh(sum(p for p in total_active_power_values if p > 0))
+    exported_energy_kwh = consumption_energy_kwh(sum(-p for p in total_active_power_values if p < 0))
     net_energy_consumption_kwh = imported_energy_kwh - exported_energy_kwh
 
-    # 3.3. Demanda Pico
+    # 3.3. Demanda pico = máxima media de bloques de reloj de 15 min (C18). Antes: media móvil de 7 muestras por
+    # POSICIÓN, que a través de un hueco de datos mezclaba lecturas separadas por horas.
     if total_active_power_values:
-        # Calcular demanda pico usando promedio móvil de 15 minutos
-        # Como tenemos datos cada 2 minutos, 15 minutos = 7-8 mediciones
-        window_size = 7
-        moving_averages = []
-        for i in range(len(total_active_power_values) - window_size + 1):
-            window_avg = sum(total_active_power_values[i:i+window_size]) / window_size
-            moving_averages.append(window_avg)
-
-        peak_demand_kw = max(moving_averages) if moving_averages else max(total_active_power_values)
+        bloques = {}
+        for i, (p_kw, fecha) in enumerate(zip(total_active_power_values, power_dates)):
+            if fecha is not None:
+                local = fecha.astimezone(COLOMBIA_TZ)
+                clave = (local.date(), local.hour, local.minute // PEAK_BLOCK_MINUTES)
+            else:
+                clave = i // 7     # filas sin fecha (solo pruebas unitarias antiguas): bloques de 7 muestras
+            acc = bloques.setdefault(clave, [0.0, 0])
+            acc[0] += p_kw
+            acc[1] += 1
+        medias = [s_ / n for s_, n in bloques.values() if n >= PEAK_BLOCK_MIN_SAMPLES]
+        peak_demand_kw = max(medias) if medias else max(total_active_power_values)
         avg_demand_kw = sum(total_active_power_values) / len(total_active_power_values)
     else:
         peak_demand_kw = 0
@@ -185,8 +150,10 @@ def compute_meter_indicators(rows):
         load_factor_pct = 0
 
     # 3.5. Factor de Potencia Promedio
+    # El FP del medidor viene con signo (el signo indica el sentido del flujo, p. ej. −0,955; tesis A7.5):
+    # promediar con signo cancela valores. Se promedia |FP|.
     if power_factor_values:
-        avg_power_factor = sum(power_factor_values) / len(power_factor_values)
+        avg_power_factor = sum(abs(pf) for pf in power_factor_values) / len(power_factor_values)
     else:
         avg_power_factor = 0
 
