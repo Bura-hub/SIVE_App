@@ -326,8 +326,7 @@ const SolarIndicators = () => {
     labels: etiquetas,
     datasets: [
       { label: 'Performance Ratio', data: periodos.map((p) => p.performance_ratio),
-        borderColor: '#2563EB', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.3, pointRadius: 5,
-        pointBackgroundColor: '#2563EB', pointBorderColor: '#ffffff', pointBorderWidth: 2, spanGaps: false },
+        backgroundColor: 'rgba(37, 99, 235, 0.75)', borderColor: '#1D4ED8', borderWidth: 1, borderRadius: 6 },
     ],
   }), [etiquetas, periodos]);
 
@@ -533,9 +532,9 @@ const SolarIndicators = () => {
                     description={hayPR
                       ? 'Solo periodos con días válidos de la estación meteorológica (contrastada con Alvernia)'
                       : 'Sin días válidos de la estación en este rango: los motivos están en la tabla'}
-                    type="line"
+                    type="bar"
                     data={graficaPR}
-                    options={conTituloY('PR', { max: 1.2 })}
+                    options={conTituloY('PR', { min: 0, max: 1, ticks: { stepSize: 0.2, callback: (v) => Number(v).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) } })}
                     height="350px"
                     fullscreenHeight="700px"
                   />

@@ -44,6 +44,43 @@ ChartJS.register(
   zoomPlugin,
 );
 
+// Las opciones de gráficos cartesianos son las de ChartCard (estilo común de SIVE), pero se respetan las ESCALAS que
+// pasa el llamador, fusionadas sobre las de por defecto: límites (min/max), títulos de eje, formato de ticks y ejes
+// adicionales (p. ej. un eje secundario `y1` a la derecha). Antes se ignoraban y un `y1` caía a la izquierda.
+const ESTILO_EJE = {
+  grid: { color: 'rgba(0, 0, 0, 0.03)', drawBorder: false },
+  ticks: { color: '#374151', font: { size: 11, weight: '500' }, callback: (value) => NF1.format(value) },
+  border: { display: false },
+};
+
+// De los ejes que ChartCard ya define (x, y) solo se toman estas claves del llamador; el resto de su estilo se ignora
+// a propósito (p. ej. el Dashboard pasa en x un ticks.callback que devolvería el índice en vez de la fecha).
+const CLAVES_EJE = ['min', 'max', 'suggestedMin', 'suggestedMax', 'beginAtZero', 'title', 'stacked', 'position'];
+
+export function mergeScales(base, options) {
+  const extra = options && options.scales;
+  if (!extra) return base;
+  const scales = { ...base.scales };
+  Object.entries(extra).forEach(([clave, eje]) => {
+    if (!eje) return;
+    if (scales[clave]) {
+      const tomado = Object.fromEntries(CLAVES_EJE.filter((k) => k in eje).map((k) => [k, eje[k]]));
+      const ticks = clave === 'y' && eje.ticks
+        ? { ...scales[clave].ticks, ...(eje.ticks.callback ? { callback: eje.ticks.callback } : {}),
+            ...(eje.ticks.stepSize ? { stepSize: eje.ticks.stepSize } : {}) }
+        : scales[clave].ticks;
+      scales[clave] = { ...scales[clave], ...tomado, ticks };
+    } else {
+      scales[clave] = {
+        ...ESTILO_EJE, ...eje,
+        grid: { ...ESTILO_EJE.grid, ...(eje.grid || {}) },
+        ticks: { ...ESTILO_EJE.ticks, ...(eje.ticks || {}) },
+      };
+    }
+  });
+  return { ...base, scales };
+}
+
 // Componente reutilizable que renderiza una tarjeta con un gráfico (línea o barras),
 // permite resetear el zoom del gráfico y expandirlo a pantalla completa.
 export function ChartCard({ 
@@ -396,7 +433,7 @@ export function ChartCard({
   const isCartesian = type === 'line' || type === 'bar';
   const effectiveOptions = useMemo(
     () => (isCartesian
-      ? chartOptions
+      ? mergeScales(chartOptions, options)
       : { responsive: true, maintainAspectRatio: false, ...(options || {}) }),
     [isCartesian, chartOptions, options]
   );
