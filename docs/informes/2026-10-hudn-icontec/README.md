@@ -77,11 +77,14 @@ ver sección 1). Para totales de energía, Solar.web es la fuente completa. SIVE
 **Eficiencia del inversor (P_AC / P_DC): no se puede calcular con los datos del MTE.** El inversor solo reporta la
 potencia DC de una de sus entradas MPPT (`dcPower` ≈ 0,55 × `acPower`).
 
-**Performance Ratio.** Se calcula con la estación meteorológica del HUDN, que mide en plano **horizontal**, no en el
-plano de los módulos.
-- 2025: 0,58–0,77 por mes; 0,695 en el periodo 2025-04-04 a 2025-12-16, con 101 días válidos.
-- La estación del HUDN **no tiene datos desde marzo de 2026**, tiene huecos y lee bajo frente a las estaciones vecinas.
-  Su PR de 2026 (0,81–0,85 en feb–mar) no es fiable.
+**Performance Ratio: 0,75**, con 27 días válidos de ago y nov 2025.
+- Se calcula con la estación meteorológica del HUDN, que mide en plano **horizontal**, no en el plano de los módulos.
+- Cada día se contrasta con la estación de referencia de Alvernia, a ±25 % por día.
+- Además, se descartan los meses en que la estación del HUDN tiene un sesgo sistemático mayor del 10 % (mediana de la
+  razón diaria, con al menos 5 días para contrastar).
+- La estación del HUDN marcaba 1,26–1,68 veces Alvernia en abr–jun 2025, 1,16 en jul, 1,13 en sep y 0,79–0,84 en
+  feb–mar 2026, y no tiene datos desde marzo de 2026. **No hay PR fiable de 2026** con ella.
+- Para comparar plantas en 2026, ver la sección 3.
 
 ## 3. Diagnóstico de la caída de 2026
 
