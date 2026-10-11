@@ -152,3 +152,21 @@ Se completa con cada commit de la rama.
   recálculo. `reconcile-measurements-midnight` (00:40, hoy y 2 días atrás, `force_recalc_days=1`) recalcula siempre
   el día de ayer completo para todos los dispositivos: diarios por componente, chart diario, rollup horario, mensual
   de su mes y KPI mensual.
+
+**D2–D11 — Indicadores solares por institución** (`61b4d00`, `a555a9f`; `indicators/services/institution_energy.py`,
+`solar_kpis.py`, `views_solar.py`, `frontend/src/components/SolarIndicators.js`, `tests/test_solar_indicators.py`).
+- Antes: SIVE no tenía generación por institución con la convención de la tesis, ni rendimiento específico, factor de
+  capacidad, PR utilizable, cobertura, autoconsumo, ahorro con tarifa ni CO₂.
+- Después: `GET /api/solar-indicators/` y la pantalla «Indicadores Solares» (menú lateral). Comprobado con la copia
+  del 10-oct, HUDN del 2025-04-04 al 2025-12-16, frente a la tesis: generación 12 913,9 kWh (12 930,2), factor de
+  capacidad 0,119 (0,120), disponibilidad 98,3 % (98,3 %), demanda media del M1 9,08 kW (9,09) y exportación 0.
+
+**D12 — Modo invitado** (`91a3468`, `7744f94`, `9d42c9c`; parte del backend quedó por error dentro de `a555a9f`,
+cuyo mensaje solo describe la pantalla solar: dos agentes compartían el índice de git y un commit se llevó los archivos
+que el otro tenía preparados. El contenido es el correcto.)
+- Antes: todo pedía sesión; «Datos Externos» era solo para superusuarios.
+- Después: los GET de datos son públicos (`core/permissions.IsAuthenticatedOrPublicRead`), con un cupo por IP para
+  anónimos (120/min en general y 30/min en las vistas que consultan XM en vivo). Exportar, recalcular, sincronizar,
+  administrar, el perfil y `/scada/`, `/tasks/` y `/local/` siguen pidiendo sesión. «Datos Externos» queda abierto en
+  lectura para todos (confirmado por el autor el 2026-10-10). Sin token se entra como «Invitado · Solo lectura», y
+  «Iniciar sesión» abre el login de siempre.
