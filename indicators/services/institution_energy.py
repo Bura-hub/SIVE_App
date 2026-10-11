@@ -159,3 +159,26 @@ def irradiacion_diaria(institution_scada_id, start_date, end_date):
             valido, motivo = True, None
         resultado[dia] = {'h_kwh_m2': h_dia, 'muestras': n, 'valido': valido, 'motivo': motivo}
     return resultado
+
+
+def totales_plantas(inicio_dt, fin_dt):
+    """Totales de las plantas del proyecto en [inicio_dt, fin_dt) (datetimes aware), sumando las instituciones
+    configuradas: generación G, demanda D de los circuitos medidos (solo horas válidas del medidor), energía tomada
+    de la red (D − autoconsumo), horas transcurridas y horas con medidor válido. Se usa en el inicio (Dashboard)."""
+    from indicators.institution_config import INSTITUCIONES
+    inicio_local = inicio_dt.astimezone(COLOMBIA_TZ).replace(tzinfo=None)
+    fin_local = fin_dt.astimezone(COLOMBIA_TZ).replace(tzinfo=None)
+    tot = {'g_kwh': 0.0, 'd_kwh': 0.0, 'red_kwh': 0.0, 'horas': 0, 'horas_medidor': 0, 'horas_medidor_posibles': 0}
+    for scada_id in INSTITUCIONES:
+        for h in energia_horaria(scada_id, inicio_local.date(), fin_local.date()):
+            if not (inicio_local <= h['hora'] < fin_local):
+                continue
+            tot['g_kwh'] += h['g_kwh']
+            tot['horas_medidor_posibles'] += 1
+            if h['d_kwh'] is not None:
+                tot['d_kwh'] += h['d_kwh']
+                tot['red_kwh'] += h['d_kwh'] - h['autoconsumo_kwh']
+                tot['horas_medidor'] += 1
+    horas = (fin_dt - inicio_dt).total_seconds() / 3600.0
+    tot['horas'] = max(horas, 0.0)
+    return tot

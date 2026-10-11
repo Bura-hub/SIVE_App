@@ -75,112 +75,42 @@ def calculate_monthly_consumption_kpi(self):
     """
     logger.info("=== INICIANDO TAREA: calculate_monthly_consumption_kpi ===")
     try:
-        # Obtener la fecha y hora actual en zona horaria de Colombia
-        today = get_colombia_date()
-        current_day = today.day
+        # Ventanas con el MISMO tiempo transcurrido (C11): el mes en curso va del día 1 a las 00:00 hasta ahora, y el
+        # mes anterior del día 1 a las 00:00 hasta el mismo instante relativo (topado al fin de ese mes). Antes el mes
+        # anterior llegaba hasta el mismo día COMPLETO, y la comparación salía sesgada a la baja sin cambio real.
+        now = get_colombia_now()
+        today = now.date()
+        cur_a = COLOMBIA_TZ.localize(datetime.combine(today.replace(day=1), datetime.min.time()))
+        cur_b = now
+        last_day_previous_month = today.replace(day=1) - timedelta(days=1)
+        prev_a = COLOMBIA_TZ.localize(datetime.combine(last_day_previous_month.replace(day=1), datetime.min.time()))
+        prev_month_end = cur_a
+        prev_b = min(prev_a + (cur_b - cur_a), prev_month_end)
+        logger.info(f"Ventana mes actual: {cur_a} -> {cur_b}; mes anterior: {prev_a} -> {prev_b}")
 
-        logger.info(f"Fecha actual en Colombia: {today}, día del mes: {current_day}")
+        weather_stations = Device.objects.filter(category__name__iexact='weatherStation', is_active=True)
 
-        # --- Cálculo de rangos de fechas para el mes actual ---
-        # El mes actual va desde el primer día hasta la fecha actual
-        start_current_month = today.replace(day=1)
-        end_current_month = today
+        # --- Demanda y generación de las plantas del proyecto (C10, decisión D2) ---
+        # Como en la tesis y el mercado P2P: por institución, D del circuito del Medidor 1 (reconstruida en
+        # medidores netos) y G de su inversor; ver indicators/services/institution_energy.py. Antes se sumaban
+        # TODOS los medidores (M1–M5 de cada sede, circuitos parciales que se solapan) y todos los inversores.
+        # Campos: total_consumption = demanda D de los circuitos medidos; total_gross_consumption = energía tomada
+        # de la red (D − autoconsumo); total_generation = G; avg_instantaneous_power = potencia media de la flota
+        # en el periodo (W), no la media por muestra de un inversor con las noches incluidas.
+        from indicators.services.institution_energy import totales_plantas
+        cur = totales_plantas(cur_a, cur_b)
+        prev = totales_plantas(prev_a, prev_b)
 
-        # --- Lógica de cálculo de rangos de fechas para el mes anterior ---
-        first_day_current_month = today.replace(day=1)
-        last_day_previous_month = first_day_current_month - timedelta(days=1)
-        previous_month = last_day_previous_month.month
-        previous_year = last_day_previous_month.year
-
-        start_previous_month = last_day_previous_month.replace(day=1)
-        
-        # El final del rango del mes anterior es el mismo día que el mes actual,
-        # pero ajustado por si el mes anterior tiene menos días (ej. febrero).
-        last_day_of_previous_month = calendar.monthrange(previous_year, previous_month)[1]
-        day_for_previous_month = min(current_day, last_day_of_previous_month)
-        end_previous_month = last_day_previous_month.replace(day=day_for_previous_month)
-
-        logger.info(f"Rango mes actual: {start_current_month} -> {end_current_month}")
-        logger.info(f"Rango mes anterior: {start_previous_month} -> {end_previous_month}")
-
-        # Obtener los dispositivos activos de cada categoría
-        electric_meters = Device.objects.filter(category__name__iexact='electricMeter', is_active=True)
-        inverters = Device.objects.filter(category__name__iexact='inverter', is_active=True)
-        weather_stations = Device.objects.filter(category__name__iexact='weatherStation', is_active=True) 
-        
-        logger.info(f"Dispositivos encontrados:")
-        logger.info(f"  - Medidores eléctricos: {electric_meters.count()} dispositivos")
-        logger.info(f"  - Inversores: {inverters.count()} dispositivos")
-        logger.info(f"  - Estaciones meteorológicas: {weather_stations.count()} dispositivos")
-
-        # --- Cálculo de Consumo Total (Medidores Eléctricos) ---
-        logger.info("Calculando consumo total (medidores eléctricos)...")
-        # Cambiar el cálculo de consumo para que sea consistente
-        # Energía consumida = Σ(totalActivePower) · Δt (ver indicators/energy.py).
-        # totalActivePower está en kW (confirmado por scripts/audit_indicators.py:
-        # mediana ~0.9, máx ~74), así que NO se divide por 1000.
-        # ANTES: se guardaba la SUMA cruda de la potencia como si fuera kWh (sin integrar
-        # Δt y con el mensual incoherente con el diario).
-        # Consumo NETO = Σ(totalActivePower) incluyendo negativos (inyección a la red,
-        # net metering). Consumo BRUTO = Σ(max(totalActivePower, 0)), solo energía tomada
-        # de la red (los periodos de exportación cuentan como 0). Ambos en kW → factor 1.
-        # `Greatest(x, 0)` clampa los negativos a nivel de agregación en la BD.
-        # Rangos aware [inicio 00:00, fin+1día 00:00) en Bogotá: mismos límites
-        # que el antiguo date__date__range inclusivo, pero como comparación de
-        # timestamps que usa el índice UNIQUE (device, date). Lecturas sobre el
-        # esquema v2 (columnas tipadas): sin Cast ni parseo de jsonb.
-        cur_a, cur_b = colombia_day_range(start_current_month, end_current_month)
-        prev_a, prev_b = colombia_day_range(start_previous_month, end_previous_month)
-
-        def _meter_window(a, b):
-            return MeterMeasurement.objects.filter(
-                device__in=electric_meters,
-                date__gte=a, date__lt=b,
-                totalActivePower__isnull=False,
-            ).aggregate(
-                net_sum=Sum('totalActivePower'),
-                gross_sum=Sum(Greatest(F('totalActivePower'), Value(0.0))),
-            )
-
-        current_agg = _meter_window(cur_a, cur_b)
-        current_month_consumption_sum = consumption_energy_kwh(current_agg['net_sum'])
-        current_month_gross_consumption_sum = consumption_energy_kwh(current_agg['gross_sum'])
-
-        previous_agg = _meter_window(prev_a, prev_b)
-        previous_month_consumption_sum = consumption_energy_kwh(previous_agg['net_sum'])
-        previous_month_gross_consumption_sum = consumption_energy_kwh(previous_agg['gross_sum'])
-        logger.info(f"Consumo NETO - Mes actual: {current_month_consumption_sum:.2f} kWh, Mes anterior: {previous_month_consumption_sum:.2f} kWh")
-        logger.info(f"Consumo BRUTO - Mes actual: {current_month_gross_consumption_sum:.2f} kWh, Mes anterior: {previous_month_gross_consumption_sum:.2f} kWh")
-
-        # --- Cálculo de Generación Total (Inversores) ---
-        logger.info("Calculando generación total (inversores)...")
-        # Energía generada = Σ(acPower de TODOS los inversores) · Δt / 1000, misma fórmula
-        # canónica que el consumo (ver indicators/energy.py).
-        # acPower está en Watts (confirmado por auditoría: mediana ~2936, máx ~16266),
-        # por eso aquí SÍ se divide por 1000 (a diferencia del consumo).
-        # ANTES: se agrupaba por día y se calculaba (Σ acPower / nº mediciones de la flota) · 24,
-        # es decir, la potencia media POR MUESTRA de la flota × 24 h → energía de UN inversor
-        # "promedio", no la suma de los N inversores. Eso dividía la generación total por N.
-        def _inverter_window(a, b):
-            # Suma (para energía) y promedio (potencia instantánea) de acPower
-            # en UNA sola query por ventana.
-            return InverterMeasurement.objects.filter(
-                device__in=inverters,
-                date__gte=a, date__lt=b,
-                acPower__isnull=False,
-            ).aggregate(total_sum=Sum('acPower'), avg_value=Avg('acPower'))
-
-        inv_current = _inverter_window(cur_a, cur_b)
-        inv_previous = _inverter_window(prev_a, prev_b)
-
-        current_month_generation_sum = generation_energy_kwh(inv_current['total_sum'])
-        previous_month_generation_sum = generation_energy_kwh(inv_previous['total_sum'])
-        logger.info(f"Generación total - Mes actual: {current_month_generation_sum:.2f} kWh, Mes anterior: {previous_month_generation_sum:.2f} kWh")
-
-        # --- Cálculo de Potencia Instantánea Promedio (Inversores) ---
-        avg_instantaneous_power_current = inv_current['avg_value'] or 0.0
-        avg_instantaneous_power_previous = inv_previous['avg_value'] or 0.0
-        logger.info(f"Potencia instantánea promedio - Mes actual: {avg_instantaneous_power_current:.2f} W, Mes anterior: {avg_instantaneous_power_previous:.2f} W")
+        current_month_consumption_sum = cur['d_kwh']
+        previous_month_consumption_sum = prev['d_kwh']
+        current_month_gross_consumption_sum = cur['red_kwh']
+        previous_month_gross_consumption_sum = prev['red_kwh']
+        current_month_generation_sum = cur['g_kwh']
+        previous_month_generation_sum = prev['g_kwh']
+        avg_instantaneous_power_current = (cur['g_kwh'] * 1000.0 / cur['horas']) if cur['horas'] else 0.0
+        avg_instantaneous_power_previous = (prev['g_kwh'] * 1000.0 / prev['horas']) if prev['horas'] else 0.0
+        logger.info(f"Demanda M1 - actual: {cur['d_kwh']:.2f} kWh ({cur['horas_medidor']}/{cur['horas_medidor_posibles']} h válidas), anterior: {prev['d_kwh']:.2f} kWh")
+        logger.info(f"Generación - actual: {cur['g_kwh']:.2f} kWh, anterior: {prev['g_kwh']:.2f} kWh")
 
         # --- Métricas meteorológicas (temperatura, humedad, viento, irradiancia) ---
         # Una sola query por ventana: Avg de SQL ignora NULL por métrica, así
@@ -188,15 +118,23 @@ def calculate_monthly_consumption_kpi(self):
         logger.info("Calculando promedios meteorológicos (estaciones)...")
 
         def _weather_window(a, b):
-            return WeatherStationMeasurement.objects.filter(
-                device__in=weather_stations,
-                date__gte=a, date__lt=b,
-            ).aggregate(
-                temp=Avg('temperature'),
-                humidity=Avg('humidity'),
-                wind=Avg('windSpeed'),
-                irradiance=Avg('irradiance'),
+            # Filtros físicos como en weather_calc (antes: Avg crudo, con 1968 W/m² y 400 km/h de lecturas
+            # erróneas). La irradiancia es la media DIURNA (06:00–17:59) de las estaciones aptas: la de Udenar está
+            # descalibrada (C16).
+            from django.db.models.functions import ExtractHour
+            from indicators.institution_config import INSTITUCIONES
+            no_aptas = [c['estacion'] for c in INSTITUCIONES.values() if not c.get('estacion_apta_pr', True)]
+            base = WeatherStationMeasurement.objects.filter(device__in=weather_stations, date__gte=a, date__lt=b)
+            agg = base.aggregate(
+                temp=Avg('temperature', filter=Q(temperature__gte=-10, temperature__lte=45)),
+                humidity=Avg('humidity', filter=Q(humidity__gte=0, humidity__lte=100)),
+                wind=Avg('windSpeed', filter=Q(windSpeed__gte=0, windSpeed__lte=150)),
             )
+            agg.update(base.exclude(device__scada_id__in=no_aptas)
+                       .annotate(h=ExtractHour('date', tzinfo=COLOMBIA_TZ))
+                       .filter(h__gte=6, h__lt=18, irradiance__gte=0, irradiance__lte=1400)
+                       .aggregate(irradiance=Avg('irradiance')))
+            return agg
 
         wx_current = _weather_window(cur_a, cur_b)
         wx_previous = _weather_window(prev_a, prev_b)
@@ -267,8 +205,9 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
             logger.info(f"No se proporcionaron fechas, calculando para el día anterior en Colombia: {yesterday}")
 
         # 1. Convertir strings a objetos datetime conscientes de la zona horaria de Colombia
-        start_date = datetime.fromisoformat(start_date_str).replace(tzinfo=COLOMBIA_TZ)
-        end_date = datetime.fromisoformat(end_date_str).replace(tzinfo=COLOMBIA_TZ)
+        # localize (no replace(tzinfo=...)): con pytz, replace deja el desfase LMT de −4:56.
+        start_date = COLOMBIA_TZ.localize(datetime.fromisoformat(start_date_str[:10]))
+        end_date = COLOMBIA_TZ.localize(datetime.fromisoformat(end_date_str[:10]))
 
         logger.info(f"Rango de fechas a procesar en Colombia: {start_date.date()} -> {end_date.date()}")
         
@@ -304,55 +243,50 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
         range_a, range_b = colombia_day_range(start_date.date(), end_date.date())
         day_trunc = TruncDay('date', tzinfo=COLOMBIA_TZ)
 
-        meter_by_day = {
-            r['d'].date(): r for r in MeterMeasurement.objects.filter(
-                device__in=electric_meter_ids,
-                date__gte=range_a, date__lt=range_b,
-                totalActivePower__isnull=False,
-            ).annotate(d=day_trunc).values('d').annotate(
-                net=Sum('totalActivePower'),
-                gross=Sum(Greatest(F('totalActivePower'), Value(0.0))),
-            )
-        }
-        inverter_by_day = {
-            r['d'].date(): r for r in InverterMeasurement.objects.filter(
-                device__in=inverter_ids,
-                date__gte=range_a, date__lt=range_b,
-                acPower__isnull=False,
-            ).annotate(d=day_trunc).values('d').annotate(gen=Sum('acPower'))
-        }
+        # Demanda y generación por día de las plantas del proyecto (C10, decisión D2), como el KPI mensual: D del
+        # circuito del Medidor 1 de cada institución (reconstruida en medidores netos), G de su inversor y la energía
+        # tomada de la red (D − autoconsumo). Antes se sumaban todos los medidores y todos los inversores.
+        from indicators.services.institution_energy import energia_horaria
+        from indicators.institution_config import INSTITUCIONES
+        planta_by_day = defaultdict(lambda: {'d': 0.0, 'red': 0.0, 'g': 0.0})
+        for scada_id in INSTITUCIONES:
+            for h in energia_horaria(scada_id, start_date.date(), end_date.date()):
+                acc = planta_by_day[h['hora'].date()]
+                acc['g'] += h['g_kwh']
+                if h['d_kwh'] is not None:
+                    acc['d'] += h['d_kwh']
+                    acc['red'] += h['d_kwh'] - h['autoconsumo_kwh']
+        # Clima con los filtros físicos del KPI mensual; irradiancia media diurna (06–18 h) de estaciones aptas.
+        from django.db.models.functions import ExtractHour
+        no_aptas = [c['estacion'] for c in INSTITUCIONES.values() if not c.get('estacion_apta_pr', True)]
+        w_base = WeatherStationMeasurement.objects.filter(
+            device__in=weather_station_ids, date__gte=range_a, date__lt=range_b).annotate(d=day_trunc)
         weather_by_day = {
-            r['d'].date(): r for r in WeatherStationMeasurement.objects.filter(
-                device__in=weather_station_ids,
-                date__gte=range_a, date__lt=range_b,
-            ).annotate(d=day_trunc).values('d').annotate(
-                temp=Avg('temperature'), wind=Avg('windSpeed'), irr=Avg('irradiance'),
+            r['d'].date(): r for r in w_base.values('d').annotate(
+                temp=Avg('temperature', filter=Q(temperature__gte=-10, temperature__lte=45)),
+                wind=Avg('windSpeed', filter=Q(windSpeed__gte=0, windSpeed__lte=150)),
             )
         }
+        for r in (w_base.exclude(device__scada_id__in=no_aptas)
+                  .annotate(h=ExtractHour('date', tzinfo=COLOMBIA_TZ))
+                  .filter(h__gte=6, h__lt=18, irradiance__gte=0, irradiance__lte=1400)
+                  .values('d').annotate(irr=Avg('irradiance'))):
+            weather_by_day.setdefault(r['d'].date(), {})['irr'] = r['irr']
 
         while current_date <= end_date:
             single_date = current_date.date()
             logger.info(f"Procesando fecha en Colombia: {single_date}")
 
-            m_day = meter_by_day.get(single_date, {})
-            i_day = inverter_by_day.get(single_date, {})
+            p_day = planta_by_day.get(single_date, {'d': 0.0, 'red': 0.0, 'g': 0.0})
             w_day = weather_by_day.get(single_date, {})
 
-            daily_consumption_sum = m_day.get('net')
-            daily_gross_consumption_sum = m_day.get('gross')
-            daily_generation_sum = i_day.get('gen')
             daily_temp_avg = w_day.get('temp') or 0.0
             avg_wind_speed = w_day.get('wind') or 0.0
             avg_irradiance = w_day.get('irr') or 0.0
 
-            # Consumo y generación con la fórmula canónica Σ(P)·Δt (ver indicators/energy.py),
-            # idéntica a la del KPI mensual. La unidad de potencia difiere por métrica:
-            # consumo (totalActivePower) en kW; generación (acPower) en W (÷1000).
-            # ANTES: el consumo solo dividía /1000 (sin integrar Δt) y la generación
-            # promediaba sobre la flota (avg_power_w · 24), dividiendo por el nº de inversores.
-            daily_consumption_kwh = consumption_energy_kwh(daily_consumption_sum)
-            daily_gross_consumption_kwh = consumption_energy_kwh(daily_gross_consumption_sum)
-            daily_generation_kwh = generation_energy_kwh(daily_generation_sum)
+            daily_consumption_kwh = p_day['d']          # demanda de los circuitos medidos (M1), kWh
+            daily_gross_consumption_kwh = p_day['red']  # tomada de la red, kWh
+            daily_generation_kwh = p_day['g']           # generación de las plantas, kWh
 
             # Calcular balance energético (ambos en kWh)
             daily_balance_sum = daily_generation_kwh - daily_consumption_kwh
@@ -360,9 +294,9 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
             daily_data_obj, created = DailyChartData.objects.update_or_create(
                 date=single_date,
                 defaults={
-                    'daily_consumption': daily_consumption_kwh,  # NETO, en kWh
-                    'daily_gross_consumption': daily_gross_consumption_kwh,  # BRUTO, en kWh
-                    'daily_generation': daily_generation_kwh,    # Ahora en kWh
+                    'daily_consumption': daily_consumption_kwh,
+                    'daily_gross_consumption': daily_gross_consumption_kwh,
+                    'daily_generation': daily_generation_kwh,
                     'daily_balance': daily_balance_sum,
                     'avg_daily_temp': daily_temp_avg,
                     'avg_wind_speed': avg_wind_speed,

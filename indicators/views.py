@@ -110,10 +110,8 @@ class ConsumptionSummaryView(APIView):
         if cached is not None:
             return Response(cached)
 
-        token = self.get_scada_token()
-        if isinstance(token, Response):
-            return token
-
+        # Ya no se consulta el conector (C12: los inversores activos salen de la BD de SIVE); el resumen no
+        # depende de que el SCADA responda.
         try:
             # Obtener el registro de KPI pre-calculado
             kpi_record = MonthlyConsumptionKPI.objects.first()
@@ -167,46 +165,24 @@ class ConsumptionSummaryView(APIView):
             avg_irradiance_previous = kpi_record.avg_irradiance_previous_month
             logger.info(f"Avg Irradiance: Current: {avg_irradiance_current} W/m², Previous: {avg_irradiance_previous} W/m²")
 
-            # --- Inversores Activos (Real-time from SCADA API) ---
-            active_inverters_count = 0
-            total_inverters_count = 0
-            inverter_status_text = "normal"
-            inverter_description_text = "Cargando..."
-
-            try:
-                inverter_category_obj = DeviceCategory.objects.get(name='inverter')
-                inverter_scada_id = inverter_category_obj.scada_id
-
-                scada_inverters_response = scada_client.get_devices(token, category_scada_id=inverter_scada_id) 
-                scada_inverters = scada_inverters_response.get('data', [])
-
-                inv_summary = summarize_inverter_status(scada_inverters)
-                active_inverters_count = inv_summary['active']
-                total_inverters_count = inv_summary['total']
-                inverter_status_text = inv_summary['status']
-                inverter_description_text = inv_summary['description']
-
-                logger.info(f"Inverters: Active: {active_inverters_count}, Total: {total_inverters_count}")
-
-            except DeviceCategory.DoesNotExist:
-                logger.error("Inverter category not found in local DB. Cannot fetch real-time inverters from SCADA.")
-                inverter_status_text = "error"
-                inverter_description_text = "Categoría 'inverter' no encontrada localmente."
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Error getting real-time inverter data from SCADA: {e}")
-                inverter_status_text = "error"
-                inverter_description_text = "Error de conexión SCADA"
-            except Exception as e:
-                logger.error(f"Error processing real-time inverter data: {e}", exc_info=True)
-                inverter_status_text = "error"
-                inverter_description_text = "Error interno"
+            # --- Inversores activos (C12) ---
+            # Solo los inversores de las plantas del proyecto vigentes hoy (institution_config: sin los de prueba ni
+            # los Fronius de Udenar retirados el 2026-04-11), y «activo» = con lecturas en SIVE en las últimas 24 h.
+            # Antes se contaba el `status` del conector para todos los inversores registrados; de noche los
+            # inversores no publican y salían «offline», y los de prueba y retirados inflaban el total («4/10»).
+            from indicators.services.kpi import summarize_plant_inverters
+            inv_summary = summarize_plant_inverters()
+            active_inverters_count = inv_summary['active']
+            total_inverters_count = inv_summary['total']
+            inverter_status_text = inv_summary['status']
+            inverter_description_text = inv_summary['description']
 
             # calculate_kpi_metrics: importado de services/kpi.py (Ola 5).
             # KPI de Consumo Total (NETO)
             consumption_kpi = calculate_kpi_metrics(
                 total_consumption_current_month,
                 total_consumption_previous_month,
-                "Consumo total",
+                "Demanda (circuitos medidos)",
                 "kWh"
             )
 
@@ -214,7 +190,7 @@ class ConsumptionSummaryView(APIView):
             gross_consumption_kpi = calculate_kpi_metrics(
                 total_gross_consumption_current_month,
                 total_gross_consumption_previous_month,
-                "Consumo bruto (red)",
+                "Energía tomada de la red",
                 "kWh"
             )
 
@@ -222,7 +198,7 @@ class ConsumptionSummaryView(APIView):
             generation_kpi = calculate_kpi_metrics(
                 total_generation_current_month,
                 total_generation_previous_month,
-                "Generación total",
+                "Generación (plantas FV)",
                 "kWh" 
             )
 
@@ -230,7 +206,7 @@ class ConsumptionSummaryView(APIView):
             energy_balance_kpi = calculate_kpi_metrics(
                 net_balance_current_month,
                 net_balance_previous_month, 
-                "Equilibrio energético",
+                "Balance generación − demanda",
                 "kWh", 
                 is_balance=True
             )
@@ -239,7 +215,7 @@ class ConsumptionSummaryView(APIView):
             avg_power_kpi = calculate_kpi_metrics(
                 avg_instantaneous_power_current,
                 avg_instantaneous_power_previous,
-                "Pot. instan. promedio", 
+                "Potencia media de la flota", 
                 "W", 
                 is_average_power=True 
             )

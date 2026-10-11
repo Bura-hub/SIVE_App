@@ -24,6 +24,30 @@ def summarize_inverter_status(scada_inverters):
             'description': 'Todos activos'}
 
 
+def summarize_plant_inverters(now=None, ventana_horas=24):
+    """Inversores de las plantas del proyecto vigentes hoy y cuántos tienen lecturas en SIVE en las últimas
+    `ventana_horas` (C12). Lee la BD de SIVE, no el conector: funciona también para invitados."""
+    from datetime import timedelta
+    from indicators.institution_config import INSTITUCIONES, inversor_vigente
+    from indicators.services.date_ranges import get_colombia_now
+    from scada_proxy.models import InverterMeasurement
+    now = now or get_colombia_now()
+    vigentes = [(cfg['nombre'], sid) for cfg in INSTITUCIONES.values() for sid in cfg['inversores_generacion']
+                if inversor_vigente(cfg, sid, now.date())]
+    con_datos = set(InverterMeasurement.objects.filter(
+        device__scada_id__in=[sid for _, sid in vigentes], date__gte=now - timedelta(hours=ventana_horas),
+    ).values_list('device__scada_id', flat=True).distinct())
+    sin_datos = [nombre for nombre, sid in vigentes if sid not in con_datos]
+    total, active = len(vigentes), len(vigentes) - len(sin_datos)
+    if total == 0:
+        return {'active': 0, 'total': 0, 'status': 'normal', 'description': 'Sin inversores configurados'}
+    if sin_datos:
+        return {'active': active, 'total': total, 'status': 'critico',
+                'description': f'Sin datos en {ventana_horas} h: {", ".join(sin_datos)}'}
+    return {'active': active, 'total': total, 'status': 'estable',
+            'description': f'Todos con datos en las últimas {ventana_horas} h'}
+
+
 def calculate_kpi_metrics(current_value, previous_value, title, base_unit_name, is_balance=False, is_average_power=False, is_temperature=False, is_humidity=False, is_wind_speed=False, is_irradiance=False):
     formatted_value, unit = format_energy_value(current_value, base_unit_name)
     change_percentage = 0.0
