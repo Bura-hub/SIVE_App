@@ -147,5 +147,6 @@ Se completa con cada commit de la rama.
   Recalcula solo lo que ganó filas: diarios y rollup horario por dispositivo y rango de días, chart diario, mensuales
   de los meses tocados y el KPI mensual una vez. En el beat, `reconcile-measurements-daily` (01:30, hoy y 35 días atrás)
   y `reconcile-measurements-6h` (cada 6 h en :40, hoy y 2 días atrás); `refetch_and_verify_yesterday` queda como alias y
-  su entrada del beat, deshabilitada desde `settings` (el `DatabaseScheduler` la desactiva al arrancar). Cubre también
-  C15 (los diarios de ayer se recalculan si ayer ganó filas).
+  su entrada del beat, deshabilitada desde `settings` (el `DatabaseScheduler` la desactiva al arrancar). **No cierra
+  C15**: las filas de ayer que la ingesta horaria trae después de las 23:10 dejan los conteos iguales y no disparan
+  recálculo.
