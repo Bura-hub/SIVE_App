@@ -1,6 +1,6 @@
 # Indicadores del sistema fotovoltaico del HUDN — calculados por SIVE
 
-**Para:** visita de acreditación ICONTEC del 13-oct-2026 · **Cifras regeneradas:** 2026-10-10 a las 22:40, desde la
+**Para:** visita de acreditación ICONTEC del 13-oct-2026 · **Cifras regeneradas:** 2026-10-11, con el 10-oct completo, desde la
 API de producción de SIVE (`https://mte.udenar.edu.co/sive/api/solar-indicators/`), con todas las mediciones
 sincronizadas, iguales a las del conector MTE.
 
@@ -9,7 +9,9 @@ Solares». Por defecto muestra el HUDN, desde el 2025-04-04 y agrupado por mes; 
 año. Cada cifra lleva su periodo y los supuestos de cálculo.
 
 **Archivos de esta carpeta:**
-- `hudn_mensual_2025-04_2026-10.csv`: tabla mensual, incluidas las columnas del diagnóstico.
+- `hudn_mensual_2025-04_2026-10.csv`: tabla mensual, incluidas las columnas del diagnóstico. La columna
+  `irradiacion_hudn_kwh_m2_dia` es la media de los días de la estación del HUDN válidos para el PR (contrastados con
+  Alvernia): queda vacía en los meses sin días válidos.
 - `hudn_diario_2025-04-04_2026-10-10.csv`: generación, kWh/kWp, demanda M1, cobertura, PR, disponibilidad y cobertura
   de lecturas, por día.
 
@@ -64,7 +66,7 @@ recuperaron y SIVE las reconcilia cada noche.
 | Rendimiento específico | 750,1 kWh/kWp | 565,0 kWh/kWp | 1 315,0 kWh/kWp |
 | Factor de capacidad | 11,5 % | 8,3 % | 9,9 % |
 | Producción frente al diseño | — | — | 70,0 % |
-| Demanda del circuito M1 | 56 025,7 kWh (media 9,08 kW, pico horario 12,24 kW) | 55 827,0 kWh (media 9,31 kW, pico 12,71 kW) | 111 852,8 kWh |
+| Demanda del circuito M1 | 56 025,7 kWh (media 9,08 kW, pico horario 12,24 kW) | 55 846,1 kWh (media 9,31 kW, pico 12,71 kW) | 111 871,8 kWh |
 | Cobertura solar del circuito M1 | 23,5 % | 17,7 % | 20,6 % |
 | Autoconsumo | 100 % (exportación 0) | 100 % | 100 % |
 | Ahorro estimado | 9,51 MCOP | 7,20 MCOP | **16,71 MCOP** |
