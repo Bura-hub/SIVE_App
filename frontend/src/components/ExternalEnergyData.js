@@ -176,8 +176,9 @@ const ExternalEnergyData = () => {
   const generationChartData = useMemo(() => ({
     labels: energyData?.generation?.generation_history?.map(item => item.date) || [],
     datasets: [{
+      // XM entrega Gene en kWh por hora; /1000 = MWh en la hora = potencia media en MW (C14).
       label: 'Generación (MW)',
-      data: energyData?.generation?.generation_history?.map(item => item.value) || [],
+      data: energyData?.generation?.generation_history?.map(item => item.value === null ? null : item.value / 1000) || [],
       borderColor: 'rgb(234, 179, 8)',
       backgroundColor: 'rgba(234, 179, 8, 0.1)',
       tension: 0.4,
@@ -193,8 +194,9 @@ const ExternalEnergyData = () => {
   const demandChartData = useMemo(() => ({
     labels: energyData?.demand?.demand_history?.map(item => item.date) || [],
     datasets: [{
+      // XM entrega DemaCome en kWh por hora; /1000 = potencia media en MW (C14).
       label: 'Demanda (MW)',
-      data: energyData?.demand?.demand_history?.map(item => item.value) || [],
+      data: energyData?.demand?.demand_history?.map(item => item.value === null ? null : item.value / 1000) || [],
       borderColor: 'rgb(249, 115, 22)',
       backgroundColor: 'rgba(249, 115, 22, 0.1)',
       tension: 0.4,
@@ -228,8 +230,9 @@ const ExternalEnergyData = () => {
     labels: energyData?.exports?.exports_history?.map(item => item.date) || [],
     datasets: [
       {
+        // ExpoEner/ImpoEner vienen en kWh por hora; /1000 = MWh (C14).
         label: 'Exportaciones (MWh)',
-        data: energyData?.exports?.exports_history?.map(item => item.value) || [],
+        data: energyData?.exports?.exports_history?.map(item => item.value === null ? null : item.value / 1000) || [],
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         borderWidth: 2,
@@ -238,7 +241,7 @@ const ExternalEnergyData = () => {
       },
       {
         label: 'Importaciones (MWh)',
-        data: energyData?.imports?.imports_history?.map(item => item.value) || [],
+        data: energyData?.imports?.imports_history?.map(item => item.value === null ? null : item.value / 1000) || [],
         borderColor: 'rgb(249, 115, 22)',
         backgroundColor: 'rgba(249, 115, 22, 0.1)',
         borderWidth: 2,
@@ -466,9 +469,9 @@ const ExternalEnergyData = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Exportaciones</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {energyData?.exports?.average_exports ? `${(energyData.exports.average_exports / 1000).toFixed(1)}K` : '0.0K'}
+                  {energyData?.exports?.average_exports ? (energyData.exports.average_exports / 1000).toLocaleString('es-CO', { maximumFractionDigits: 1 }) : '—'}
                 </p>
-                <p className="text-sm text-gray-500">MWh</p>
+                <p className="text-sm text-gray-500">MWh por hora (promedio)</p>
               </div>
               <div className="p-3 bg-blue-100 rounded-xl">
                 <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -492,9 +495,9 @@ const ExternalEnergyData = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Importaciones</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {energyData?.imports?.average_imports ? `${(energyData.imports.average_imports / 1000).toFixed(1)}K` : '0.0K'}
+                  {energyData?.imports?.average_imports ? (energyData.imports.average_imports / 1000).toLocaleString('es-CO', { maximumFractionDigits: 1 }) : '—'}
                 </p>
-                <p className="text-sm text-gray-500">MWh</p>
+                <p className="text-sm text-gray-500">MWh por hora (promedio)</p>
               </div>
               <div className="p-3 bg-orange-100 rounded-xl">
                 <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -518,9 +521,9 @@ const ExternalEnergyData = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Generación Promedio</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {energyData?.generation?.average_generation ? `${(energyData.generation.average_generation / 1000000).toFixed(1)}M` : '0.0M'}
+                  {energyData?.generation?.average_generation ? (energyData.generation.average_generation / 1000).toLocaleString('es-CO', { maximumFractionDigits: 0 }) : '—'}
                 </p>
-                <p className="text-sm text-gray-500">MW</p>
+                <p className="text-sm text-gray-500">MW (potencia media)</p>
               </div>
               <div className="p-3 bg-purple-100 rounded-xl">
                 <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

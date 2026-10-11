@@ -249,33 +249,24 @@ def energy_savings(request):
         total_generated = sum(float(s.total_generated_kwh) for s in savings)
         total_savings = sum(float(s.total_savings_cop) for s in savings)
         
-        # Calcular costo evitado
-        average_price = EnergyPrice.objects.filter(
-            date__range=[start_date, end_date]
-        ).aggregate(avg_price=models.Avg('price_per_kwh'))['avg_price'] or 0
-        average_price_float = float(average_price)
-        
-        avoided_cost = total_generated * average_price_float
-        
-        # Calcular porcentajes (evitar división por cero)
-        savings_percentage = 0
-        if total_consumed > 0 and average_price_float > 0:
-            savings_percentage = (total_savings / (total_consumed * average_price_float)) * 100
-        
-        self_consumption = 0
-        if total_consumed > 0:
-            self_consumption = min((total_generated / total_consumed) * 100, 100)
-        
-        # Calcular excedentes
-        excess_energy = max(0, total_generated - total_consumed)
-        
-        # Calcular factor de capacidad (simplificado).
-        # La capacidad instalada es parametrizable (settings.SOLAR_INSTALLED_CAPACITY_KW,
-        # variable de entorno SOLAR_INSTALLED_CAPACITY_KW; por defecto 100 kW).
+        # C13: el ahorro ya viene calculado por día con la tarifa al usuario (autoconsumo × CU del comercializador,
+        # external_energy.tasks.calculate_energy_savings). El «costo evitado» ES ese ahorro: antes se recalculaba como
+        # generación × precio medio de BOLSA, que no es lo que paga una institución.
+        avoided_cost = total_savings
+        total_autoconsumo = sum(float(s.total_generated_kwh) * float(s.self_consumption_percentage) / 100
+                                for s in savings)
+        # Porcentaje de la demanda de los circuitos medidos que no se compró a la red.
+        savings_percentage = (total_autoconsumo / total_consumed * 100) if total_consumed > 0 else 0
+        # Autoconsumo = parte de la generación consumida en sitio.
+        self_consumption = (total_autoconsumo / total_generated * 100) if total_generated > 0 else 0
+        excess_energy = sum(float(s.excess_energy_kwh) for s in savings)
+
+        # Factor de capacidad con la capacidad real de las plantas (5 × 17,55 kWp; institution_config),
+        # no 100 kW fijos.
+        from indicators.institution_config import INSTITUCIONES
         capacity_factor = 0
-        installed_capacity = float(getattr(settings, 'SOLAR_INSTALLED_CAPACITY_KW', 100))
+        installed_capacity = sum(c['kwp'] for c in INSTITUCIONES.values())
         hours_in_period = (end_date - start_date).days * 24
-        # Guardar contra división por cero (p.ej. start_date == end_date -> hours_in_period == 0).
         if total_generated > 0 and installed_capacity > 0 and hours_in_period > 0:
             capacity_factor = (total_generated / (installed_capacity * hours_in_period)) * 100
 
