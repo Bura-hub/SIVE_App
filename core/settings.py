@@ -312,7 +312,7 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'scada_proxy.tasks.fetch_historical_measurements_for_all_devices',
         'schedule': crontab(minute=10),  # Cada hora en :10 (después de sync)
         # Ventana de 3h con cadencia 1h: tolera caídas del connector de hasta
-        # ~2h sin pérdida (upserts idempotentes); >2h lo cubre el refetch de ayer.
+        # ~2h sin pérdida (upserts idempotentes); >2h lo cubre la reconciliación (D1).
         'args': (int(timedelta(hours=3).total_seconds()),),
     },
     'check-devices-status-hourly': {
@@ -323,9 +323,28 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'scada_proxy.tasks.repair_device_relationships',
         'schedule': crontab(minute=2),
     },
+    # D1 (diseño 2026-10-10): las RPi envían colas atrasadas días después y la
+    # ventana de 3 h no las recoge. La reconciliación compara por dispositivo y
+    # día el conteo local con meta.total del connector, re-descarga solo los días
+    # distintos y recalcula solo lo tocado.
+    'reconcile-measurements-daily': {
+        'task': 'scada_proxy.tasks.reconcile_recent_measurements',
+        'schedule': crontab(hour=1, minute=30),  # Diario 01:30 Bogotá: hoy + 35 días atrás
+        'kwargs': {'days': 35},
+    },
+    'reconcile-measurements-6h': {
+        'task': 'scada_proxy.tasks.reconcile_recent_measurements',
+        'schedule': crontab(hour='0,6,12,18', minute=40),  # Cada 6 h en :40: hoy + 2 días atrás
+        'kwargs': {'days': 2},
+    },
+    # Sustituida por reconcile-measurements-daily. Se conserva DESHABILITADA:
+    # el DatabaseScheduler crea/actualiza las PeriodicTask por nombre pero no
+    # borra las obsoletas; con 'enabled': False la fila existente en la BD queda
+    # desactivada sola al arrancar el beat (sin tocar el admin).
     'refetch-verify-yesterday-daily': {
         'task': 'scada_proxy.tasks.refetch_and_verify_yesterday',
-        'schedule': crontab(hour=1, minute=30),  # Diario 01:30 Bogotá
+        'schedule': crontab(hour=1, minute=30),
+        'enabled': False,
     },
     'sync-external-energy-daily': {
         'task': 'external_energy.tasks.sync_external_energy_data',
