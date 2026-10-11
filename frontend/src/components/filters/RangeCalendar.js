@@ -42,6 +42,10 @@ const ACCENT = {
     sel: 'bg-blue-500 text-white', range: 'bg-blue-100',
     hover: 'hover:bg-blue-50', ring: 'focus:ring-blue-500', text: 'text-blue-700',
   },
+  amber: {
+    sel: 'bg-amber-500 text-white', range: 'bg-amber-100',
+    hover: 'hover:bg-amber-50', ring: 'focus:ring-amber-500', text: 'text-amber-700',
+  },
 };
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);

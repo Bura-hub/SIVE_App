@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 
-vi.mock('react-chartjs-2', () => ({ Bar: () => <div data-testid="grafica" /> }));
+vi.mock('./KPI/ChartCard', () => ({ ChartCard: ({ title }) => <div data-testid="grafica">{title}</div> }));
 
 import SolarIndicators from './SolarIndicators';
 
@@ -33,9 +33,11 @@ test('muestra los indicadores del HUDN y explica la eficiencia no disponible', a
   }));
   render(<SolarIndicators />);
   await waitFor(() => expect(screen.getByText('Energía generada')).toBeInTheDocument());
-  expect(screen.getByText(/Sistema fotovoltaico de HUDN/)).toBeInTheDocument();
-  expect(screen.getAllByText(/una entrada MPPT/).length).toBeGreaterThan(0);
-  expect(screen.getByText('jul 2025')).toBeInTheDocument();
+  expect(screen.getByText(/sistema fotovoltaico de HUDN/)).toBeInTheDocument();
+  expect(screen.getByText('Generación frente a lo esperado')).toBeInTheDocument();
+  expect(screen.getAllByTestId('tarjeta-solar')).toHaveLength(12);
+  expect(screen.getAllByText(/entradas MPPT/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText('jul 2025').length).toBeGreaterThan(0);
   const llamada = global.fetch.mock.calls.find(([u]) => String(u).includes('/api/solar-indicators/?'));
   expect(String(llamada[0])).toContain('institution_id=5');
   expect(llamada[1].headers.Authorization).toBeUndefined();

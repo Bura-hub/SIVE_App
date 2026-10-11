@@ -216,8 +216,9 @@ def _supuestos(cfg):
         'contribución). Los meses sin tarifa publicada usan la última disponible (marcados como extrapolados).',
         f'CO₂ evitado = generación × {FACTOR_CO2_KG_KWH} kgCO₂/kWh (factor del SIN, UPME Res. 0705/2024); '
         'árboles: 545 por cada 12 t (Informe Técnico 2).',
-        f'Diseño: {DISENO_KWH_DIA} kWh/día por sistema ({DISENO_IRRADIACION_KWH_M2_DIA} kWh/m²/día, '
-        f'{int(DISENO_PERDIDAS * 100)} % de pérdidas; Informe Técnico 2).',
+        f'Producción esperada según el diseño: {DISENO_KWH_DIA} kWh/día por sistema '
+        f'({DISENO_IRRADIACION_KWH_M2_DIA} kWh/m²/día de irradiación y {int(DISENO_PERDIDAS * 100)} % de pérdidas; '
+        'Informe Técnico 2). «Frente a lo esperado» = generación / producción esperada.',
     ]
     if cfg['tipo_medidor'] == 'gross':
         s.append('El Medidor 1 mide la carga del circuito donde se inyecta la FV: toda la generación se consume en '
