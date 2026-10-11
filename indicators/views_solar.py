@@ -10,7 +10,7 @@ from datetime import datetime
 from django.core.cache import cache
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from core.permissions import IsAuthenticatedOrPublicRead
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -32,7 +32,7 @@ def _fecha(valor, nombre):
 
 
 class SolarInstitutionsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(summary='Instituciones con sistema fotovoltaico configurado', tags=['Indicadores solares'])
     def get(self, request):
@@ -41,7 +41,7 @@ class SolarInstitutionsView(APIView):
 
 
 class SolarIndicatorsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrPublicRead]  # modo invitado: GET público
 
     @extend_schema(
         summary='Indicadores del sistema fotovoltaico de una institución',

@@ -37,6 +37,8 @@ PUBLIC_GET = [
     '/api/weather-station-chart-data/',
     '/api/weather-stations/list/',
     '/api/data-availability/?institution_id=1&category=inverter',
+    '/api/solar-indicators/institutions/',
+    '/api/solar-indicators/?institution_id=1',
     '/api/external-energy/prices/',
     '/api/external-energy/savings/',
     '/api/external-energy/market-overview/',
