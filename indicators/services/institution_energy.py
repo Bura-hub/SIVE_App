@@ -120,7 +120,7 @@ def _energia_horaria_sin_cache(institution_scada_id, start_date, end_date):
     return horas
 
 
-CACHE_MES_CERRADO_S = 6 * 3600   # meses pasados: la reconciliación nocturna puede tocarlos, se refrescan cada 6 h
+CACHE_MES_CERRADO_S = 26 * 3600  # meses pasados: warm_solar_cache los renueva cada noche y la reconciliación invalida los que ganan lecturas
 CACHE_MES_EN_CURSO_S = 10 * 60
 
 
