@@ -195,6 +195,39 @@ const calculateTheoreticalPVPower = (irradiance, temperature = 25) => {
   return Math.max(0, power); // No puede ser negativa
 };
 
+// Corrección de octubre de 2026: un valor null del backend es un dato que no se midió y se
+// muestra «No disponible»; nunca se convierte en 0.
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+export const fmtOrNA = (v, digits) => (isNum(v) ? v.toFixed(digits) : 'No disponible');
+export const valueOrNull = (v) => (isNum(v) ? v : null);
+
+// Potencia FV teórica de una fila. Diario/mensual: `theoretical_pv_power_w` del backend
+// (irradiancia diurna media en W/m² × 17 %). Antes, si faltaba, se pasaba
+// `daily_irradiance_kwh_m2` (kWh/m²/día, p. ej. 4,1) como si fuera W/m² y salían ~0,7 W.
+// Horario: `avg_irradiance_wm2` sí está en W/m².
+export function pvPowerFromRow(item, timeRange) {
+  if (!item) return null;
+  if (timeRange === 'hourly') {
+    return isNum(item.avg_irradiance_wm2)
+      ? calculateTheoreticalPVPower(item.avg_irradiance_wm2, isNum(item.avg_temperature_c) ? item.avg_temperature_c : 25)
+      : null;
+  }
+  return valueOrNull(item.theoretical_pv_power_w);
+}
+
+// Estaciones no aptas para el Performance Ratio (indicators/institution_config.py,
+// estacion_apta_pr = False). C16: la de Udenar marca 7–12 kWh/m²/día, físicamente imposible.
+export const INSTITUCIONES_ESTACION_NO_APTA_PR = ['Udenar'];
+
+export function stationPrWarning(results) {
+  const rows = Array.isArray(results) ? results : [];
+  const inst = rows.map(r => r?.institution_name).find(n => INSTITUCIONES_ESTACION_NO_APTA_PR.includes(n));
+  return inst
+    ? `La estación de ${inst} está descalibrada (marca 7–12 kWh/m²/día, físicamente imposible): `
+      + 'sus cifras de irradiación no son fiables y no se usa para el Performance Ratio.'
+    : null;
+}
+
 // Función para obtener la dirección predominante del viento (pura)
 const getPredominantWindDirection = (data) => {
   if (!data || !Array.isArray(data) || data.length === 0) {
@@ -339,16 +372,16 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     const kpis = {
       irradiance: {
         title: "Irradiancia Acumulada",
-        value: (latestData.daily_irradiance_kwh_m2 || 0).toFixed(2),
-        unit: "kWh/m²",
-        change: latestData.daily_hsp_hours ? `≈ ${latestData.daily_hsp_hours.toFixed(1)} HSP` : "N/A",
+        value: fmtOrNA(latestData.daily_irradiance_kwh_m2, 2),
+        unit: isNum(latestData.daily_irradiance_kwh_m2) ? "kWh/m²" : "",
+        change: isNum(latestData.daily_hsp_hours) ? `≈ ${latestData.daily_hsp_hours.toFixed(1)} HSP` : "Sin irradiancia válida",
         status: "normal",
         icon: initialKpiData.irradiance.icon,
         color: initialKpiData.irradiance.color
       },
       temperature: {
         title: "Temperatura Ambiente",
-        value: (latestData.avg_temperature_c ?? null) !== null ? latestData.avg_temperature_c.toFixed(1) : "N/A",
+        value: fmtOrNA(latestData.avg_temperature_c, 1),
         unit: "°C",
         change: "Promedio del período",
         status: "normal",
@@ -357,8 +390,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       },
       windSpeed: {
         title: "Velocidad del Viento",
-        value: (latestData.avg_wind_speed_kmh || 0).toFixed(1),
-        unit: "km/h",
+        value: fmtOrNA(latestData.avg_wind_speed_kmh, 1),
+        unit: isNum(latestData.avg_wind_speed_kmh) ? "km/h" : "",
         change: "Promedio del período",
         status: "normal",
         icon: initialKpiData.windSpeed.icon,
@@ -375,8 +408,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       },
       precipitation: {
         title: "Precipitación Acumulada",
-        value: (latestData.daily_precipitation_cm || 0).toFixed(2),
-        unit: "cm/día",
+        value: fmtOrNA(latestData.daily_precipitation_cm, 2),
+        unit: isNum(latestData.daily_precipitation_cm) ? "cm/día" : "",
         change: "Acumulado del período",
         status: "normal",
         icon: initialKpiData.precipitation.icon,
@@ -384,12 +417,11 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       },
       pvPower: {
         title: "Potencia Fotovoltaica",
-        value: (latestData.theoretical_pv_power_w || calculateTheoreticalPVPower(
-          latestData.daily_irradiance_kwh_m2 || 0,
-          latestData.avg_temperature_c || 25
-        )).toFixed(1),
-        unit: "W",
-        change: "Basada en irradiancia y temperatura",
+        value: fmtOrNA(pvPowerFromRow(latestData, filters.timeRange), 1),
+        unit: isNum(pvPowerFromRow(latestData, filters.timeRange)) ? "W" : "",
+        change: isNum(pvPowerFromRow(latestData, filters.timeRange))
+          ? "Por m² de módulo al 17 %, con la irradiancia diurna media"
+          : "No disponible: sin irradiancia válida",
         status: "normal",
         icon: initialKpiData.pvPower.icon,
         color: initialKpiData.pvPower.color
@@ -398,7 +430,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
 
     // Actualizar el estado de kpiData con los nuevos valores
     setKpiData(kpis);
-  }, [weatherData]);
+  }, [weatherData, filters.timeRange]);
 
   // Función para calcular datos de la rosa de los vientos
   const calculateWindRoseData = (data, minSpeed, maxSpeed) => {
@@ -549,8 +581,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         // (suma horaria), equivalente a `daily_irradiance_kwh_m2` pero para 1 hora.
         data: weatherRows.map(item => (
           filters.timeRange === 'hourly'
-            ? (item.irradiance_energy_kwh_m2 || 0)
-            : (item.daily_irradiance_kwh_m2 || 0)
+            ? valueOrNull(item.irradiance_energy_kwh_m2)
+            : valueOrNull(item.daily_irradiance_kwh_m2)
         )),
         borderColor: '#F59E0B',
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
@@ -567,8 +599,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         label: filters.timeRange === 'hourly' ? 'Irradiancia Promedio (W/m²)' : 'Horas Solares Pico (HSP)',
         data: weatherRows.map(item => (
           filters.timeRange === 'hourly'
-            ? (item.avg_irradiance_wm2 || 0)
-            : (item.daily_hsp_hours || 0)
+            ? valueOrNull(item.avg_irradiance_wm2)
+            : valueOrNull(item.daily_hsp_hours)
         )),
         borderColor: '#10B981',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -588,7 +620,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     datasets: [
       {
         label: 'Temperatura Promedio (°C)',
-        data: weatherRows.map(item => item.avg_temperature_c || 0),
+        data: weatherRows.map(item => valueOrNull(item.avg_temperature_c)),
         borderColor: '#EF4444',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         fill: true,
@@ -598,7 +630,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       },
       {
         label: 'Humedad Relativa (%)',
-        data: weatherRows.map(item => item.avg_humidity_pct || 0),
+        data: weatherRows.map(item => valueOrNull(item.avg_humidity_pct)),
         borderColor: '#3B82F6',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         fill: true,
@@ -614,7 +646,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     datasets: [
       {
         label: 'Velocidad del Viento (km/h)',
-        data: weatherRows.map(item => item.avg_wind_speed_kmh || 0),
+        data: weatherRows.map(item => valueOrNull(item.avg_wind_speed_kmh)),
         borderColor: '#10B981',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         fill: true,
@@ -628,8 +660,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         // (último valor de la hora), equivalente a `daily_precipitation_cm`.
         data: weatherRows.map(item => (
           filters.timeRange === 'hourly'
-            ? (item.precipitation_cm || 0)
-            : (item.daily_precipitation_cm || 0)
+            ? valueOrNull(item.precipitation_cm)
+            : valueOrNull(item.daily_precipitation_cm)
         )),
         borderColor: '#8B5CF6',
         backgroundColor: 'rgba(139, 92, 246, 0.1)',
@@ -687,14 +719,9 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
     datasets: [
       {
         label: 'Potencia Teórica (W)',
-        data: weatherRows.map(item =>
-          calculateTheoreticalPVPower(
-            // Vista horaria (Opción B): avg_irradiance_wm2 (W/m² instantáneo de la hora)
-            // en vez de daily_irradiance_kwh_m2 (acumulado del día).
-            (filters.timeRange === 'hourly' ? item?.avg_irradiance_wm2 : item?.daily_irradiance_kwh_m2) || 0,
-            item?.avg_temperature_c || 25
-          )
-        ),
+        // Diario/mensual: theoretical_pv_power_w del backend (antes se pasaba la irradiación en
+        // kWh/m²/día como si fuera W/m²). Horario: avg_irradiance_wm2 (W/m²).
+        data: weatherRows.map(item => pvPowerFromRow(item, filters.timeRange)),
         borderColor: '#8B5CF6',
         backgroundColor: 'rgba(139, 92, 246, 0.1)',
         fill: true,
@@ -708,8 +735,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         label: filters.timeRange === 'hourly' ? 'Irradiancia (W/m²)' : 'Irradiancia (kWh/m²)',
         data: weatherRows.map(item => (
           filters.timeRange === 'hourly'
-            ? (item?.avg_irradiance_wm2 || 0)
-            : (item?.daily_irradiance_kwh_m2 || 0)
+            ? valueOrNull(item?.avg_irradiance_wm2)
+            : valueOrNull(item?.daily_irradiance_kwh_m2)
         )),
         borderColor: '#F59E0B',
         backgroundColor: 'rgba(245, 158, 11, 0.05)',
@@ -1065,6 +1092,11 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
               institutionId={filters.institutionId}
               category="weatherStation"
             />
+            {stationPrWarning(weatherData?.results) && (
+              <div role="note" className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                {stationPrWarning(weatherData?.results)}
+              </div>
+            )}
             <DeviceDateRangeFilters
               authToken={authToken}
               devicesEndpoint={ENDPOINTS.weather.stations}
@@ -1495,32 +1527,32 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-medium text-gray-900">
-                                {(item.daily_irradiance_kwh_m2 || 0).toFixed(2)}
+                                {fmtOrNA(item.daily_irradiance_kwh_m2, 2)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-medium text-gray-900">
-                                {(item.daily_hsp_hours || 0).toFixed(1)}
+                                {fmtOrNA(item.daily_hsp_hours, 1)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-medium text-gray-900">
-                                {(item.avg_temperature_c || 0).toFixed(1)}
+                                {fmtOrNA(item.avg_temperature_c, 1)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-medium text-gray-900">
-                                {(item.avg_humidity_pct || 0).toFixed(1)}
+                                {fmtOrNA(item.avg_humidity_pct, 1)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-medium text-gray-900">
-                                {(item.avg_wind_speed_kmh || 0).toFixed(1)}
+                                {fmtOrNA(item.avg_wind_speed_kmh, 1)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-medium text-gray-900">
-                                {(item.daily_precipitation_cm || 0).toFixed(2)}
+                                {fmtOrNA(item.daily_precipitation_cm, 2)}
                               </div>
                             </td>
                           </tr>
