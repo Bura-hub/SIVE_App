@@ -247,27 +247,27 @@ class WeatherStationIndicators(models.Model):
     ], help_text="Tipo de rango de tiempo del registro.")
     
     # 5.1. Irradiancia Acumulada Diaria
-    daily_irradiance_kwh_m2 = models.FloatField(default=0.0, help_text="Irradiancia acumulada diaria en kWh/m².")
+    daily_irradiance_kwh_m2 = models.FloatField(null=True, blank=True, default=None, help_text="Irradiancia acumulada diaria en kWh/m².")
     
     # 5.2. Horas Solares Pico (HSP)
-    daily_hsp_hours = models.FloatField(default=0.0, help_text="Horas solares pico diarias.")
+    daily_hsp_hours = models.FloatField(null=True, blank=True, default=None, help_text="Horas solares pico diarias.")
     
     # 5.3. Viento: Velocidad Media y Rosa de los Vientos
-    avg_wind_speed_kmh = models.FloatField(default=0.0, help_text="Velocidad media del viento en km/h.")
+    avg_wind_speed_kmh = models.FloatField(null=True, blank=True, default=None, help_text="Velocidad media del viento en km/h.")
     wind_direction_distribution = models.JSONField(default=dict, help_text="Distribución de direcciones del viento (rosa de los vientos).")
     wind_speed_distribution = models.JSONField(default=dict, help_text="Distribución de velocidades del viento.")
     
     # 5.4. Precipitación Acumulada
-    daily_precipitation_cm = models.FloatField(default=0.0, help_text="Precipitación acumulada diaria en cm.")
+    daily_precipitation_cm = models.FloatField(null=True, blank=True, default=None, help_text="Precipitación acumulada diaria en cm.")
     
     # 5.5. Generación Fotovoltaica Potencia (basada en irradiancia)
-    theoretical_pv_power_w = models.FloatField(default=0.0, help_text="Potencia fotovoltaica teórica basada en irradiancia en W.")
+    theoretical_pv_power_w = models.FloatField(null=True, blank=True, default=None, help_text="Potencia fotovoltaica teórica basada en irradiancia en W.")
     
     # Datos adicionales para análisis
-    avg_temperature_c = models.FloatField(default=0.0, help_text="Temperatura promedio en °C.")
-    avg_humidity_pct = models.FloatField(default=0.0, help_text="Humedad relativa promedio en %.")
-    max_temperature_c = models.FloatField(default=0.0, help_text="Temperatura máxima en °C.")
-    min_temperature_c = models.FloatField(default=0.0, help_text="Temperatura mínima en °C.")
+    avg_temperature_c = models.FloatField(null=True, blank=True, default=None, help_text="Temperatura promedio en °C.")
+    avg_humidity_pct = models.FloatField(null=True, blank=True, default=None, help_text="Humedad relativa promedio en %.")
+    max_temperature_c = models.FloatField(null=True, blank=True, default=None, help_text="Temperatura máxima en °C.")
+    min_temperature_c = models.FloatField(null=True, blank=True, default=None, help_text="Temperatura mínima en °C.")
     
     # Metadatos
     measurement_count = models.IntegerField(default=0, help_text="Número de mediciones procesadas.")
@@ -298,24 +298,24 @@ class WeatherStationChartData(models.Model):
     
     # Datos para gráficos de irradiancia
     hourly_irradiance = models.JSONField(default=list, help_text="Irradiancia por hora del día en W/m².")
-    daily_irradiance_kwh_m2 = models.FloatField(default=0.0, help_text="Irradiancia acumulada diaria en kWh/m².")
+    daily_irradiance_kwh_m2 = models.FloatField(null=True, blank=True, default=None, help_text="Irradiancia acumulada diaria en kWh/m².")
     
     # Datos para gráficos de temperatura
     hourly_temperature = models.JSONField(default=list, help_text="Temperatura por hora del día en °C.")
-    avg_daily_temperature_c = models.FloatField(default=0.0, help_text="Temperatura promedio diaria en °C.")
+    avg_daily_temperature_c = models.FloatField(null=True, blank=True, default=None, help_text="Temperatura promedio diaria en °C.")
     
     # Datos para gráficos de humedad
     hourly_humidity = models.JSONField(default=list, help_text="Humedad por hora del día en %.")
-    avg_daily_humidity_pct = models.FloatField(default=0.0, help_text="Humedad promedio diaria en %.")
+    avg_daily_humidity_pct = models.FloatField(null=True, blank=True, default=None, help_text="Humedad promedio diaria en %.")
     
     # Datos para gráficos de viento
     hourly_wind_speed = models.JSONField(default=list, help_text="Velocidad del viento por hora del día en km/h.")
     hourly_wind_direction = models.JSONField(default=list, help_text="Dirección del viento por hora del día en grados.")
-    avg_daily_wind_speed_kmh = models.FloatField(default=0.0, help_text="Velocidad promedio del viento diaria en km/h.")
+    avg_daily_wind_speed_kmh = models.FloatField(null=True, blank=True, default=None, help_text="Velocidad promedio del viento diaria en km/h.")
     
     # Datos para gráficos de precipitación
     hourly_precipitation = models.JSONField(default=list, help_text="Precipitación por hora del día en cm.")
-    daily_precipitation_cm = models.FloatField(default=0.0, help_text="Precipitación acumulada diaria en cm.")
+    daily_precipitation_cm = models.FloatField(null=True, blank=True, default=None, help_text="Precipitación acumulada diaria en cm.")
     
     # Metadatos
     calculated_at = models.DateTimeField(auto_now=True, help_text="Fecha y hora del cálculo.")
@@ -481,7 +481,7 @@ class HourlyWeatherIndicators(models.Model):
 
     # 5.3. Viento de la hora (sin rosa de los vientos, poco significativa a grano horario)
     avg_wind_speed_kmh = models.FloatField(default=0.0, null=True, blank=True, help_text="Velocidad media del viento de la hora en km/h.")
-    avg_wind_direction_deg = models.FloatField(default=0.0, null=True, blank=True, help_text="Dirección promedio del viento de la hora en grados (promedio aritmético).")
+    avg_wind_direction_deg = models.FloatField(default=0.0, null=True, blank=True, help_text="Dirección promedio del viento de la hora en grados (media circular).")
 
     # 5.4. Precipitación de la hora
     precipitation_cm = models.FloatField(default=0.0, null=True, blank=True, help_text="Precipitación de la hora en cm (último valor del acumulador).")

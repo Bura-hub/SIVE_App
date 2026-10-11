@@ -850,7 +850,7 @@ def calculate_daily_weather_indicators(station, measurements, start_date, end_da
     # Agrupar mediciones por día (filas dict v2: measurement['date'])
     daily_measurements = {}
     for measurement in measurements:
-        day = measurement['date'].date()
+        day = measurement['date'].astimezone(COLOMBIA_TZ).date()  # día de Bogotá (C7)
         if day not in daily_measurements:
             daily_measurements[day] = []
         daily_measurements[day].append(measurement)
@@ -897,7 +897,7 @@ def calculate_monthly_weather_indicators(station, measurements, start_date, end_
     # Agrupar mediciones por mes (filas dict v2: measurement['date'])
     monthly_measurements = {}
     for measurement in measurements:
-        month_start = measurement['date'].date().replace(day=1)
+        month_start = measurement['date'].astimezone(COLOMBIA_TZ).date().replace(day=1)  # C7
         if month_start not in monthly_measurements:
             monthly_measurements[month_start] = []
         monthly_measurements[month_start].append(measurement)
