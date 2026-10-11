@@ -138,7 +138,7 @@ recalcular y administrar piden sesión.
 
 Se completa con cada commit de la rama.
 
-**D1 — Reconciliación de mediciones** (`17b82c3`; `scada_proxy/tasks.py`, `core/settings.py`, comando
+**D1 y C15 — Reconciliación de mediciones** (`17b82c3`, `999a2c6`; `scada_proxy/tasks.py`, `core/settings.py`, comando
 `reconcile_measurements`, `tests/test_reconcile_measurements.py`).
 - Antes: la ingesta pedía las últimas 3 h cada hora y `refetch_and_verify_yesterday` re-descargaba solo ayer a la 01:30;
   lo que las RPi enviaban con más retraso no entraba nunca (§2.2).
@@ -146,7 +146,9 @@ Se completa con cada commit de la rama.
   conector y re-descarga con upsert solo los días distintos; la diferencia que persiste se registra y alerta, y sigue.
   Recalcula solo lo que ganó filas: diarios y rollup horario por dispositivo y rango de días, chart diario, mensuales
   de los meses tocados y el KPI mensual una vez. En el beat, `reconcile-measurements-daily` (01:30, hoy y 35 días atrás)
-  y `reconcile-measurements-6h` (cada 6 h en :40, hoy y 2 días atrás); `refetch_and_verify_yesterday` queda como alias y
-  su entrada del beat, deshabilitada desde `settings` (el `DatabaseScheduler` la desactiva al arrancar). **No cierra
-  C15**: las filas de ayer que la ingesta horaria trae después de las 23:10 dejan los conteos iguales y no disparan
-  recálculo.
+  y `reconcile-measurements-6h` (06:40, 12:40 y 18:40, hoy y 2 días atrás); `refetch_and_verify_yesterday` queda como
+  alias y su entrada del beat, deshabilitada desde `settings` (el `DatabaseScheduler` la desactiva al arrancar).
+- C15: las filas de ayer que la ingesta horaria trae después de las 23:10 dejan los conteos iguales y no disparaban
+  recálculo. `reconcile-measurements-midnight` (00:40, hoy y 2 días atrás, `force_recalc_days=1`) recalcula siempre
+  el día de ayer completo para todos los dispositivos: diarios por componente, chart diario, rollup horario, mensual
+  de su mes y KPI mensual.
