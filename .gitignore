@@ -61,3 +61,6 @@ deploy/mte-sive-ssl-vhost.conf
 
 # Documentos fuente locales (no versionar)
 G306*.pdf
+
+# Certificados y claves TLS locales: nunca al repositorio (deploy_production.sh los genera si faltan)
+ssl/*.pem
