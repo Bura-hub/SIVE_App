@@ -89,22 +89,27 @@ function HelpSupport({ onClose }) {
 
     const helpContent = {
         overview: {
-            title: 'SIVE — Sistema de Visualización Energético',
-            description: 'Plataforma web de visualización del proyecto MTE (Modelo Transaccional de Energía) — Universidad de Nariño.',
+            title: 'SIVE, Sistema de Visualización Energético',
+            description: 'Plataforma web de visualización del proyecto MTE de la Universidad de Nariño.',
             content: [
                 {
                     subtitle: '¿Qué es SIVE?',
-                    text: 'SIVE es la plataforma que visualiza los datos históricos e indicadores de consumo y generación de energía, junto con variables climáticas, de las instituciones monitoreadas. Los datos provienen del conector SCADA y del mercado eléctrico colombiano (XM).',
+                    text: 'SIVE muestra los datos históricos y los indicadores de consumo, generación y clima de las cinco instituciones del proyecto MTE, junto con los datos del mercado eléctrico colombiano (XM). Las mediciones de las sedes llegan del conector SCADA cada hora, y SIVE las guarda y las concilia cada noche con las del conector.',
                     icon: IconBolt
                 },
                 {
                     subtitle: 'El proyecto MTE',
-                    text: 'SIVE hace parte del proyecto "Modelo Transaccional de Energía" (MTE) de la Universidad de Nariño, que instaló generación fotovoltaica y medición inteligente en instituciones de Pasto para pilotar una red transactiva de energía con fuentes no convencionales (FNCE).',
+                    text: 'SIVE hace parte del proyecto MTE de la Universidad de Nariño, que instaló en cada una de las cinco instituciones una planta solar de 17,55 kWp y medición inteligente, para pilotar un modelo transaccional de energía con fuentes no convencionales (FNCE).',
                     icon: IconTarget
                 },
                 {
+                    subtitle: 'Consulta sin cuenta (modo invitado)',
+                    text: 'Cualquier persona puede consultar SIVE sin iniciar sesión, como «Invitado», en solo lectura: el Dashboard, Medidores, Inversores, Estaciones, Indicadores Solares y Datos Externos. Con una cuenta se puede además sincronizar y recalcular los datos. Exportar reportes es solo para administradores. El botón «Iniciar sesión» abre el acceso cuando hace falta.',
+                    icon: IconKey
+                },
+                {
                     subtitle: 'Para qué sirve',
-                    text: 'Permite monitorear y analizar el comportamiento energético (consumo, generación y balance) y climático de cada sede, apoyando decisiones de eficiencia energética y el seguimiento de la transición hacia energías renovables.',
+                    text: 'Permite seguir el comportamiento energético (demanda, generación y balance) y climático de cada sede, y el desempeño de cada planta solar, como apoyo a las decisiones de eficiencia energética y al seguimiento de la transición hacia las energías renovables.',
                     icon: IconChart
                 }
             ]
@@ -114,34 +119,44 @@ function HelpSupport({ onClose }) {
             description: 'Lo que puedes hacer en SIVE.',
             content: [
                 {
-                    subtitle: 'Panel de inicio (Dashboard)',
-                    text: 'Resumen mensual de consumo, generación y balance energético, con comparación contra el mes anterior; además indicadores climáticos y el número de inversores activos en tiempo real.',
+                    subtitle: 'Dashboard',
+                    text: 'Resumen del mes en curso: demanda de los circuitos medidos (el Medidor 1 de cada institución), generación de las cinco plantas solares, balance entre las dos, potencia media de la flota y clima. Cada cifra se compara con el mes anterior en el mismo tiempo transcurrido. La tarjeta de inversores cuenta los que enviaron datos en las últimas 24 horas.',
                     icon: IconChart
                 },
                 {
-                    subtitle: 'Medidores eléctricos',
-                    text: 'Por medidor: energía importada de la red, demanda pico, factor de carga y factor de potencia, con filtros por institución y rango de fechas.',
+                    subtitle: 'Medidores',
+                    text: 'Para un medidor o para todos juntos: energía importada de la red, demanda pico (la mayor media de 15 minutos), factor de carga y factor de potencia, en la institución y el rango de fechas que elijas.',
                     icon: IconBolt
                 },
                 {
-                    subtitle: 'Inversores solares',
-                    text: 'Generación de los sistemas fotovoltaicos, eficiencia de conversión DC/AC, potencia máxima, factor de potencia y desbalance entre fases.',
+                    subtitle: 'Inversores',
+                    text: 'Generación, potencia máxima, factor de potencia y frecuencia mientras el inversor genera, desbalance de fases y de corriente, y Performance Ratio con la estación de la institución. Cuando un dato no se puede calcular, la tarjeta dice «No disponible» y el motivo, nunca 0. La eficiencia DC/AC no se calcula, porque el inversor solo reporta una de sus entradas de corriente continua.',
                     icon: IconSolar
                 },
                 {
-                    subtitle: 'Estaciones meteorológicas',
-                    text: 'Irradiancia acumulada y horas solares pico (HSP), temperatura ambiente, viento (con rosa de los vientos) y precipitación.',
+                    subtitle: 'Estaciones',
+                    text: 'Irradiancia acumulada y horas solares pico (HSP), temperatura, velocidad y dirección del viento (con rosa de los vientos), precipitación y potencia fotovoltaica teórica. Si la estación no tiene un sensor, su tarjeta dice «No disponible».',
                     icon: IconWeather
                 },
                 {
-                    subtitle: 'Reportes',
-                    text: 'Genera y descarga informes en PDF, Excel y CSV, con resumen ejecutivo por institución y período.',
+                    subtitle: 'Indicadores Solares',
+                    text: 'El desempeño de la planta de cada institución: energía generada, rendimiento específico, factor de capacidad, producción frente a lo esperado, Performance Ratio, demanda del circuito, cobertura solar, autoconsumo, ahorro estimado, CO₂ evitado y disponibilidad de datos, con gráficas y una tabla por periodo.',
+                    icon: IconTarget
+                },
+                {
+                    subtitle: 'Datos Externos (XM)',
+                    text: 'Datos del mercado eléctrico colombiano publicados por XM: precios de la energía, generación y demanda nacional, factor de emisión de CO₂ y comercio internacional de energía.',
+                    icon: IconMarket
+                },
+                {
+                    subtitle: 'Exportar Reportes',
+                    text: 'Los administradores generan y descargan informes en PDF, Excel y CSV por institución y período.',
                     icon: IconReport
                 },
                 {
-                    subtitle: 'Mercado energético (XM)',
-                    text: 'Consulta datos del mercado eléctrico colombiano vía XM: precios, ahorros estimados, demanda y emisiones.',
-                    icon: IconMarket
+                    subtitle: 'En el teléfono',
+                    text: 'SIVE se adapta a pantallas pequeñas: el menú se abre con el botón de tres líneas de la barra superior, y los filtros y las gráficas ocupan todo el ancho.',
+                    icon: IconHome
                 }
             ]
         },
@@ -150,33 +165,28 @@ function HelpSupport({ onClose }) {
             description: 'Cómo moverte por SIVE.',
             content: [
                 {
-                    subtitle: 'Inicio',
-                    text: 'Desde el menú lateral entra a "Inicio" para ver el resumen de indicadores y las gráficas de comparación mensual. Al hacer clic en el botón de información (i) de cada tarjeta verás qué mide, cómo se calcula y su interpretación.',
+                    subtitle: 'Menú y tarjetas',
+                    text: 'El menú lateral lleva a cada pantalla. El botón de información (i) de cada tarjeta explica qué mide, cómo se calcula y cómo leerla.',
                     icon: IconHome
                 },
                 {
-                    subtitle: 'Pantallas de detalle',
-                    text: 'En "Medidores", "Inversores" y "Estaciones" selecciona primero una institución y un rango de fechas en los filtros; los indicadores, gráficas y tablas se cargan para esa selección.',
+                    subtitle: 'Filtros y rango de fechas',
+                    text: 'En Medidores, Inversores, Estaciones e Indicadores Solares elige la institución, el dispositivo y el rango de fechas. La vista horaria admite hasta 31 días. El aviso «Datos disponibles» indica desde y hasta cuándo hay mediciones para la selección.',
                     icon: IconBolt
                 },
                 {
-                    subtitle: 'Filtros y cálculo',
-                    text: 'Si no hay datos calculados para el período, usa el botón de cálculo (disponible para administradores) para generarlos; luego vuelve a consultar.',
+                    subtitle: 'Cálculo de los indicadores',
+                    text: 'SIVE calcula los indicadores cada hora y los vuelve a calcular cuando la conciliación nocturna recupera mediciones atrasadas, así que no hace falta pedirlos. Con sesión iniciada, los botones de cálculo de cada pantalla y «Sincronizar datos y calcular KPIs» del Dashboard fuerzan el recálculo del periodo elegido.',
                     icon: IconRefresh
                 },
                 {
                     subtitle: 'Exportar reportes',
-                    text: 'En "Exportar Reportes" elige categoría, institución, tipo de reporte, formato y rango; el archivo se genera en segundo plano y queda disponible para descargar.',
+                    text: 'En «Exportar Reportes» (solo administradores) elige categoría, institución, tipo de reporte, formato y rango. El archivo se genera en segundo plano y queda disponible para descargar.',
                     icon: IconReport
                 },
                 {
-                    subtitle: 'Datos externos',
-                    text: 'La sección de datos externos muestra la información del mercado XM (precios, demanda, emisiones).',
-                    icon: IconMarket
-                },
-                {
                     subtitle: 'Perfil y sesión',
-                    text: 'Accede a tu perfil desde tu nombre en la esquina superior. Por seguridad, la sesión expira tras un tiempo de inactividad.',
+                    text: 'Con sesión iniciada, tu perfil está en el menú de usuario. Por seguridad la sesión expira tras un tiempo de inactividad, y al cerrarla SIVE vuelve al modo invitado.',
                     icon: IconKey
                 }
             ]
@@ -187,32 +197,37 @@ function HelpSupport({ onClose }) {
             content: [
                 {
                     subtitle: 'No puedo iniciar sesión',
-                    text: 'Verifica usuario y contraseña. Tras varios intentos fallidos la cuenta se bloquea temporalmente por seguridad; espera unos minutos o contacta al administrador.',
+                    text: 'Verifica usuario y contraseña. Tras varios intentos fallidos la cuenta se bloquea temporalmente por seguridad; espera unos minutos o contacta al administrador. Mientras tanto puedes seguir consultando como invitado.',
                     icon: IconWarn
                 },
                 {
-                    subtitle: '"¿Por qué los datos no son en tiempo real?"',
-                    text: 'Los KPIs del inicio son agregados MENSUALES: el conector SCADA muestrea aproximadamente cada 2 minutos y el sistema recalcula los indicadores de forma periódica. El único valor en vivo es "Inversores activos". Para forzar recarga usa Ctrl+F5.',
+                    subtitle: '¿Por qué los datos no son en tiempo real?',
+                    text: 'SIVE muestra datos históricos. Las mediciones de las sedes llegan cada hora, y las que una sede envía con retraso se recuperan en la conciliación con el conector, a las 00:40, a las 01:30 y a las 06:40, 12:40 y 18:40. Por eso el último día puede completarse al día siguiente. Ninguna tarjeta muestra valores en vivo.',
                     icon: IconRefresh
                 },
                 {
+                    subtitle: 'Una tarjeta dice «No disponible»',
+                    text: 'El dato no se midió en el rango o no se puede calcular con lo medido, por ejemplo un sensor que la estación no tiene o un Performance Ratio sin días válidos. La tarjeta explica el motivo. SIVE no muestra 0 en lugar de un dato que falta.',
+                    icon: IconWarn
+                },
+                {
                     subtitle: 'No aparece una institución o dispositivo',
-                    text: 'Puede que no haya reportado datos en el rango elegido. Ajusta el filtro de fechas o verifica con el administrador el estado de sincronización de ese dispositivo.',
+                    text: 'Puede que no haya reportado datos en el rango elegido. Revisa el aviso de disponibilidad de datos, ajusta las fechas o consulta con el administrador el estado de ese dispositivo.',
                     icon: IconBolt
                 },
                 {
                     subtitle: 'Un mes se ve muy distinto de otro',
-                    text: 'Suele deberse a la cobertura de datos (por ejemplo, un dispositivo que dejó de reportar parte del período), no a un error de cálculo. Compara los rangos y el número de registros.',
+                    text: 'Suele deberse a la cobertura de datos, por ejemplo un dispositivo que dejó de reportar parte del período, y no a un error de cálculo. Compara la disponibilidad de datos de los dos meses.',
                     icon: IconChart
                 },
                 {
                     subtitle: 'El reporte no se genera o no descarga',
-                    text: 'Asegúrate de seleccionar institución y un rango de fechas válido. El reporte se procesa en segundo plano; si tarda, espera unos segundos y vuelve a intentar la descarga.',
+                    text: 'Exportar reportes requiere una cuenta de administrador. Selecciona institución y un rango de fechas válido. El reporte se procesa en segundo plano; si tarda, espera unos segundos y vuelve a intentar la descarga.',
                     icon: IconReport
                 },
                 {
                     subtitle: 'Mi sesión se cerró',
-                    text: 'Por seguridad las sesiones caducan. Simplemente vuelve a iniciar sesión para continuar.',
+                    text: 'Por seguridad las sesiones caducan. SIVE sigue en modo invitado; vuelve a iniciar sesión para recalcular datos o exportar reportes.',
                     icon: IconKey
                 }
             ]
@@ -222,18 +237,18 @@ function HelpSupport({ onClose }) {
             description: 'Quién desarrolla SIVE y cómo obtener ayuda.',
             content: [
                 {
-                    subtitle: 'Universidad de Nariño — GIIEE',
+                    subtitle: 'Universidad de Nariño, GIIEE',
                     text: 'Sistema desarrollado por el Grupo de Investigación en Ingeniería Eléctrica y Electrónica (GIIEE), Departamento de Ingeniería Electrónica de la Universidad de Nariño.',
                     icon: IconBuilding
                 },
                 {
                     subtitle: 'Investigador principal',
-                    text: 'Wilson Achicanoy, Ph.D. — Correo institucional: wilachic@udenar.edu.co',
+                    text: 'Wilson Achicanoy, Ph.D. Correo institucional: wilachic@udenar.edu.co',
                     icon: IconMail
                 },
                 {
                     subtitle: 'Soporte y accesos',
-                    text: 'Para reportar problemas, solicitar acceso a dispositivos o restablecer credenciales, contacta al administrador del sistema o al grupo GIIEE.',
+                    text: 'Para reportar problemas, solicitar una cuenta o restablecer credenciales, contacta al administrador del sistema o al grupo GIIEE.',
                     icon: IconShield
                 },
                 {
@@ -249,41 +264,41 @@ function HelpSupport({ onClose }) {
             content: [
                 {
                     subtitle: 'Nombre del proyecto',
-                    text: '"Desarrollo de un modelo transaccional de energía no convencional de múltiples agentes para el departamento de Nariño" (MTE). Palabras clave: energía renovable no convencional, transición energética y mercado transaccional de energía.',
+                    text: '«Desarrollo de un modelo transaccional de energía no convencional de múltiples agentes para el departamento de Nariño» (MTE). Palabras clave: energía renovable no convencional, transición energética y mercado transaccional de energía.',
                     icon: IconBook
                 },
                 {
                     subtitle: 'Objetivo del proyecto',
-                    text: 'Desarrollar un piloto de un modelo transaccional de energía eléctrica, incluyendo fuentes no convencionales (FNCE), aplicado al contexto del Departamento de Nariño.',
+                    text: 'Desarrollar un piloto de un modelo transaccional de energía eléctrica, incluyendo fuentes no convencionales (FNCE), aplicado al contexto del departamento de Nariño.',
                     icon: IconTarget
                 },
                 {
                     subtitle: 'Instituciones monitoreadas',
-                    text: 'Generación fotovoltaica y medición inteligente en la Universidad de Nariño, Universidad CESMAG, Universidad Cooperativa de Colombia (sede Pasto), Universidad Mariana y el Hospital Universitario Departamental de Nariño (Pasto).',
+                    text: 'Generación fotovoltaica y medición inteligente en la Universidad de Nariño (Udenar), la Universidad Mariana (Unimar), la Universidad Cooperativa de Colombia, campus Pasto (UCC), la Universidad CESMAG (Unicesmag) y el Hospital Universitario Departamental de Nariño (HUDN), todas en el municipio de Pasto.',
                     icon: IconBuilding
                 },
                 {
                     subtitle: 'Financiación',
-                    text: 'Proyecto financiado por el Sistema General de Regalías (SGR) — asignación para CTeI ambiental. Código de registro SIGP 89530. Entidad proponente: Universidad de Nariño.',
+                    text: 'Proyecto financiado por la Asignación para la Ciencia, Tecnología e Innovación (CTeI) del Sistema General de Regalías (SGR), código BPIN 2021000100499 (registro SIGP 89530). Entidad proponente: Universidad de Nariño.',
                     icon: IconCash
                 },
                 {
-                    subtitle: 'Glosario — FNCE',
+                    subtitle: 'Glosario: FNCE',
                     text: 'Fuentes No Convencionales de Energía: fuentes renovables como la solar, eólica, biomasa, geotérmica e hidroeléctrica de pequeña escala.',
                     icon: IconBolt
                 },
                 {
-                    subtitle: 'Glosario — Prosumidor',
-                    text: 'Usuario conectado a la red que además genera su propia energía (p. ej. con paneles solares), pudiendo consumir o inyectar energía a la red.',
+                    subtitle: 'Glosario: Prosumidor',
+                    text: 'Usuario conectado a la red que además genera su propia energía (por ejemplo, con paneles solares), y que puede consumir energía de la red o inyectarle sus excedentes.',
                     icon: IconSolar
                 },
                 {
-                    subtitle: 'Glosario — Energía transactiva',
+                    subtitle: 'Glosario: Energía transactiva',
                     text: 'Conjunto de mecanismos económicos y de control que equilibran de forma dinámica la oferta y la demanda usando el valor (precio) como parámetro operativo clave.',
                     icon: IconMarket
                 },
                 {
-                    subtitle: 'Glosario — Microrred',
+                    subtitle: 'Glosario: Microrred',
                     text: 'Sistema de distribución de baja tensión con recursos energéticos distribuidos y cargas, que puede operar conectado a la red principal o de forma aislada (modo isla).',
                     icon: IconChart
                 }
@@ -301,7 +316,7 @@ function HelpSupport({ onClose }) {
                         <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-700 to-purple-700 bg-clip-text text-transparent">
                             Ayuda y Soporte
                         </h2>
-                        <p className="text-slate-600 text-lg">Guía completa del Sistema MTE</p>
+                        <p className="text-slate-600 text-lg">Guía de uso de SIVE</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -376,7 +391,7 @@ function HelpSupport({ onClose }) {
                                                 ¿Listo para comenzar?
                                             </h4>
                                             <p className="text-blue-700 text-lg mb-6">
-                                                Explora las diferentes secciones para familiarizarte con todas las funcionalidades del sistema MTE.
+                                                Explora las diferentes secciones para conocer todo lo que puedes hacer en SIVE.
                                             </p>
                                             <div className="flex justify-center space-x-4">
                                                 <button

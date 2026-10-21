@@ -1,7 +1,7 @@
 # 🌟 MTE SIVE - Sistema de Visualización Energético
 
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
-[![Django](https://img.shields.io/badge/Django-5.2.4-green.svg)](https://www.djangoproject.com/)
+[![Django](https://img.shields.io/badge/Django-5.2.16-green.svg)](https://www.djangoproject.com/)
 [![React](https://img.shields.io/badge/React-19.1.0-blue.svg)](https://reactjs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue.svg)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -13,12 +13,16 @@
 ### 🎯 Objetivo Principal
 Transformar datos complejos en información accionable, proporcionando a analistas y ejecutivos una visión clara y dinámica del comportamiento de los sistemas energéticos y climáticos.
 
-**Estado del Proyecto:** en producción bajo `https://mte.udenar.edu.co/sive/`, en fase de
-remediación y refinamiento continuo (ver *Estado de Desarrollo* más abajo).
+**Estado del Proyecto:** en producción bajo `https://mte.udenar.edu.co/sive/` (desde el 10 de octubre de 2026,
+con la corrección de ingesta e indicadores, la pantalla Indicadores Solares y el modo invitado; ver *Estado de
+Desarrollo* más abajo).
 
 ## 🚀 Características Principales
 
-### 🔐 Autenticación y Seguridad
+### 🔐 Acceso, Autenticación y Seguridad
+- **Modo invitado**: sin iniciar sesión se consultan en solo lectura el Dashboard, Medidores, Inversores, Estaciones,
+  Indicadores Solares y Datos Externos (`IsAuthenticatedOrPublicRead`, con cupo por IP: `SIVE_GUEST_READ_RATE`,
+  120/min, y `SIVE_GUEST_XM_RATE`, 30/min). Sincronizar, recalcular, exportar y administrar piden sesión.
 - **Sistema de Autenticación Robusto**: Login seguro con gestión de usuarios y roles
 - **Gestión de Perfiles Avanzada**: Configuración de información personal, avatares y preferencias
 - **Gestión de Sesiones**: Control de dispositivos conectados con capacidad de cerrar sesiones
@@ -26,21 +30,30 @@ remediación y refinamiento continuo (ver *Estado de Desarrollo* más abajo).
 - **Tokens de Acceso**: Sistema de autenticación basado en tokens con expiración automática
 
 ### 📊 Dashboard y Visualizaciones
-- **Dashboard Interactivo**: Panel de control principal con resumen de indicadores clave (KPIs)
+- **Dashboard Interactivo**: resumen del mes en curso (demanda de los circuitos medidos, generación de las plantas,
+  balance, potencia media de la flota y clima), comparado con el mes anterior en el mismo tiempo transcurrido
 - **Visualizaciones Dinámicas**: Gráficos interactivos (líneas y barras) impulsados por Chart.js
-- **KPIs en Tiempo Real**: Métricas actualizadas automáticamente para consumo, generación y balance energético
+- **KPIs actualizados cada hora**: se recalculan tras cada ingesta y tras la reconciliación nocturna; no son datos en vivo
+- **Selector de rango en español** y aviso de **disponibilidad de datos** por dispositivo
+- **Versión móvil**: menú lateral como cajón con botón de tres líneas, filtros y gráficas a todo el ancho
 - **Persistencia de Estado**: Recuerda el estado de la barra lateral y pestañas activas
 
 ### 🔌 Módulos Especializados
-- **Detalles Eléctricos**: Información detallada sobre el consumo eléctrico con filtros avanzados
-- **Detalles de Inversores**: Métricas y tendencias de la generación de energía solar
-- **Detalles del Clima**: Datos meteorológicos relevantes para el análisis energético
-- **Datos Externos de Energía**: Análisis de precios, ahorros y mercado energético
-- **Exportación de Reportes**: Generación y descarga de reportes en PDF, Excel y CSV
+- **Medidores**: energía importada, demanda pico, factor de carga y factor de potencia, por medidor o para todos
+- **Inversores**: generación, potencia máxima, FP y frecuencia mientras genera, desbalances y Performance Ratio;
+  «No disponible» con su motivo en lugar de 0
+- **Estaciones**: irradiancia y HSP, temperatura, viento (con rosa de los vientos), precipitación y potencia FV teórica
+- **Indicadores Solares**: desempeño de la planta de cada institución (energía, kWh/kWp, factor de capacidad, frente al
+  diseño, PR, cobertura, autoconsumo, ahorro, CO₂ y disponibilidad), con la convención de energía de la tesis y del
+  mercado P2P (`indicators/services/institution_energy.py`, `solar_kpis.py`)
+- **Datos Externos (XM)**: precios, generación y demanda nacional, factor de emisión y comercio internacional
+- **Exportación de Reportes** (administradores): Generación y descarga de reportes en PDF, Excel y CSV
 
 ### ⚡ Integración SCADA y Procesamiento
-- **Integración con API SCADA**: Conexión segura a través de proxy Django para datos en tiempo real
-- **Cálculo Automático de KPIs**: Tareas asíncronas con Celery que calculan indicadores mensuales
+- **Integración con API SCADA**: ingesta horaria de las mediciones del conector a tablas tipadas por categoría
+- **Reconciliación con el conector (D1)**: compara por dispositivo y día el conteo local con el del conector y
+  vuelve a descargar los días distintos; recupera las colas que las RPi envían con retraso
+- **Cálculo Automático de KPIs**: Tareas asíncronas con Celery que calculan indicadores diarios y mensuales
 - **Sincronización de Metadatos**: Actualización automática de dispositivos, categorías e instituciones
 - **Procesamiento de Datos Históricos**: Almacenamiento y análisis de mediciones históricas
 
@@ -187,7 +200,8 @@ existente, luego `sudo apache2ctl configtest && sudo systemctl reload apache2`.
 **Verificación:**
 ```bash
 curl -sk  https://mte.udenar.edu.co/sive/health/   # -> 200
-curl -sk  https://mte.udenar.edu.co/sive/api/      # -> 401 (requiere auth)
+curl -sk  https://mte.udenar.edu.co/sive/api/      # -> 401 (la raíz de la API pide sesión)
+curl -sk  https://mte.udenar.edu.co/sive/api/dashboard/summary/   # -> 200 (lectura pública, modo invitado)
 curl -skI https://mte.udenar.edu.co/sive/          # -> 200 (index del frontend)
 ```
 
@@ -197,31 +211,46 @@ curl -skI https://mte.udenar.edu.co/sive/          # -> 200 (index del frontend)
 
 ## 📊 Indicadores Clave de Rendimiento (KPIs)
 
-### 🔋 Consumo y Generación
-- **Consumo Total**: Consumo acumulado de energía eléctrica (kWh)
-- **Generación Total**: Generación acumulada de energía (kWh) por inversores
-- **Equilibrio Energético**: Diferencia neta entre generación y consumo
-- **Potencia Instantánea Promedio**: Promedio de potencia activa (Watts)
+La metodología completa está en [`indicators/indicators.md`](indicators/indicators.md) y en la corrección de octubre de
+2026 ([`docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md`](docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md),
+con sus hallazgos C1–C22). Cada tarjeta explica su cálculo en la propia aplicación (`frontend/src/utils/kpiInfo.js`).
 
-### 🌡️ Variables Climáticas
-- **Temperatura Promedio Diaria**: Temperatura promedio (°C)
-- **Humedad Relativa**: Humedad relativa promedio (%RH)
-- **Velocidad del Viento**: Velocidad promedio del viento (km/h)
-- **Irradiancia Solar**: Radiación solar promedio (W/m²)
+### 🔋 Dashboard (mes en curso)
+- **Demanda de los circuitos medidos**: Medidor 1 de cada institución, horas con ≥ 15 de 30 lecturas (kWh)
+- **Generación de las plantas FV**: inversores de las cinco plantas de 17,55 kWp, sin equipos de prueba ni retirados (kWh)
+- **Balance generación − demanda** y **Potencia media de la flota** (generación × 1000 / horas transcurridas)
+- **Clima**: temperatura, humedad, viento e irradiancia de las estaciones
+- **Inversores con datos**: inversores de planta con lecturas en SIVE en las últimas 24 h (no es un dato en vivo)
 
-### 📊 Métricas Operativas
-- **Inversores Activos**: Conteo en tiempo real de inversores operativos
-- **Eficiencia del Sistema**: Relación entre generación y capacidad instalada
-- **Factor de Capacidad**: Utilización efectiva de la capacidad de generación
-- **Autoconsumo**: Porcentaje de energía generada consumida localmente
+### 🔌 Medidores
+- **Energía importada**: integración de la potencia activa (C17)
+- **Demanda pico**: mayor media de bloques de reloj de 15 min (C18); **Factor de carga** = media / pico
+- **Factor de potencia**: promedio de |FP| (C19); con «Todos», sumas de medias y de picos (C20)
+
+### ☀️ Inversores e Indicadores Solares
+- **Generación**, **potencia máxima**, **FP** y **frecuencia** mientras genera, **desbalances** de tensión y corriente
+- **Performance Ratio** con la estación de la institución, validada contra la de referencia (C22)
+- **Rendimiento específico** (kWh/kWp), **factor de capacidad**, **frente al diseño**, **cobertura solar**,
+  **autoconsumo**, **ahorro estimado** (con el CU del comercializador, C13) y **CO₂ evitado**
+- La **eficiencia DC/AC** no se calcula: el inversor solo reporta una de sus entradas MPPT
 
 ## 🔄 Tareas Programadas (Celery Beat)
 
-El sistema ejecuta automáticamente:
-- **Metadatos SCADA**: Sincronización diaria a las 2:00 AM
-- **KPIs Mensuales**: Cálculo diario a las 3:30 AM
-- **Datos Diarios**: Procesamiento a las 3:45 AM
-- **Mediciones Históricas**: Obtención cada hora
+Definidas en `CELERY_BEAT_SCHEDULE` (`core/settings.py`) y cargadas en la BD por el `DatabaseScheduler`. Horas de Bogotá:
+
+| Tarea | Horario | Qué hace |
+|---|---|---|
+| `sync-scada-metadata-hourly` | cada hora, :00 | Sincroniza dispositivos, categorías e instituciones |
+| `check-devices-status-hourly` | cada hora, :01 | Estado de los dispositivos |
+| `repair-device-relationships-hourly` | cada hora, :02 | Repara relaciones dispositivo–institución |
+| `ingest-and-calculate-hourly` | cada hora, :10 | Ingesta de las últimas 3 h y recálculo de indicadores |
+| `reconcile-measurements-midnight` | 00:40 | Reconciliación y recálculo forzado del día de ayer (C15) |
+| `reconcile-measurements-daily` | 01:30 | Reconciliación de hoy y los 35 días anteriores |
+| `warm-solar-cache-daily` | 02:40 | Precalienta la caché por mes de Indicadores Solares |
+| `sync-external-energy-daily` | 03:00 | Sincroniza los datos de XM |
+| `calculate-energy-savings-daily` | 03:30 | Calcula los ahorros con los precios del día |
+| `reconcile-measurements-6h` | 06:40, 12:40, 18:40 | Reconciliación de hoy y los 2 días anteriores |
+| `refetch-verify-yesterday-daily` | deshabilitada | Sustituida por la reconciliación diaria |
 
 ## 📚 Documentación
 
@@ -234,6 +263,10 @@ El sistema ejecuta automáticamente:
 ### Módulos Especializados
 - **[Datos Externos de Energía](external_energy/README.md)**: Integración con APIs externas (XM)
 - **[Inicio Rápido - Datos Externos](external_energy/quick_start.md)**: Configuración rápida
+
+### Diseño e informes
+- **[Corrección de ingesta e indicadores (oct-2026)](docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md)**: hallazgos C1–C22, decisiones y registro de cambios
+- **[Informe HUDN para la visita de ICONTEC](docs/informes/2026-10-hudn-icontec/README.md)**: cifras de la planta del HUDN desde el 2025-04-04
 
 ### Referencia técnica
 - **[Análisis Backend/Frontend](BACKEND_FRONTEND_ANALYSIS.md)**: troubleshooting y fallas comunes de despliegue
@@ -298,27 +331,31 @@ docker-compose -f docker-compose.prod.yml restart db
 ## 📈 Estado de Desarrollo
 
 ### ✅ Funcionalidades operativas
-- Autenticación por token con expiración/refresh, rate limiting y bloqueo temporal
-- Dashboard con KPIs (mensuales + inversores activos en tiempo real)
-- Pantallas de detalle Eléctricos / Inversores / Estaciones (refactorizadas sobre el hook
-  compartido `useDeviceDetail`) con filtros, cálculo y paginación
-- Integración con API SCADA (proxy) y con el mercado XM (`external_energy`, `pydataxm`)
-- Cálculo de indicadores en Celery + capa `services/` (funciones puras, vistas finas)
+- Autenticación por token con expiración/refresh, rate limiting y bloqueo temporal; modo invitado de solo lectura
+- Dashboard, Medidores, Inversores, Estaciones e Indicadores Solares, con selector de rango, disponibilidad de datos
+  y versión móvil
+- Ingesta horaria del conector SCADA en tablas tipadas (esquema v2) y reconciliación diaria con el conector
+- Integración con el mercado XM (`external_energy`, `pydataxm`)
+- Cálculo de indicadores en Celery + capa `services/` (funciones puras, vistas finas), con caché por mes
 - Reportes en PDF/Excel/CSV
 - Despliegue en producción en Docker bajo Apache, subruta `/sive/`
 
-### 🔧 Remediación reciente (Olas 0–5)
-- Migración del frontend de CRA a **Vite** (build/tests con Vitest)
-- Extracción de la lógica de indicadores a `indicators/services/` y adelgazamiento de vistas
-- Saneamiento anti roll-over de acumuladores y de rangos diarios (zona horaria Colombia)
-- **Auditoría y saneamiento de las tarjetas KPI** de las 4 pantallas (info-al-click profesional,
-  corrección de campos/agregaciones, rosa de vientos polar real)
+### 🔧 Historia reciente
+- **Julio de 2026 (Olas 0–5)**: migración del frontend de CRA a **Vite**; lógica de indicadores en `indicators/services/`;
+  esquema v2 de mediciones; auditoría de las tarjetas KPI; selector de rango en español, disponibilidad de datos y
+  versión móvil (18-jul)
+- **Octubre de 2026 (corrección C1–C22, rama `correccion-indicadores-2026-10`, desplegada el 10-oct)**: reconciliación de
+  mediciones (D1) y backfill desde mayo de 2026; energía por institución con la convención de la tesis y del mercado P2P;
+  medidores integrados de la potencia (C17–C20); inversor con FP y frecuencia mientras genera y PR validado (C1–C5, C22);
+  reposición de lecturas perdidas sueltas (C21); ahorro con la tarifa al usuario (C13); pantalla Indicadores Solares;
+  modo invitado
 
-### 🎯 Próximos pasos
-- Mejora de **formato de reportes** (encabezados/paginación, resumen ejecutivo, logos)
-- Organización de la documentación OpenAPI (tags/descripciones por endpoint)
-- **Métricas normalizadas por capacidad** (kWh/kWp, Performance Ratio de flota, disponibilidad):
-  requieren registrar la potencia nominal y disponer de irradiancia POA
+### 🎯 Pendiente
+- El PR de la pantalla Inversores no aplica todavía la regla de cobertura del inversor (≥ 80 %) ni la reposición C21
+  que sí aplica Indicadores Solares
+- El CI (GitHub Actions) no corre las suites añadidas en julio y octubre
+- `docker-compose.prod.yml` no pasa las variables de alertas, del cupo de invitados ni del tiempo de espera de XM
+- Irradiancia POA para un PR en el plano de los módulos (hoy es con irradiancia horizontal)
 
 ## 🤝 Contribución
 
@@ -346,7 +383,7 @@ Las contribuciones son bienvenidas:
 - **Código BPIN**: 2021000100499
 - **Tipo**: Sistema de Visualización Energético
 - **Ubicación**: Departamento de Nariño, Colombia
-- **Estado**: en producción bajo `/sive/`, en remediación y refinamiento continuo
+- **Estado**: en producción bajo `/sive/`
 
 ## 📄 Licencia
 
@@ -361,4 +398,4 @@ Este proyecto está bajo la licencia MIT. Ver el archivo `LICENSE` para más det
 
 ---
 
-**Última Actualización**: Julio 2026 (migración a Vite, capa `services/`, refactor de pantallas de detalle con `useDeviceDetail`, saneamiento de KPIs y despliegue bajo `/sive/`).
+**Última Actualización**: Octubre 2026 (corrección de ingesta e indicadores C1–C22, reconciliación con el conector, Indicadores Solares y modo invitado).

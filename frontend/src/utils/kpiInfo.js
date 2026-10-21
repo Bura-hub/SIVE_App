@@ -13,8 +13,10 @@
  *   interpretation  — Interpretación / umbral (qué es bueno/malo)
  *
  * Nota de exactitud: el conector SCADA muestrea ~cada 2 min (no "cada 5 min") y los KPIs del
- * Inicio son agregaciones MENSUALES recalculadas por tarea programada (salvo "Inversores activos",
- * que es tiempo real). Los detalles (Medidores/Inversores/Estaciones) agregan sobre el rango de fechas.
+ * Inicio son agregaciones MENSUALES recalculadas por tarea programada; "Inversores con datos" cuenta
+ * lecturas guardadas en SIVE en las últimas 24 h (C12), no es tiempo real. Los detalles
+ * (Medidores/Inversores/Estaciones) agregan sobre el rango de fechas. Corrección de octubre de 2026
+ * (C17–C22): docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md.
  */
 
 export const DASHBOARD_KPI_INFO = {
@@ -30,7 +32,7 @@ export const DASHBOARD_KPI_INFO = {
   totalGeneration: {
     title: "Generación de las plantas FV",
     description: "Energía AC entregada en el mes por los inversores de las cinco plantas del proyecto (17,55 kWp cada una).",
-    calculation: "Σ acPower × 2 min / 1000 de cada inversor de planta; una lectura que no llegó no suma. Udenar antes del 2025-09-03: Fronius 1 × 1,2054 (CAL-44).",
+    calculation: "Σ acPower × 2 min / 1000 de cada inversor de planta, por hora. Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes (C21); con menos, una lectura que no llegó no suma. Udenar antes del 2025-09-03: Fronius 1 × 1,2054 (CAL-44).",
     dataSource: "Inversores de las plantas (conector SCADA). No incluye equipos de prueba ni inversores retirados.",
     units: "kWh (se muestra en MWh según magnitud).",
     frequency: "Muestreo ~2 min; comparación con el mismo tiempo transcurrido del mes anterior.",
@@ -104,8 +106,8 @@ export const DASHBOARD_KPI_INFO = {
 export const METER_KPI_INFO = {
   totalEnergyConsumed: {
     title: "Energía Importada de la Red",
-    description: "Energía activa total IMPORTADA de la red por los medidores en el rango (energía BRUTA, no neta). No confundir con el Consumo NETO del Inicio.",
-    calculation: "Suma de imported_energy_kwh sobre todos los registros del rango (acumuladores importedActivePower con saneamiento anti roll-over).",
+    description: "Energía activa IMPORTADA de la red por los medidores en el rango (sin descontar la exportada). No confundir con la demanda de los circuitos medidos del Inicio.",
+    calculation: "Integración de la potencia: Σ max(totalActivePower, 0) × Δt sobre las lecturas del rango (imported_energy_kwh, C17). Ya no se usan los acumuladores importedActivePower, desescalados en varios medidores. Una lectura que no llegó no suma.",
     dataSource: "Medidores eléctricos del conector SCADA.",
     units: "kWh.",
     frequency: "Muestreo ~2 min; suma sobre el rango de fechas seleccionado.",
@@ -113,8 +115,8 @@ export const METER_KPI_INFO = {
   },
   peakDemand: {
     title: "Demanda Pico",
-    description: "Máxima potencia demandada (media móvil de ~15 min) alcanzada en el rango seleccionado.",
-    calculation: "Máximo de peak_demand_kw sobre TODOS los registros del rango; peak_demand_kw es el máximo de medias móviles de 7 muestras de totalActivePower.",
+    description: "Máxima potencia demandada (media de un bloque de 15 min) alcanzada en el rango seleccionado.",
+    calculation: "Máximo de peak_demand_kw sobre los registros del rango; peak_demand_kw es la mayor media de totalActivePower en bloques de reloj de 15 min (C18). Con «Todos» se suman los picos de cada medidor, una cota superior porque no ocurren a la vez (C20).",
     dataSource: "Medidores eléctricos del conector SCADA.",
     units: "kW.",
     frequency: "Muestreo ~2 min; máximo sobre el rango de fechas.",
@@ -123,7 +125,7 @@ export const METER_KPI_INFO = {
   loadFactor: {
     title: "Factor de Carga",
     description: "Uniformidad del uso de la capacidad instalada (relación entre demanda media y demanda pico) en el rango.",
-    calculation: "load_factor = (demanda media del rango / demanda pico del rango) × 100, acotado a [0,100].",
+    calculation: "load_factor = (demanda media del rango / demanda pico del rango) × 100, acotado a [0,100]. Con «Todos»: Σ medias / Σ picos de los medidores (C20).",
     dataSource: "Medidores eléctricos del conector SCADA.",
     units: "%.",
     frequency: "Muestreo ~2 min; calculado sobre el rango de fechas.",
@@ -132,7 +134,7 @@ export const METER_KPI_INFO = {
   powerFactor: {
     title: "Factor de Potencia",
     description: "Factor de potencia medio reportado por los medidores en el rango.",
-    calculation: "Promedio del campo totalPowerFactor que reporta cada medidor (no se recalcula P/S).",
+    calculation: "Promedio de |totalPowerFactor| de cada lectura (C19): el medidor lo reporta con signo según el sentido del flujo y promediar con signo cancelaba valores. No se recalcula P/S.",
     dataSource: "Medidores eléctricos del conector SCADA.",
     units: "adimensional (0–1).",
     frequency: "Muestreo ~2 min; promedio sobre el rango de fechas.",
@@ -157,7 +159,7 @@ export const INVERTER_KPI_INFO = {
     dataSource: "Inversores solares del conector SCADA.",
     units: "dispositivos.",
     frequency: "Según el rango de fechas seleccionado.",
-    interpretation: "Debe coincidir con el parque instalado; si es menor, hay inversores sin reportar datos en el período. No confundir con el KPI homónimo del Inicio, que sí es estado 'online' en tiempo real.",
+    interpretation: "Debe coincidir con el parque instalado; si es menor, hay inversores sin reportar datos en el período. No confundir con «Inversores con datos» del Inicio, que mira solo las últimas 24 h.",
   },
   maxPower: {
     title: "Potencia Máxima",
@@ -180,7 +182,7 @@ export const INVERTER_KPI_INFO = {
   performanceRatio: {
     title: "Performance Ratio",
     description: "Relación entre la energía AC generada y la que daría la planta con la irradiación medida por la estación de la institución, sin pérdidas.",
-    calculation: "PR = Σ E_AC / Σ (H × kWp / 1 kW/m²) sobre los días válidos. H = Σ irradiancia de 06:00–18:00 (0–1400 W/m²) × 2/60 / 1000; un día es válido con ≥ 80 % de las muestras diurnas de la estación y H ≤ 8 kWh/m². kWp = 17,55 por planta.",
+    calculation: "PR = Σ E_AC / Σ (H × kWp / 1 kW/m²) sobre los días válidos. H = Σ irradiancia de 06:00–18:00 (0–1400 W/m²) × 2/60 / 1000; un día es válido con ≥ 80 % de las muestras diurnas de la estación, H ≤ 8 kWh/m² y H a ±25 % de la estación de referencia (Alvernia) ese día; se descartan los meses cuya mediana estación/referencia se aparta más de ±10 % (C22). kWp = 17,55 por planta.",
     dataSource: "Inversor de la planta y estación meteorológica de la misma institución (conector SCADA).",
     units: "%.",
     frequency: "Por día; el del rango pondera los días válidos.",
@@ -236,7 +238,7 @@ export const WEATHER_KPI_INFO = {
   },
   windSpeed: {
     title: "Velocidad del Viento",
-    description: "Velocidad media del viento en el día más reciente. Si la estación no tiene anemómetro se muestra N/A (no 0).",
+    description: "Velocidad media del viento en el día más reciente. Si la estación no tiene anemómetro se muestra «No disponible» (no 0).",
     calculation: "Promedio de windSpeed (lecturas válidas 0–150 km/h) del día.",
     dataSource: "Anemómetros de las estaciones del conector SCADA.",
     units: "km/h.",
@@ -254,7 +256,7 @@ export const WEATHER_KPI_INFO = {
   },
   precipitation: {
     title: "Precipitación Acumulada",
-    description: "Lluvia acumulada del día más reciente. Si la estación no tiene pluviómetro se muestra N/A (no 0).",
+    description: "Lluvia acumulada del día más reciente. Si la estación no tiene pluviómetro se muestra «No disponible» (no 0).",
     calculation: "En vista diaria se toma el último valor del acumulador de precipitation (reinicio diario); en vista mensual se suman los diarios.",
     dataSource: "Pluviómetros de las estaciones del conector SCADA.",
     units: "cm/día.",
