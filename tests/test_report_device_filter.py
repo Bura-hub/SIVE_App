@@ -77,3 +77,29 @@ class ReportDeviceFilterTests(TestCase):
                                                '2025-08-01', '2025-08-31')
         self.assertEqual(filas[0]['avg_power_factor'], '0.96')
         self.assertEqual(filas[0]['max_voltage_thd_pct'], '7.80%')
+
+
+class ReportStatusFieldsTests(TestCase):
+    """El estado de un reporte terminado trae su tamaño y su número de registros: el historial los muestra
+    sin recargar la página (antes decía «0.0 MB · 0 registros» hasta recargar)."""
+
+    def test_completado_trae_tamano_y_registros(self):
+        from indicators.models import GeneratedReport
+        from indicators.tasks import get_report_status
+        GeneratedReport.objects.create(
+            task_id='t-1', user_id=8, report_type='Calidad de Potencia', category='electricMeter',
+            institution_id=5, institution_name='HUDN', devices=['x'], time_range='daily',
+            start_date=DIA, end_date=DIA, format='CSV', status='completed', file_size='1.5 KB', record_count=31)
+        info = get_report_status('t-1', user_id=8)
+        self.assertEqual(info['record_count'], 31)
+        self.assertEqual(info['file_size'], '1.5 KB')
+
+    def test_pendiente_no_trae_tamano(self):
+        from indicators.models import GeneratedReport
+        from indicators.tasks import get_report_status
+        GeneratedReport.objects.create(
+            task_id='t-2', user_id=8, report_type='Calidad de Potencia', category='electricMeter',
+            institution_id=5, institution_name='HUDN', devices=['x'], time_range='daily',
+            start_date=DIA, end_date=DIA, format='CSV', status='pending')
+        info = get_report_status('t-2', user_id=8)
+        self.assertIsNone(info['file_size'])

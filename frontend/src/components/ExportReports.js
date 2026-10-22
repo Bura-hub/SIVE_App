@@ -9,6 +9,21 @@ import { IconFileDown, IconDownload } from './icons';
 // Límite de sondeos de estado por reporte (cada 2-5 s → ~5-12 min máximo)
 const MAX_STATUS_CHECKS = 150;
 
+// Fila del historial actualizada con la respuesta de /api/reports/status/. El tamaño y los registros salen del
+// estado del reporte terminado (antes se ponían 0 registros y el tamaño del archivo descargado en MB, «0.0 MB»).
+export function applyStatusToExport(exp, statusInfo) {
+  switch (statusInfo.status) {
+    case 'completed':
+      return { ...exp, status: 'Completado', fileSize: statusInfo.file_size || exp.fileSize, recordCount: statusInfo.record_count ?? 0 };
+    case 'failed':
+      return { ...exp, status: 'Fallido', fileSize: 'Error', recordCount: 0 };
+    case 'processing':
+      return { ...exp, status: 'Procesando' };
+    default:
+      return { ...exp, status: 'Pendiente' };
+  }
+}
+
 function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo, isSidebarMinimized, setIsSidebarMinimized }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -410,11 +425,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           downloadReport(taskId);
 
           // Actualizar estado en la lista
-          setPreviousExports(prev => prev.map(exp =>
-            exp.id === taskId
-              ? { ...exp, status: 'Completado', fileSize: 'Descargando...', recordCount: statusInfo.record_count || 0 }
-              : exp
-          ));
+          setPreviousExports(prev => prev.map(exp => (exp.id === taskId ? applyStatusToExport(exp, statusInfo) : exp)));
 
           showTransitionAnimation('success', `Reporte "${reportType}" generado exitosamente!`, 3000);
 
@@ -428,14 +439,11 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
           setError(`Error al generar reporte: ${statusInfo.error}`);
 
           // Actualizar estado en la lista
-          setPreviousExports(prev => prev.map(exp =>
-            exp.id === taskId
-              ? { ...exp, status: 'Fallido', fileSize: 'Error', recordCount: 0 }
-              : exp
-          ));
+          setPreviousExports(prev => prev.map(exp => (exp.id === taskId ? applyStatusToExport(exp, statusInfo) : exp)));
 
-        } else if (statusInfo.status === 'processing') {
-          // Reporte en proceso, continuar monitoreando
+        } else {
+          // Pendiente o en proceso: reflejarlo y seguir monitoreando (antes «pending» detenía el sondeo)
+          setPreviousExports(prev => prev.map(exp => (exp.id === taskId ? applyStatusToExport(exp, statusInfo) : exp)));
           scheduleNextCheck(2000);
         }
 
@@ -495,14 +503,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
-      // Actualizar estado en la lista
-      setPreviousExports(prev => prev.map(exp => 
-        exp.id === taskId 
-          ? { ...exp, fileSize: `${(blob.size / 1024 / 1024).toFixed(1)} MB` }
-          : exp
-      ));
-      
+
     } catch (error) {
       // Si la sesión expiró, handleApiResponse ya redirigió al login
       if (error.isAuthError) return;

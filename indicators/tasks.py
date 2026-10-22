@@ -2519,7 +2519,10 @@ def get_report_status(task_id, user_id=None):
             'status': report.status,
             'progress': 0,
             'download_url': None,
-            'error': None
+            'error': None,
+            # Tamaño y registros del reporte terminado: el historial los muestra sin recargar la página.
+            'file_size': None,
+            'record_count': None,
         }
         
         if report.status == 'pending':
@@ -2529,6 +2532,8 @@ def get_report_status(task_id, user_id=None):
         elif report.status == 'completed':
             status_info['progress'] = 100
             status_info['download_url'] = f"/api/reports/download/?task_id={task_id}"
+            status_info['file_size'] = report.file_size
+            status_info['record_count'] = report.record_count
         elif report.status == 'failed':
             status_info['progress'] = 0
             status_info['error'] = report.error_message
