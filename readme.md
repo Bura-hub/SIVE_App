@@ -284,7 +284,7 @@ docker-compose -f docker-compose.prod.yml ps
 # Reiniciar servicios
 docker-compose -f docker-compose.prod.yml restart
 
-# Crear backup
+# Crear backup (base verificada con backup_db.sh --manual, volumen de media y etiqueta antes-<marca> de las imágenes)
 ./scripts/deploy_production.sh backup  # Linux/Mac
 ```
 
@@ -293,8 +293,10 @@ docker-compose -f docker-compose.prod.yml restart
 # Verificar salud
 ./scripts/deploy_production.sh health  # Linux/Mac
 
-# Rollback
+# Rollback a las imágenes del último despliegue (datos en backups/ultimo_despliegue.txt)
 ./scripts/deploy_production.sh rollback  # Linux/Mac
+# ... y además restaurar la base con pg_restore (descarta lo ingerido desde el respaldo)
+./scripts/deploy_production.sh rollback --con-base
 
 # Limpiar recursos
 docker system prune -f
