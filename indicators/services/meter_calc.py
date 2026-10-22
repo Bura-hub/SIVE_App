@@ -10,6 +10,7 @@ la BD ni Celery. La task queda como envoltorio (query + update_or_create).
 from indicators.energy import consumption_energy_kwh
 from indicators.services.date_ranges import COLOMBIA_TZ
 from indicators.services.rows import _row_get
+import math
 
 # Demanda pico: media de cada bloque de reloj de 15 min (00, 15, 30, 45) con al menos estas muestras (de 7–8).
 PEAK_BLOCK_MINUTES = 15
@@ -91,14 +92,19 @@ def compute_meter_indicators(rows):
             else 0
         )
 
-        current_thd_a = _row_get(data, 'currentTHDPhaseA')
-        current_thd_b = _row_get(data, 'currentTHDPhaseB')
-        current_thd_c = _row_get(data, 'currentTHDPhaseC')
-        if (
-            row_current_avg >= MIN_CURRENT_A_FOR_UNBALANCE
-            and all(thd is not None for thd in [current_thd_a, current_thd_b, current_thd_c])
-        ):
-            current_thd_values.extend([current_thd_a, current_thd_b, current_thd_c])
+        # El THD se mide contra la FUNDAMENTAL, y la corriente que reporta el medidor es RMS (incluye los
+        # armónicos). A mediodía la generación FV compensa la carga en el punto del medidor: la fundamental cae
+        # casi a cero mientras los armónicos siguen, y el THD se dispara (hasta 999,9 %) aunque la corriente RMS
+        # supere el umbral. Por eso el gate se aplica por fase a la fundamental estimada,
+        # I_rms / sqrt(1 + (THD/100)^2), con el mismo umbral de carga mínima.
+        for phase in 'ABC':
+            i_rms = _row_get(data, f'currentPhase{phase}')
+            thd = _row_get(data, f'currentTHDPhase{phase}')
+            if i_rms is None or thd is None:
+                continue
+            fundamental = i_rms / math.sqrt(1 + (thd / 100) ** 2)
+            if fundamental >= MIN_CURRENT_A_FOR_UNBALANCE:
+                current_thd_values.append(thd)
 
         current_tdd_a = _row_get(data, 'currentTDDPhaseA')
         current_tdd_b = _row_get(data, 'currentTDDPhaseB')

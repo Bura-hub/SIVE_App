@@ -289,6 +289,26 @@ class MeterCurrentUnbalanceGateTests(SimpleTestCase):
         self.assertEqual(result['max_current_thd_pct'], 3.0)
         self.assertEqual(result['max_current_tdd_pct'], 2.1)
 
+    def test_thd_de_corriente_usa_la_fundamental_de_cada_fase(self):
+        # Caso real (Medidor 4 del HUDN, 2-ago-2025, 12:40): a mediodía la generación FV compensa la carga y la
+        # fundamental cae casi a cero, pero la corriente RMS (5,6 A en la fase C) incluye los armónicos y pasaba
+        # el gate por promedio. Fundamental de C = 5,6 / sqrt(1 + 7,485^2) ~ 0,74 A < 1 A -> se excluye esa fase.
+        rows = [_meter_row(
+            currentPhaseA=4.4, currentPhaseB=6.0, currentPhaseC=5.6,
+            currentTHDPhaseA=37.0, currentTHDPhaseB=58.1, currentTHDPhaseC=748.5,
+        )]
+        result = compute_meter_indicators(rows)
+        self.assertEqual(result['max_current_thd_pct'], 58.1)
+
+    def test_thd_alto_con_fundamental_suficiente_se_conserva(self):
+        # 30 A RMS con THD 150 %: fundamental = 30 / sqrt(1 + 1,5^2) ~ 16,6 A, carga real con mucha distorsión.
+        rows = [_meter_row(
+            currentPhaseA=30.0, currentPhaseB=30.0, currentPhaseC=30.0,
+            currentTHDPhaseA=150.0, currentTHDPhaseB=20.0, currentTHDPhaseC=20.0,
+        )]
+        result = compute_meter_indicators(rows)
+        self.assertEqual(result['max_current_thd_pct'], 150.0)
+
     def test_desbalance_de_voltaje_no_se_altera_por_el_gate(self):
         # El gate/cap es exclusivo de corriente; el voltaje conserva su fórmula original.
         rows = [_meter_row(
