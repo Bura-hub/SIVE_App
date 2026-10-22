@@ -48,7 +48,7 @@ class Command(BaseCommand):
 
         # Si no se especifican fechas, usar el último mes
         if not start_date_str:
-            end_date = timezone.now().date()
+            end_date = timezone.localdate()
             start_date = end_date - timedelta(days=30)
         else:
             start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()

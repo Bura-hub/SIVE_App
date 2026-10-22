@@ -350,6 +350,19 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
         borderDash: [6, 3],
         pointBackgroundColor: '#8B5CF6',
       },
+      {
+        // TDD de corriente (IEEE 519, contra la corriente de demanda máxima): el indicador fiable de distorsión de
+        // corriente. El THD de corriente no se dibuja: con FV detrás del medidor se dispara a baja carga neta.
+        label: 'TDD de Corriente (%)',
+        data: meterRows.map(item => item.max_current_tdd_pct || 0),
+        borderColor: '#14B8A6',
+        backgroundColor: 'rgba(20, 184, 166, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 3,
+        borderDash: [2, 3],
+        pointBackgroundColor: '#14B8A6',
+      },
     ]
   }), [meterRows, filters.timeRange]);
 

@@ -88,7 +88,7 @@ class Command(BaseCommand):
                 )
                 return
 
-            if start_date > timezone.now().date():
+            if start_date > timezone.localdate():
                 self.stdout.write(
                     self.style.WARNING('⚠️ La fecha de inicio es en el futuro. ¿Estás seguro?')
                 )

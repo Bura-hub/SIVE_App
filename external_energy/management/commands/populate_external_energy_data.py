@@ -75,7 +75,7 @@ class Command(BaseCommand):
         """Genera datos simulados de precios de energía"""
         self.stdout.write('Generando precios de energía...')
         
-        end_date = timezone.now().date()
+        end_date = timezone.localdate()
         start_date = end_date - timedelta(days=days)
         current_date = start_date
         
@@ -113,7 +113,7 @@ class Command(BaseCommand):
         """Genera datos simulados del mercado de energía"""
         self.stdout.write('Generando datos del mercado...')
         
-        end_date = timezone.now().date()
+        end_date = timezone.localdate()
         start_date = end_date - timedelta(days=days)
         current_date = start_date
         
@@ -139,7 +139,7 @@ class Command(BaseCommand):
         """Genera datos simulados de ahorro de energía"""
         self.stdout.write('Generando datos de ahorro...')
         
-        end_date = timezone.now().date()
+        end_date = timezone.localdate()
         start_date = end_date - timedelta(days=days)
         current_date = start_date
         
@@ -167,7 +167,7 @@ class Command(BaseCommand):
         """Genera pronósticos simulados de precios"""
         self.stdout.write('Generando pronósticos...')
         
-        end_date = timezone.now().date()
+        end_date = timezone.localdate()
         start_date = end_date + timedelta(days=1)  # Pronósticos futuros
         current_date = start_date
         
@@ -224,7 +224,7 @@ class Command(BaseCommand):
                 severity=severity,
                 title=title,
                 description=description,
-                affected_date=timezone.now().date(),
+                affected_date=timezone.localdate(),
                 is_active=random.choice([True, False])
             )
             
@@ -236,7 +236,7 @@ class Command(BaseCommand):
         """Genera datos solares simulados basados en la ubicación"""
         self.stdout.write(f'Generando datos solares para {location}...')
         
-        end_date = timezone.now().date()
+        end_date = timezone.localdate()
         start_date = end_date - timedelta(days=days)
         current_date = start_date
         
