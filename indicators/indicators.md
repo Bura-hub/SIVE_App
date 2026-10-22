@@ -72,7 +72,10 @@ La energía de cada mes se guarda en caché (26 h para los meses cerrados, 10 mi
   el máximo del periodo. En corriente solo cuentan las lecturas con corriente media ≥ 1 A (con carga casi nula la
   fórmula llegaba al 200 %) y el resultado se acota a 100 %.
 - **THD y TDD.** Máximo del periodo de los valores que da el medidor (`voltageTHDPhaseA/B/C`,
-  `currentTHDPhaseA/B/C`, `currentTDDPhaseA/B/C`). Los de corriente, solo con corriente media ≥ 1 A.
+  `currentTHDPhaseA/B/C`, `currentTDDPhaseA/B/C`). El TDD de corriente, solo con corriente media ≥ 1 A. El THD de
+  corriente, por fase y solo si la fundamental estimada, I_rms / √(1 + (THD/100)²), llega a 1 A (`31edea7`): con FV detrás
+  del medidor la fundamental neta cae casi a cero a mediodía y el THD se disparaba hasta 999,9 %. Aun así sigue por encima
+  del 100 % a baja carga neta, por lo que el reporte «Calidad de Potencia» da el TDD (`80535b5`).
 - **«Todos» los medidores (C20).** La demanda media del conjunto es la suma de las medias; el pico, la suma de los
   picos de cada medidor (una cota superior, porque los picos no tienen por qué coincidir); el FC, Σ medias / Σ picos.
   Las energías se suman, el FP se promedia y los desbalances, THD y TDD toman el máximo.
