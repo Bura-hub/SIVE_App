@@ -190,11 +190,17 @@ class RefreshTokenRequestSerializer(serializers.Serializer):
             # Verificar que el usuario esté activo
             if not refresh_token.user.is_active:
                 raise serializers.ValidationError("El usuario asociado al token no está activo")
-            
+
+            # La vista usa este mismo objeto: no repite la consulta ni la comprobación del usuario.
+            self._refresh_token = refresh_token
             return value
-            
+
         except RefreshToken.DoesNotExist:
             raise serializers.ValidationError("Token de refresco inválido")
+
+    def validate(self, attrs):
+        attrs['refresh_token_obj'] = self._refresh_token
+        return attrs
 
 
 class RefreshTokenResponseSerializer(serializers.Serializer):

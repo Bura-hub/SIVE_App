@@ -372,23 +372,16 @@ class RefreshTokenView(APIView):
 
         # La validación (raise_exception=True) va FUERA del try: un refresh token
         # inválido/expirado debe devolver 400 (vía DRF), no 500.
+        # El serializador ya comprobó que el token exista, esté activo, no haya expirado y sea de un usuario
+        # activo (400 si no). Antes la vista volvía a buscarlo y repetía la comprobación del usuario con un
+        # 403 que nunca se alcanzaba.
         serializer = RefreshTokenRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         refresh_token_value = serializer.validated_data['refresh_token']
+        refresh_token = serializer.validated_data['refresh_token_obj']
+        user = refresh_token.user
 
         try:
-            refresh_token = RefreshToken.objects.get(
-                token=refresh_token_value,
-                is_active=True
-            )
-            user = refresh_token.user
-
-            # Verificar que el usuario esté activo
-            if not user.is_active:
-                return Response({
-                    'error': 'Usuario inactivo'
-                }, status=status.HTTP_403_FORBIDDEN)
-
             # Nuevo token de acceso, emparejado con el mismo refresh token
             new_access_token = AuthToken.create_token(
                 user=user,
@@ -405,11 +398,6 @@ class RefreshTokenView(APIView):
                 'expires_in': int((new_access_token.expires_at - timezone.now()).total_seconds()),
                 'token_type': 'Bearer'
             }, status=status.HTTP_200_OK)
-
-        except RefreshToken.DoesNotExist:
-            return Response({
-                'error': 'Token de refresco inválido'
-            }, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception:
             logger.exception('Error interno al refrescar token')
