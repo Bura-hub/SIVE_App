@@ -57,6 +57,22 @@ const ESTILO_EJE = {
 // a propósito (p. ej. el Dashboard pasa en x un ticks.callback que devolvería el índice en vez de la fecha).
 const CLAVES_EJE = ['min', 'max', 'suggestedMin', 'suggestedMax', 'beginAtZero', 'title', 'stacked', 'position'];
 
+// En pantallas estrechas (< lg), una línea con muchos puntos los apila: con 31 días en ~240 px cada
+// punto (radio 4 y borde blanco) mide más que la separación y tapa la línea. Ahí se dibuja solo la
+// línea; el punto aparece al tocarlo (pointHoverRadius). Sin cambios devuelve el mismo objeto,
+// para no romper la identidad que necesita react-chartjs-2.
+const MAX_PUNTOS_MOVIL = 16;
+export function densePoints(data, { isMobile, type }) {
+  const n = data?.labels?.length || 0;
+  if (!isMobile || type !== 'line' || n <= MAX_PUNTOS_MOVIL) return data;
+  return {
+    ...data,
+    datasets: data.datasets.map((ds) => (ds.type && ds.type !== 'line')
+      ? ds
+      : { ...ds, pointRadius: 0, pointHoverRadius: Math.max(ds.pointHoverRadius || 0, 5) }),
+  };
+}
+
 export function mergeScales(base, options) {
   const extra = options && options.scales;
   if (!extra) return base;
@@ -430,6 +446,8 @@ export function ChartCard({
   // apilado debajo, fijamos una altura explícita para que la gráfica no quede aplastada.
   const fullscreenChartStyle = isMobile ? { height: '55vh' } : undefined;
 
+  const chartData = useMemo(() => densePoints(data, { isMobile, type }), [data, isMobile, type]);
+
   const isCartesian = type === 'line' || type === 'bar';
   const effectiveOptions = useMemo(
     () => (isCartesian
@@ -508,7 +526,7 @@ export function ChartCard({
         <div className="p-6">
           <div className="chart-container relative w-full" style={{ height: effectiveHeight }}>
             <ErrorBoundary fallback={chartErrorFallback}>
-              <ChartComponent ref={chartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
+              <ChartComponent ref={chartRef} data={chartData} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
             </ErrorBoundary>
             
             {/* Overlay sutil para indicar interactividad */}
@@ -607,7 +625,7 @@ export function ChartCard({
               <div className="flex-1 min-h-0 p-8 overflow-hidden bg-gradient-to-br from-white to-slate-50/30">
                 <div className="chart-container w-full h-full" style={fullscreenChartStyle}>
                   <ErrorBoundary fallback={chartErrorFallback}>
-                    <ChartComponent ref={fullscreenChartRef} data={data} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
+                    <ChartComponent ref={fullscreenChartRef} data={chartData} options={effectiveOptions} aria-label={title || "Gráfico de datos"} />
                   </ErrorBoundary>
                 </div>
               </div>
