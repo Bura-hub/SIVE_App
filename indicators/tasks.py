@@ -1457,7 +1457,9 @@ def generate_electric_meter_report(institution_id, devices, report_type, time_ra
         
     elif report_type == 'Calidad de Potencia':
         data = ElectricMeterIndicators.objects.filter(filters).select_related('device')
-        columns = ['device__name', 'date', 'max_voltage_thd_pct', 'max_current_thd_pct', 'avg_power_factor']
+        # TDD de corriente (IEEE 519, contra la corriente de demanda máxima) y no THD: con generación FV detrás del
+        # medidor la fundamental neta cae a 1-3 A y el THD de corriente pasa del 100 % (decisión del autor, 22-oct-2026).
+        columns = ['device__name', 'date', 'max_voltage_thd_pct', 'max_current_tdd_pct', 'avg_power_factor']
         
     elif report_type == 'Balance Energético':
         # Repuntado a ElectricMeterIndicators (energía saneada) en vez de la tabla vacía.

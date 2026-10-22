@@ -52,6 +52,7 @@ COLUMN_META = {
     "avg_power_factor": ("Factor de potencia", "", "mean"),
     "max_voltage_thd_pct": ("THD tensión (máx)", "%", "max"),
     "max_current_thd_pct": ("THD corriente (máx)", "%", "max"),
+    "max_current_tdd_pct": ("TDD corriente (máx)", "%", "max"),
     # Inversores
     "total_generated_energy_kwh": ("Energía generada", "kWh", "sum"),
     "energy_ac_daily_kwh": ("Energía AC", "kWh", "sum"),

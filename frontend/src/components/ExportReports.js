@@ -89,7 +89,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
     electricMeter: [
       { id: 'consumption_summary', name: 'Resumen de Consumo', description: 'Consumo energético total y por períodos' },
       { id: 'demand_analysis', name: 'Análisis de Demanda', description: 'Demanda pico, promedio y factor de carga' },
-      { id: 'power_quality', name: 'Calidad de Potencia', description: 'THD, factor de potencia y desbalance' },
+      { id: 'power_quality', name: 'Calidad de Potencia', description: 'THD de tensión, TDD de corriente y factor de potencia' },
       { id: 'energy_balance', name: 'Balance Energético', description: 'Energía importada vs exportada' },
       { id: 'comprehensive', name: 'Reporte Integral', description: 'Todos los indicadores eléctricos' }
     ],

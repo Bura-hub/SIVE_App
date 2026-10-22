@@ -79,6 +79,20 @@ class ReportDeviceFilterTests(TestCase):
         self.assertEqual(filas[0]['max_voltage_thd_pct'], '7.80%')
 
 
+    def test_calidad_de_potencia_trae_tdd_y_no_thd_de_corriente(self):
+        # «Calidad de Potencia» da el TDD de corriente (IEEE 519, contra la corriente de demanda máxima) en lugar del
+        # THD, que con generación FV detrás del medidor se dispara a baja carga neta (decisión del autor, 22-oct-2026).
+        uno = self.devs['electricmeter'][0]
+        ElectricMeterIndicators.objects.filter(device=uno).update(max_current_thd_pct=748.5, max_current_tdd_pct=12.3)
+        filas = generate_electric_meter_report(self.inst.id, [uno.scada_id], 'Calidad de Potencia', 'daily',
+                                               '2025-08-01', '2025-08-31')
+        self.assertEqual(filas[0]['max_current_tdd_pct'], '12.30%')
+        self.assertNotIn('max_current_thd_pct', filas[0])
+
+    def test_el_tdd_tiene_rotulo_en_los_reportes(self):
+        from indicators.reports import branding
+        self.assertEqual(branding.COLUMN_META['max_current_tdd_pct'][1], '%')
+
 class ReportStatusFieldsTests(TestCase):
     """El estado de un reporte terminado trae su tamaño y su número de registros: el historial los muestra
     sin recargar la página (antes decía «0.0 MB · 0 registros» hasta recargar)."""
@@ -103,3 +117,4 @@ class ReportStatusFieldsTests(TestCase):
             start_date=DIA, end_date=DIA, format='CSV', status='pending')
         info = get_report_status('t-2', user_id=8)
         self.assertIsNone(info['file_size'])
+
