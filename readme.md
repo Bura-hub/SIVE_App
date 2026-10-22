@@ -350,14 +350,13 @@ docker-compose -f docker-compose.prod.yml restart db
   modo invitado
 - **21 de octubre de 2026**: PR de Inversores con las reglas de Indicadores Solares, alertas, cupos y XM configurables
   desde `.env`, el CI con todas las suites (236 pruebas), ayuda integrada al día y correcciones del frontend
-  (`f42ca0a`, `5048d56`, `34b5e14`); después, la energía de Inversores (día, mes, gráfica y detalle horario) sale de
+  (`f42ca0a`, `5048d56`, `34b5e14`); la energía de Inversores también igual a la de Indicadores Solares, con el
+  histórico recalculado desde el 2024-12-01 (`ec12df7`); después, la energía de Inversores (día, mes, gráfica y detalle horario) sale de
   la misma energía horaria con la reposición de lecturas sueltas (C21) que Indicadores Solares
 
 ### 🎯 Pendiente
-- Destino de las alertas: el compose ya pasa `ALERT_WEBHOOK_URL`, `ALERT_EMAIL_TO` y `EMAIL_*`, pero el `.env` de
-  producción no define ningún canal, así que las alertas solo quedan en el log
-- Recalcular los indicadores guardados de Inversores (diarios, mensuales, gráfica y detalle horario) para que la
-  energía con la reposición de lecturas sueltas (C21), ya unificada con Indicadores Solares, llegue al histórico
+- Destino de las alertas: el compose ya pasa `ALERT_WEBHOOK_URL`, `ALERT_EMAIL_TO` y `EMAIL_*`, pero por decisión del
+  autor el `.env` de producción no define ningún canal hasta que haya uno institucional; las alertas quedan en el log
 - Irradiancia POA para un PR en el plano de los módulos (hoy es con irradiancia horizontal)
 
 ## 🤝 Contribución
