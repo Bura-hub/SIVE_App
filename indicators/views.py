@@ -120,11 +120,11 @@ class ConsumptionSummaryView(APIView):
                 # Si el registro no existe, devolvemos valores por defecto en lugar de un error.
                 kpi_record = MonthlyConsumptionKPI()
 
-            # --- Consumo Total (NETO: importación − exportación, net metering) ---
+            # --- Demanda D de los circuitos medidos de las plantas (C10, ver institution_energy.totales_plantas) ---
             total_consumption_current_month = kpi_record.total_consumption_current_month
             total_consumption_previous_month = kpi_record.total_consumption_previous_month
 
-            # --- Consumo Bruto (solo energía tomada de la red; inyección clampeada a 0) ---
+            # --- Energía tomada de la red (D − autoconsumo de la generación solar) ---
             total_gross_consumption_current_month = kpi_record.total_gross_consumption_current_month
             total_gross_consumption_previous_month = kpi_record.total_gross_consumption_previous_month
             
@@ -256,9 +256,9 @@ class ConsumptionSummaryView(APIView):
                 is_irradiance=True
             )
 
-            # KPI de Inversores Activos
+            # KPI de inversores con datos en las últimas 24 h (C12)
             active_inverters_kpi = {
-                "title": "Inversores activos",
+                "title": "Inversores con datos",
                 "value": str(active_inverters_count),
                 "unit": f"/{total_inverters_count}",
                 "description": inverter_description_text,
@@ -730,6 +730,10 @@ class ElectricMetersListView(APIView):
             OpenApiParameter("end_datetime", str, OpenApiParameter.QUERY, description="Fin del rango horario con hora (YYYY-MM-DDTHH:MM), modo horario"),
         ],
         responses={200: ElectricMeterIndicatorsSerializer(many=True)}
+    ),
+    retrieve=extend_schema(
+        tags=["Indicadores"],
+        description="Un registro de indicadores eléctricos de medidor por su id.",
     ),
 )
 @method_decorator(cache_page(60 * 5), name='dispatch')

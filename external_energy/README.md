@@ -1,269 +1,126 @@
-# Datos Externos de Energía
+# Datos externos de energía (XM)
 
-Esta aplicación Django proporciona funcionalidades para obtener, procesar y analizar datos externos de energía, incluyendo precios de KWh, ahorros calculados y análisis del mercado energético.
+La aplicación `external_energy` trae datos del mercado eléctrico colombiano desde **XM**, el operador del sistema, con
+la librería `pydataxm`, y calcula el **ahorro** de las plantas del proyecto. Alimenta la pantalla «Datos Externos».
 
-## Características Principales
+No hay otras integraciones. No se usan OpenWeatherMap ni Electricity Maps, y no hace falta ninguna clave de API: la API
+pública de XM no la pide.
 
-### 🔌 Integración con APIs Externas
-- **OpenWeatherMap**: Obtiene datos climáticos y solares que afectan la generación fotovoltaica
-- **Electricity Maps**: Información sobre precios de energía y composición del mercado
-- **Datos Simulados**: Sistema robusto de fallback para desarrollo y pruebas
-- **Pronósticos**: Predicciones de precios futuros con niveles de confianza
+## Qué se consulta en XM
 
-### 💰 Análisis Económico
-- **Cálculo de Ahorros**: Compara consumo vs generación propia
-- **ROI Estimado**: Retorno de inversión de la instalación solar
-- **Costo Evitado**: Dinero ahorrado por no comprar energía de la red
-- **Análisis de Autoconsumo**: Porcentaje de energía generada vs consumida
+`services.py` (`XMRealAPIService` y su envoltorio `XMEnergyService`) pide estas métricas a nivel `Sistema`:
 
-### 📊 Indicadores y KPIs
-- **Precios de Energía**: Historial, tendencias y variaciones
-- **Datos Solares**: Radiación solar, cobertura de nubes, temperatura
-- **Métricas del Mercado**: Demanda, oferta y composición de generación
-- **Alertas Inteligentes**: Notificaciones sobre eventos importantes del mercado
-- **Pronósticos**: Predicciones de precios para planificación
+| Métrica de XM | Qué es | Unidad | Uso |
+|---|---|---|---|
+| `PrecBolsNaci` | Precio de bolsa nacional, horario | COP/kWh | Se promedia por día y se guarda en `EnergyPrice` |
+| `Gene` | Generación real del sistema, horaria | kWh por hora | `/generation/` y la oferta diaria de `EnergyMarketData` |
+| `DemaCome` | Demanda comercial, horaria | kWh por hora | `/demand/` y la demanda diaria de `EnergyMarketData` |
+| `factorEmisionCO2e` | Factor de emisión del sistema, horario | gCO₂e/kWh | `/emissions/` |
+| `ExpoEner` | Exportaciones de energía, horarias | kWh | `/exports/` |
+| `ImpoEner` | Importaciones de energía, horarias | kWh | `/imports/` |
 
-## Instalación y Configuración
+`pydataxm` no tiene tiempo de espera propio, así que cada consulta corre en un hilo con un límite de
+`XM_API_TIMEOUT` segundos (30 por defecto). La verificación SSL se controla con `PYDATAXM_VERIFY_SSL` (activa por
+defecto) y no se desactiva para el resto del proceso.
 
-### 1. Instalar Dependencias
+## Endpoints
+
+Todos cuelgan de `/api/external-energy/`. Los `GET` son públicos en solo lectura (modo invitado); `sync/` pide un
+superusuario. El parámetro `range` acepta `week` (7 días), `month` (30), `quarter` (90) y `year` (365); un valor
+desconocido se toma como 30 días.
+
+| Método y ruta | Qué devuelve | Fuente | Rango por defecto | Caché | Cupo anónimo |
+|---|---|---|---|---|---|
+| `GET prices/` | Precio medio, máximo, mínimo, variación, tendencia, historial diario y datos del mercado del periodo | Base de datos; si está vacía para el rango, consulta XM y guarda | `month` | No | `anon_xm` |
+| `GET savings/` | Ahorro, demanda, generación, autoconsumo, exportación, factor de capacidad, ROI y ahorro por mes | `EnergySavings` | `month` | No | `anon_read` |
+| `GET market-overview/` | Último día de `EnergyMarketData`, los 7 precios más recientes y las alertas activas | Base de datos | (fijo) | 1 h | `anon_read` |
+| `GET generation/` | Serie de `Gene` con media, máximo, mínimo y total | XM en vivo | `month` | 1 h | `anon_xm` |
+| `GET demand/` | Serie de `DemaCome` | XM en vivo | `month` | 1 h | `anon_xm` |
+| `GET emissions/` | Serie de `factorEmisionCO2e` | XM en vivo | `month` | 1 h | `anon_xm` |
+| `GET exports/` | Serie de `ExpoEner` | XM en vivo | `week` | 1 h | `anon_xm` |
+| `GET imports/` | Serie de `ImpoEner` | XM en vivo | `week` | 1 h | `anon_xm` |
+| `POST sync/` | Encola `sync_external_energy_data` y responde 202 con el `task_id` | Celery | | | Solo superusuario |
+
+Si XM no responde, las series devuelven listas vacías con `source: "unavailable"` en lugar de un error. El campo
+`source` de `prices/` dice si los precios son de XM (`XM`), simulados (`simulated`), mezclados (`mixed`) o si no hay
+(`none`).
+
+Los esquemas están en Swagger (`/docs/`), bajo la etiqueta «Mercado Energético (XM)»; `sync/` está en «Operación».
+
+## Tareas programadas
+
+Definidas en `CELERY_BEAT_SCHEDULE` (`core/settings.py`), en hora de Bogotá:
+
+- **`sync-external-energy-daily`** (03:00), tarea `sync_external_energy_data`. Guarda en `EnergyPrice` el precio de
+  bolsa medio de cada uno de los últimos 30 días y en `EnergyMarketData` la demanda y la oferta medias diarias en MW
+  (de `DemaCome` y `Gene`) con el precio del día en COP/MWh. La composición por tecnología no se puede obtener de
+  esas métricas y queda en 0.
+- **`calculate-energy-savings-daily`** (03:30), tarea `calculate_energy_savings`. Calcula el ahorro diario de las
+  plantas del proyecto (decisión D8 y hallazgo C13 de la corrección de octubre de 2026):
+  - por institución y hora, con la energía de `indicators/services/institution_energy.py` (demanda del Medidor 1,
+    generación, autoconsumo y exportación);
+  - ahorro = energía autoconsumida × CU mensual del comercializador (ASC nivel 2 para Udenar, Mariana, UCC y HUDN;
+    Cedenar nivel 2 para Cesmag; `indicators/data/tarifas_cu.csv`). Un mes sin tarifa publicada usa la última
+    anterior;
+  - guarda en `EnergySavings` la suma de las instituciones por día;
+  - recalcula siempre los últimos 40 días (para recoger las lecturas que llegan tarde) y los días que falten desde el
+    2025-02-25. Con `start_date_str` y `end_date_str` recalcula un rango completo.
+
+El ahorro ya no depende del precio de bolsa: el precio de bolsa es lo que cuesta la energía en el mercado mayorista, no
+lo que paga una institución.
+
+## Cálculos de `savings/`
+
+Sobre los días del rango en `EnergySavings`:
+
+- **Ahorro total** y **costo evitado**: la suma del ahorro diario (son la misma cifra).
+- **Porcentaje de ahorro**: energía autoconsumida / demanda.
+- **Autoconsumo**: energía autoconsumida / generación.
+- **Factor de capacidad**: generación / (capacidad instalada × horas del periodo), con la capacidad de
+  `indicators/institution_config.py` (5 plantas de 17,55 kWp).
+- **ROI**: ahorro / costo de la instalación, con `SOLAR_INSTALLATION_COST_COP` (50 000 000 COP por defecto).
+
+## Modo invitado
+
+Sin sesión se pueden leer todos los `GET`. El tráfico anónimo tiene cupos por IP (`core/throttling.py`):
+
+- `anon_read`, para las lecturas públicas en general: `SIVE_GUEST_READ_RATE`, 120/min por defecto;
+- `anon_xm`, más estricto, para las vistas que pueden consultar XM en vivo: `SIVE_GUEST_XM_RATE`, 30/min por defecto.
+
+La IP del cliente se toma del último salto de `X-Forwarded-For` según `SIVE_NUM_PROXIES` (1 por defecto: Apache
+delante del backend). Los usuarios con sesión usan el cupo normal de usuario.
+
+## Modelos
+
+- `EnergyPrice`: precio de bolsa medio por día (COP/kWh) y su fuente.
+- `EnergyMarketData`: demanda, oferta y precio del mercado por día.
+- `EnergySavings`: ahorro diario de las plantas.
+- `EnergyPriceForecast` y `EnergyAlert`: existen en el modelo, pero ninguna tarea los llena; solo el comando de datos
+  simulados.
+
+## Datos simulados
+
+`python manage.py populate_external_energy_data [--days 90] [--clear]` llena las tablas con datos aleatorios para
+desarrollo. Esos precios llevan `source = 'ElectricityMaps'` (no vienen de ningún servicio) y `prices/` los marca como
+`simulated`. **No se usa en producción.**
+
+## Variables de entorno
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `XM_API_TIMEOUT` | 30 | Segundos máximos por consulta a XM |
+| `PYDATAXM_VERIFY_SSL` | `true` | Verificación SSL de las consultas a XM |
+| `SOLAR_INSTALLATION_COST_COP` | 50000000 | Costo de la instalación para el ROI |
+| `SIVE_GUEST_READ_RATE` | `120/min` | Cupo anónimo general |
+| `SIVE_GUEST_XM_RATE` | `30/min` | Cupo anónimo de las vistas que consultan XM |
+| `SIVE_NUM_PROXIES` | 1 | Proxies de confianza delante del backend |
+
+`docker-compose.prod.yml` las pasa al backend y a los dos servicios de Celery; se documentan en `env.example`.
+
+## Pruebas
 
 ```bash
-pip install -r requirements.txt
+docker compose -f docker-compose.prod.yml exec backend python manage.py test tests.test_external_energy_fixes tests.test_savings_cu tests.test_guest_mode
 ```
 
-### 2. Configurar Variables de Entorno
-
-Copia el archivo `settings_example.py` como `.env` y configura:
-
-#### OpenWeatherMap (Gratuito)
-```bash
-# Obtén tu API key gratuita en: https://openweathermap.org/api
-OPENWEATHER_API_KEY=your_actual_openweather_api_key_here
-```
-
-**Pasos para obtener API key gratuita:**
-1. Ve a [OpenWeatherMap](https://openweathermap.org/api)
-2. Crea una cuenta gratuita
-3. Ve a "My API Keys"
-4. Copia tu API key
-5. La versión gratuita incluye:
-   - 60 llamadas por minuto
-   - Datos climáticos actuales e históricos
-   - Datos de radiación UV (útil para energía solar)
-
-#### Electricity Maps (Opcional)
-```bash
-# Obtén tu API key en: https://www.electricitymaps.com/
-ELECTRICITY_MAPS_API_KEY=your_electricity_maps_api_key_here
-```
-
-**Nota:** Electricity Maps tiene acceso limitado gratuito. Si no tienes API key, el sistema usará datos simulados realistas.
-
-#### Configuraciones Adicionales
-```bash
-# Configuraciones de datos simulados (para desarrollo)
-USE_SIMULATED_DATA=true  # Cambiar a false en producción
-
-# Ubicación por defecto (Bogotá, Colombia)
-DEFAULT_LATITUDE=4.7110
-DEFAULT_LONGITUDE=-74.0721
-```
-
-### 3. Ejecutar Migraciones
-
-```bash
-python manage.py makemigrations external_energy
-python manage.py migrate
-```
-
-### 4. Poblar Datos Simulados (Desarrollo)
-
-```bash
-python manage.py populate_external_energy_data --days 90
-```
-
-## Uso de la API
-
-### Endpoints Disponibles
-
-#### Precios de Energía
-```http
-GET /api/external-energy/prices/?range=month
-```
-
-**Parámetros:**
-- `range`: week, month, quarter, year
-
-**Respuesta:**
-```json
-{
-  "average_price": 450.25,
-  "max_price": 495.50,
-  "min_price": 405.75,
-  "price_variation": 2.5,
-  "price_trend": "increasing",
-  "price_history": [...],
-  "price_forecast": [...],
-  "alerts": [...],
-  "market_demand": 9500.0,
-  "market_supply": 10200.0,
-  "renewable_percentage": 12.5
-}
-```
-
-#### Ahorros de Energía
-```http
-GET /api/external-energy/savings/?range=month
-```
-
-**Respuesta:**
-```json
-{
-  "total_consumed": 4500.0,
-  "total_generated": 3200.0,
-  "total_savings": 1440000.0,
-  "avoided_cost": 1440000.0,
-  "savings_percentage": 32.0,
-  "self_consumption": 71.1,
-  "excess_energy": 0.0,
-  "capacity_factor": 15.2,
-  "roi": 2.88,
-  "monthly_savings": [...]
-}
-```
-
-#### Sincronización de Datos
-```http
-POST /api/external-energy/sync/
-```
-
-#### Vista del Mercado
-```http
-GET /api/external-energy/market-overview/
-```
-
-## Modelos de Datos
-
-### EnergyPrice
-Almacena precios históricos de energía por fecha y fuente.
-
-### EnergySavings
-Calcula automáticamente ahorros basados en consumo vs generación.
-
-### EnergyPriceForecast
-Pronósticos de precios futuros con niveles de confianza.
-
-### EnergyMarketData
-Datos del mercado energético (demanda, oferta, composición).
-
-### EnergyAlert
-Sistema de alertas para eventos importantes del mercado.
-
-## Servicios
-
-### XMRealAPIService
-- Obtiene datos reales de la API de XM (Sistema Interconectado Nacional)
-- Datos de precios de energía, generación, demanda y emisiones
-- Integración con la librería pydataxm
-- Fallback a datos simulados si no está disponible la API
-
-### XMEnergyService
-- Servicio principal que encapsula XMRealAPIService
-- Proporciona métodos para obtener todos los tipos de datos de XM
-- Manejo de errores y sincronización de datos
-
-## Comandos de Gestión
-
-### Poblar Datos Simulados
-```bash
-python manage.py populate_external_energy_data --days 90 --clear
-```
-
-**Opciones:**
-- `--days`: Número de días de datos a generar
-- `--clear`: Limpiar datos existentes antes de poblar
-
-## Configuración del Admin
-
-La aplicación incluye una interfaz de administración completa con:
-
-- Gestión de precios de energía
-- Monitoreo de ahorros
-- Configuración de alertas
-- Análisis de pronósticos
-- Datos del mercado
-
-## Desarrollo y Pruebas
-
-### Datos Simulados
-Para desarrollo, la aplicación puede usar datos simulados que incluyen:
-
-- **Variaciones diarias de precios** (±5%)
-- **Patrones semanales** (precios más altos en días laborales)
-- **Patrones estacionales** (verano/invierno en Colombia)
-- **Datos de generación** realistas del mercado colombiano
-- **Datos de demanda** típicos del SIN
-- **Factores de emisión** promedio del sistema eléctrico
-
-### Logging
-```python
-import logging
-logger = logging.getLogger(__name__)
-logger.info('Operación completada exitosamente')
-```
-
-## Integración con el Frontend
-
-El componente React `ExternalEnergyData.js` proporciona:
-
-- **4 Pestañas**: Precios, Ahorro, Comparación, Pronóstico
-- **KPIs Principales**: Precio promedio, ahorro total, energía generada
-- **Gráficos Interactivos**: Historial de precios, ahorros mensuales
-- **Análisis Comparativo**: Consumo vs generación
-- **Recomendaciones**: Basadas en tendencias del mercado
-
-## Monitoreo y Mantenimiento
-
-### Tareas Programadas
-- Sincronización automática de datos externos
-- Actualización de pronósticos
-- Generación de alertas
-
-### Métricas de Salud
-- Estado de conexión con APIs externas
-- Calidad de datos recibidos
-- Rendimiento de cálculos
-
-## APIs Alternativas
-
-### OpenWeatherMap (Recomendado para empezar)
-- **Gratuito**: 60 llamadas/minuto
-- **Datos**: Clima, radiación UV, cobertura de nubes
-- **Cobertura**: Mundial
-- **Registro**: Simple, solo email
-
-### Electricity Maps
-- **Gratuito**: Acceso limitado
-- **Datos**: Precios de energía, composición del mercado
-- **Cobertura**: Principalmente Europa y Norteamérica
-- **Registro**: Requiere aprobación
-
-### Otras Opciones
-- **CREG (Colombia)**: Datos oficiales del mercado colombiano
-- **IEA**: Datos internacionales de energía
-- **EIA**: Datos de energía de Estados Unidos
-
-## Soporte y Contribución
-
-### Reportar Problemas
-- Usar el sistema de issues del proyecto
-- Incluir logs y contexto relevante
-
-### Contribuir
-- Fork del repositorio
-- Crear rama para nueva funcionalidad
-- Pull request con descripción detallada
-
-## Licencia
-
-Este proyecto está bajo la misma licencia que el proyecto principal MTE - SIVE App.
+`tests/test_external_energy.py` no es una suite: es un guion de diagnóstico que se corre a mano contra una base real.

@@ -356,8 +356,8 @@ def upsert_measurements_page(device, rows, write_v2=True):
 def fetch_and_save_measurements_for_device(self, device_scada_id: str, django_device_id: int, from_datetime_str: str, to_datetime_str: str):
     """
     Obtiene y guarda mediciones para un dispositivo SCADA.
-    Upsert masivo por página (bulk_create con update_conflicts), dual-write
-    v1 (jsonb) + v2 (tablas tipadas por categoría) durante la transición.
+    Upsert masivo por página (bulk_create con update_conflicts) en las tablas tipadas
+    por categoría (v2). La tabla jsonb v1 y su escritura doble ya no existen.
     """
     try:
         token = scada_client.get_token()

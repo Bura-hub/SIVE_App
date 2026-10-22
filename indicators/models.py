@@ -5,17 +5,17 @@ class MonthlyConsumptionKPI(models.Model):
     Modelo para almacenar los KPIs de consumo, generación y balance total mensual pre-calculados.
     Solo debe haber una instancia de este modelo.
     """
-    total_consumption_current_month = models.FloatField(default=0.0, help_text="Consumo NETO acumulado del mes actual en kWh (importación − exportación, net metering).")
-    total_consumption_previous_month = models.FloatField(default=0.0, help_text="Consumo NETO acumulado del mes anterior en kWh (importación − exportación, net metering).")
+    total_consumption_current_month = models.FloatField(default=0.0, help_text="Demanda D del mes en curso (del día 1 hasta el cálculo) en kWh: suma, por planta del proyecto, de la demanda del circuito del Medidor 1 (en medidores netos, medida + generación aguas abajo), solo en las horas con al menos 15 de 30 lecturas del medidor. Ver indicators/services/institution_energy.py.")
+    total_consumption_previous_month = models.FloatField(default=0.0, help_text="Demanda D del mes anterior en kWh, en la misma ventana transcurrida que el mes en curso (C11). Misma definición que total_consumption_current_month.")
 
-    total_gross_consumption_current_month = models.FloatField(default=0.0, help_text="Consumo BRUTO acumulado del mes actual en kWh (solo energía tomada de la red; inyección clampeada a 0).")
-    total_gross_consumption_previous_month = models.FloatField(default=0.0, help_text="Consumo BRUTO acumulado del mes anterior en kWh (solo energía tomada de la red; inyección clampeada a 0).")
+    total_gross_consumption_current_month = models.FloatField(default=0.0, help_text="Energía tomada de la red en el mes en curso en kWh: demanda D menos el autoconsumo de la generación solar, por planta del proyecto y solo en las horas válidas del medidor.")
+    total_gross_consumption_previous_month = models.FloatField(default=0.0, help_text="Energía tomada de la red en el mes anterior en kWh, en la misma ventana transcurrida que el mes en curso (C11).")
 
-    total_generation_current_month = models.FloatField(default=0.0, help_text="Generación total acumulada del mes actual en kWh.")
-    total_generation_previous_month = models.FloatField(default=0.0, help_text="Generación total acumulada del mes anterior en kWh.")
+    total_generation_current_month = models.FloatField(default=0.0, help_text="Generación G de las plantas del proyecto en el mes en curso en kWh (inversores de generación, con reposición de lecturas sueltas en horas con al menos 15 de 30 lecturas, C21).")
+    total_generation_previous_month = models.FloatField(default=0.0, help_text="Generación G de las plantas del proyecto en el mes anterior en kWh, en la misma ventana transcurrida que el mes en curso (C11).")
 
-    avg_instantaneous_power_current_month = models.FloatField(default=0.0, help_text="Potencia instantánea promedio de inversores del mes actual en Watts.")
-    avg_instantaneous_power_previous_month = models.FloatField(default=0.0, help_text="Potencia instantánea promedio de inversores del mes anterior en Watts.")
+    avg_instantaneous_power_current_month = models.FloatField(default=0.0, help_text="Potencia media de la flota en el mes en curso en W: generación G × 1000 / horas transcurridas (noches incluidas).")
+    avg_instantaneous_power_previous_month = models.FloatField(default=0.0, help_text="Potencia media de la flota en el mes anterior en W, en la misma ventana transcurrida que el mes en curso.")
 
     avg_daily_temp_current_month = models.FloatField(default=0.0, help_text="Temperatura promedio diaria del mes actual en °C.")
     avg_daily_temp_previous_month = models.FloatField(default=0.0, help_text="Temperatura promedio diaria del mes anterior en °C.")
@@ -28,8 +28,8 @@ class MonthlyConsumptionKPI(models.Model):
     avg_wind_speed_previous_month = models.FloatField(default=0.0, help_text="Velocidad del viento promedio del mes anterior en km/h.")
 
     # Nuevos campos para la irradiancia solar promedio (en W/m²)
-    avg_irradiance_current_month = models.FloatField(default=0.0, help_text="Irradiancia solar promedio del mes actual en W/m².")
-    avg_irradiance_previous_month = models.FloatField(default=0.0, help_text="Irradiancia solar promedio del mes anterior en W/m².")
+    avg_irradiance_current_month = models.FloatField(default=0.0, help_text="Irradiancia media diurna (06:00 a 17:59) del mes en curso en W/m², de las estaciones aptas y con lecturas entre 0 y 1400 W/m².")
+    avg_irradiance_previous_month = models.FloatField(default=0.0, help_text="Irradiancia media diurna (06:00 a 17:59) del mes anterior en W/m², de las estaciones aptas y con lecturas entre 0 y 1400 W/m².")
 
     last_calculated = models.DateTimeField(auto_now=True, help_text="Fecha y hora de la última vez que se calculó este KPI.")
 

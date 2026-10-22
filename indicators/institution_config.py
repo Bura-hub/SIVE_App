@@ -4,7 +4,7 @@ generación, capacidad FV, estación meteorológica y comercializador.
 
 Es la misma convención de la tesis (sistemabl, `preprocessing.py`) y del módulo de mercado P2P con blockchain
 (`mercado-p2p/motor_p2p/semillas/agentes.json`), para que SIVE, el Control Panel y el mercado den las mismas cifras.
-Ver AUDITORIA_SIVE/CORRECCION_2026-10.md (decisiones D2, D4, D5 y D8).
+Ver docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md (decisiones D2, D4, D5 y D8).
 
 Las claves son el `scada_id` del conector (UUID), que es estable; el `id` de Django no lo es entre instalaciones.
 

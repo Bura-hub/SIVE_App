@@ -43,3 +43,10 @@ class DashboardSummaryCacheTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['totalConsumption']['value'], '123')
         mock_scada.get_token.assert_not_called()
+
+    def test_titulo_del_kpi_de_inversores(self):
+        """El backend manda «Inversores con datos» (C12: con lecturas en las últimas 24 h), no «activos»."""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(DASHBOARD_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['activeInverters']['title'], 'Inversores con datos')

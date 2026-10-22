@@ -78,8 +78,8 @@ class TaskProgress(models.Model):
 # =========================
 # Mediciones v2 — tablas anchas tipadas por categoría (una columna float8
 # por métrica; nombres = claves exactas del connector, ver
-# measurements_schema.py). Reemplazan a Measurement (jsonb) tras el
-# switchover; conviven con ella durante la transición (dual-write).
+# measurements_schema.py). Reemplazaron a Measurement (jsonb), que se
+# retiró en la migración 0003_delete_measurement.
 # =========================
 from .measurements_schema import METER_METRICS, INVERTER_METRICS, WEATHER_METRICS
 

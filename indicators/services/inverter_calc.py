@@ -7,7 +7,6 @@ BD ni Celery. La task queda como envoltorio (query + update_or_create de Inverte
 y de InverterChartData). `measurement_count`/`last_measurement_date` NO se calculan aquí.
 """
 import statistics
-from collections import defaultdict
 
 from indicators.energy import SAMPLE_INTERVAL_HOURS
 from indicators.services.date_ranges import COLOMBIA_TZ
@@ -224,8 +223,9 @@ PR_REASON_STATION_NOT_APT = (
 )
 PR_REASON_NO_STATION = 'No disponible: la estación meteorológica de {institucion} no está en SIVE.'
 PR_REASON_NO_VALID_DAYS = (
-    'No disponible: ningún día con al menos el 80 % de las muestras diurnas de la estación '
-    '(06:00–18:00) y una irradiación de hasta 8 kWh/m².'
+    'No disponible: ningún día válido. Cuenta un día con ≥ 80 % de muestras diurnas de la estación, '
+    'hasta 8 kWh/m², acorde con la estación de referencia (Alvernia) y con lecturas del inversor en '
+    '≥ 80 % de las horas de sol.'
 )
 
 
@@ -234,49 +234,38 @@ def bogota_day(ts):
     return ts.astimezone(COLOMBIA_TZ).date()
 
 
-def daily_ac_energy_kwh(rows):
-    """Energía AC por día de Bogotá, E = Σ acPower·Δt / 1000 (kWh), a partir de filas
-    `.values('date', 'acPower')`. Los NULL no cuentan (faltante = 0 en G, D3). Solo aparecen
-    los días con alguna muestra."""
-    energy = defaultdict(float)
-    for row in rows:
-        day = bogota_day(row['date'])
-        ac = row['acPower']
-        energy[day] += 0.0 if ac is None else ac * SAMPLE_INTERVAL_HOURS / 1000.0
-    return dict(energy)
-
-
 def compute_performance_ratio(energy_by_day, irradiation_by_day, kwp):
-    """Performance Ratio de un periodo (D5).
+    """Performance Ratio de un periodo (D5), con las mismas reglas que «Indicadores Solares».
 
         PR = Σ E_AC_día / Σ (H_día × kWp / 1 kW/m²)
 
-    sobre los días válidos: con energía del inversor y con H válida de la estación
-    (`irradiation_by_day[día]` = (H en kWh/m², válido: bool), ver
-    `weather_calc.daily_irradiation_for_pr`). H es irradiancia horizontal (GHI), así que el PR
-    resultante es un PR con irradiancia horizontal.
+    sobre los días válidos según `institution_energy.dias_pr`, la función que usa también
+    `solar_kpis.calcular`: estación válida (≥ 80 % de muestras diurnas, H ≤ 8 kWh/m² y contraste con
+    la estación de referencia, C22) e inversor con lecturas en ≥ 80 % de las horas de sol.
+
+    `energy_by_day`: {día: (E kWh, horas de sol con lectura)}, de `institution_energy.energia_diaria_para_pr`
+    (energía horaria con la reposición de lecturas sueltas, C21). `irradiation_by_day`: salida de
+    `institution_energy.irradiacion_diaria`. H es irradiancia horizontal (GHI), así que el PR resultante es
+    un PR con irradiancia horizontal.
 
     Devuelve un dict con `performance_ratio_pct` (o None), `reference_energy_kwh` (Σ H×kWp de los
     días válidos, o None), `performance_ratio_valid_days` y `performance_ratio_note` (motivo
     cuando el PR es None)."""
-    valid_days = [
-        day for day, (h, ok) in irradiation_by_day.items()
-        if ok and day in energy_by_day
-    ]
+    from indicators.services.institution_energy import dias_pr
+    energy = reference = 0.0
+    valid_days = 0
+    for _day, e, h, motivo in dias_pr(energy_by_day, irradiation_by_day):
+        if motivo is None:
+            energy += e
+            reference += h * kwp
+            valid_days += 1
     if not valid_days:
-        return {
-            'performance_ratio_pct': None,
-            'reference_energy_kwh': None,
-            'performance_ratio_valid_days': 0,
-            'performance_ratio_note': PR_REASON_NO_VALID_DAYS,
-        }
-    energy = sum(energy_by_day[d] for d in valid_days)
-    reference = sum(irradiation_by_day[d][0] * kwp for d in valid_days)
+        return pr_unavailable(PR_REASON_NO_VALID_DAYS)
     return {
-        'performance_ratio_pct': energy / reference * 100.0,
+        'performance_ratio_pct': energy / reference * 100.0 if reference else None,
         'reference_energy_kwh': reference,
-        'performance_ratio_valid_days': len(valid_days),
-        'performance_ratio_note': None,
+        'performance_ratio_valid_days': valid_days,
+        'performance_ratio_note': None if reference else PR_REASON_NO_VALID_DAYS,
     }
 
 

@@ -36,11 +36,6 @@ logger = logging.getLogger(__name__)
 
 # Helpers puros extraídos a services/ (Ola 5); re-exportados para no romper los imports
 # existentes (`from indicators.tasks import ...`).
-from indicators.services.sanitize import (  # noqa: E402,F401
-    ROLLOVER_CAP_FACTOR,
-    ROLLOVER_CAP_MARGIN_KWH,
-    _accumulate_register_energy,
-)
 from indicators.services.date_ranges import (  # noqa: E402,F401
     COLOMBIA_TZ,
     colombia_day_range,
@@ -58,7 +53,6 @@ from indicators.services.inverter_calc import (  # noqa: E402
     compute_inverter_hourly_chart,
     compute_inverter_indicators,
     compute_performance_ratio,
-    daily_ac_energy_kwh,
     pr_unavailable,
 )
 from indicators.institution_config import config_institucion, inversor_vigente  # noqa: E402
@@ -530,20 +524,19 @@ def _inverter_performance_ratio(device, first_day, last_day, measurements):
     if station is None:
         return pr_unavailable(PR_REASON_NO_STATION.format(institucion=config['nombre']))
 
-    # Misma irradiación diaria que «Indicadores Solares» (institution_energy.irradiacion_diaria): cobertura, tope
-    # físico y validación cruzada con la estación de referencia (Alvernia), para que las dos pantallas den el mismo PR.
-    from indicators.services.institution_energy import irradiacion_diaria
-    irradiation = {
-        day: (d['h_kwh_m2'], d['valido'])
-        for day, d in irradiacion_diaria(device.institution.scada_id,
-                                         first_day, last_day).items()
-    }
-    energy = {
-        day: e for day, e in daily_ac_energy_kwh(
-            measurements.values('date', 'acPower').iterator(chunk_size=2000)
-        ).items()
-        if inversor_vigente(config, device.scada_id, day)
-    }
+    # Mismas reglas y mismas funciones que «Indicadores Solares» (solar_kpis.calcular): irradiación diaria con
+    # cobertura, tope físico y contraste con la estación de referencia (C22); energía horaria con reposición de
+    # lecturas sueltas (C21), y un día solo cuenta si el inversor tiene lectura en ≥ 80 % de las horas de sol.
+    # Cada planta tiene un único inversor de generación, así que para el mismo rango las dos pantallas dan el mismo
+    # PR. La excepción sería un día con `respaldo_generacion` (Udenar antes del 2025-09-03), donde la planta usa
+    # otro inversor; hoy no aplica porque la estación de Udenar no es apta para el PR.
+    from indicators.services.institution_energy import energia_diaria_para_pr, horas_inversor, irradiacion_diaria
+    irradiation = irradiacion_diaria(device.institution.scada_id, first_day, last_day)
+    horas = [
+        h for h in horas_inversor(measurements.values('date', 'acPower').iterator(chunk_size=2000))
+        if inversor_vigente(config, device.scada_id, h['hora'].date())
+    ]
+    energy = energia_diaria_para_pr(horas)
     return compute_performance_ratio(energy, irradiation, config['kwp'])
 
 

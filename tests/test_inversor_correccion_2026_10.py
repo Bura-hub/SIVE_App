@@ -15,8 +15,8 @@ from indicators.services.inverter_calc import (
     compute_inverter_hourly_chart,
     compute_inverter_indicators,
     compute_performance_ratio,
-    daily_ac_energy_kwh,
 )
+from indicators.services.institution_energy import energia_diaria_para_pr, horas_inversor
 from indicators.services.weather_calc import daily_irradiation_for_pr
 from indicators.tasks import calculate_inverter_indicators
 from scada_proxy.models import (
@@ -114,29 +114,58 @@ class IrradiacionParaPRTests(SimpleTestCase):
         self.assertEqual(list(daily_irradiation_for_pr(rows)), [date(2025, 7, 1)])
 
 
+def _irr(h, valido=True, motivo=None):
+    return {'h_kwh_m2': h, 'muestras': 360, 'valido': valido, 'motivo': motivo}
+
+
 class PerformanceRatioPuroTests(SimpleTestCase):
+    """PR del inversor con las reglas de «Indicadores Solares» (institution_energy.dias_pr)."""
+
     def test_pr_mensual_es_suma_de_e_entre_suma_de_referencia(self):
-        energy = {date(2025, 7, 1): 70.0, date(2025, 7, 2): 50.0, date(2025, 7, 3): 99.0}
-        irr = {date(2025, 7, 1): (5.0, True), date(2025, 7, 2): (4.0, True),
-               date(2025, 7, 3): (6.0, False)}
+        energy = {date(2025, 7, 1): (70.0, 12), date(2025, 7, 2): (50.0, 10), date(2025, 7, 3): (99.0, 12)}
+        irr = {date(2025, 7, 1): _irr(5.0), date(2025, 7, 2): _irr(4.0),
+               date(2025, 7, 3): _irr(6.0, False, 'cobertura diurna 100/360 muestras')}
         r = compute_performance_ratio(energy, irr, 17.55)
         self.assertAlmostEqual(r['performance_ratio_pct'], 120.0 / (9.0 * 17.55) * 100)
         self.assertAlmostEqual(r['reference_energy_kwh'], 9.0 * 17.55)
         self.assertEqual(r['performance_ratio_valid_days'], 2)
         self.assertIsNone(r['performance_ratio_note'])
 
+    def test_dia_con_inversor_en_menos_del_80_por_ciento_de_las_horas_de_sol_no_cuenta(self):
+        # 9 de 12 horas de sol con lectura: 75 % < 80 % (regla de ee0d286).
+        energy = {date(2025, 7, 1): (70.0, 12), date(2025, 7, 2): (30.0, 9)}
+        irr = {date(2025, 7, 1): _irr(5.0), date(2025, 7, 2): _irr(5.0)}
+        r = compute_performance_ratio(energy, irr, 17.55)
+        self.assertEqual(r['performance_ratio_valid_days'], 1)
+        self.assertAlmostEqual(r['performance_ratio_pct'], 70.0 / (5.0 * 17.55) * 100)
+
     def test_sin_dias_validos_es_null_con_motivo(self):
-        r = compute_performance_ratio({date(2025, 7, 1): 70.0}, {date(2025, 7, 1): (5.0, False)}, 17.55)
+        r = compute_performance_ratio({date(2025, 7, 1): (70.0, 12)},
+                                      {date(2025, 7, 1): _irr(5.0, False, 'x')}, 17.55)
         self.assertIsNone(r['performance_ratio_pct'])
         self.assertEqual(r['performance_ratio_note'], PR_REASON_NO_VALID_DAYS)
 
-    def test_energia_diaria_en_dias_de_bogota(self):
-        rows = [{'date': _bog(2025, 7, 1, 23, 58), 'acPower': 3000.0},
+    def test_motivo_menciona_la_referencia_y_la_cobertura_del_inversor_y_cabe_en_la_columna(self):
+        self.assertIn('referencia (Alvernia)', PR_REASON_NO_VALID_DAYS)
+        self.assertIn('lecturas del inversor', PR_REASON_NO_VALID_DAYS)
+        self.assertLessEqual(len(PR_REASON_NO_VALID_DAYS), 255)   # InverterIndicators.performance_ratio_note
+
+    def test_energia_horaria_y_diaria_en_hora_de_bogota(self):
+        rows = [{'date': _bog(2025, 7, 1, 23, 58).astimezone(pytz.utc), 'acPower': 3000.0},
                 {'date': _bog(2025, 7, 2, 0, 0), 'acPower': 6000.0},
                 {'date': _bog(2025, 7, 2, 0, 2), 'acPower': None}]
-        e = daily_ac_energy_kwh(rows)
-        self.assertAlmostEqual(e[date(2025, 7, 1)], 0.1)
-        self.assertAlmostEqual(e[date(2025, 7, 2)], 0.2)
+        e = energia_diaria_para_pr(horas_inversor(rows))
+        self.assertAlmostEqual(e[date(2025, 7, 1)][0], 0.1)
+        self.assertAlmostEqual(e[date(2025, 7, 2)][0], 0.2)
+        self.assertEqual(e[date(2025, 7, 2)][1], 0)            # 00:00 no es hora de sol
+
+    def test_reposicion_c21_con_15_o_mas_lecturas(self):
+        start = _bog(2025, 7, 1, 10)
+        rows = [{'date': start + timedelta(minutes=2 * i), 'acPower': 6000.0} for i in range(20)]
+        rows += [{'date': _bog(2025, 7, 1, 11) + timedelta(minutes=2 * i), 'acPower': 6000.0} for i in range(10)]
+        horas = {h['hora'].hour: h for h in horas_inversor(rows)}
+        self.assertAlmostEqual(horas[10]['g_kwh'], 6.0)   # 20 de 30: se repone a la hora completa
+        self.assertAlmostEqual(horas[11]['g_kwh'], 2.0)   # 10 de 30: faltante = 0
 
 
 class GraficaHorariaTests(SimpleTestCase):

@@ -35,6 +35,77 @@ IRRADIACION_MAX_DIA_KWH_M2 = 8.0
 COBERTURA_MIN_ESTACION = 0.8   # fracción mínima de las 360 muestras diurnas para que el día cuente en el PR
 
 
+# Performance Ratio (decisión D5 y reglas de ee0d286 y C22): un día cuenta solo si la irradiación de la estación es
+# válida (ver _irradiacion_diaria_sin_cache) y el inversor tiene lectura en al menos el 80 % de las horas de sol.
+FRACCION_MIN_HORAS_SOL_INVERSOR = 0.8
+MINIMO_HORAS_SOL_INVERSOR = FRACCION_MIN_HORAS_SOL_INVERSOR * (HORA_FIN_DIA_SOLAR - HORA_INICIO_DIA_SOLAR)
+MOTIVO_INVERSOR_SIN_COBERTURA = 'inversor sin lecturas en ≥ 80 % de las horas de sol'
+
+
+def energia_inversor_hora_kwh(suma_w, n):
+    """Energía AC de un inversor en una hora (kWh) a partir de la suma de sus `n` lecturas de acPower (W).
+
+    E = max(Σ P, 0) × Δt / 1000. Si la hora tiene entre 15 y 29 lecturas, las que faltan se reponen con la media de
+    las presentes (× 30/n, C21); con menos de 15 rige «faltante = 0». Sin lecturas, 0."""
+    if suma_w is None or not n:
+        return 0.0
+    e = max(suma_w, 0.0) * DT_H / 1000.0
+    if MINIMO_MUESTRAS_MEDIDOR <= n < MUESTRAS_HORA:
+        e *= MUESTRAS_HORA / n          # repone lecturas perdidas sueltas en una hora casi completa
+    return e
+
+
+def horas_inversor(filas):
+    """Energía horaria de UN inversor a partir de filas `.values('date', 'acPower')` (fechas aware).
+
+    Agrupa por hora de Bogotá como `_sumas_horarias` (los NULL no cuentan) y aplica `energia_inversor_hora_kwh`.
+    Devuelve [{'hora' (naive, Bogotá), 'g_kwh', 'n_g'}] solo con las horas que tienen lecturas, ordenadas."""
+    sumas = defaultdict(lambda: [0.0, 0])
+    for fila in filas:
+        p = fila['acPower']
+        if p is None:
+            continue
+        hora = fila['date'].astimezone(COLOMBIA_TZ).replace(minute=0, second=0, microsecond=0, tzinfo=None)
+        acc = sumas[hora]
+        acc[0] += p
+        acc[1] += 1
+    return [{'hora': h, 'g_kwh': energia_inversor_hora_kwh(s, n), 'n_g': n} for h, (s, n) in sorted(sumas.items())]
+
+
+def energia_diaria_para_pr(horas):
+    """{día: (energía del día en kWh, horas de sol con lectura del inversor)} a partir de horas con 'hora', 'g_kwh'
+    y 'n_g' (las de `energia_horaria` o las de `horas_inversor`)."""
+    dias = {}
+    for h in horas:
+        dia = h['hora'].date()
+        e, horas_sol = dias.get(dia, (0.0, 0))
+        e += h['g_kwh']
+        if HORA_INICIO_DIA_SOLAR <= h['hora'].hour < HORA_FIN_DIA_SOLAR and h['n_g'] > 0:
+            horas_sol += 1
+        dias[dia] = (e, horas_sol)
+    return dias
+
+
+def dias_pr(energia_dia, irradiacion):
+    """Clasifica para el PR cada día con dato de la estación. Es la regla única de las dos pantallas (Indicadores
+    Solares e Inversores).
+
+    `energia_dia`: salida de `energia_diaria_para_pr`. `irradiacion`: salida de `irradiacion_diaria`.
+    Devuelve, por día y en orden, (día, energía kWh, H kWh/m², motivo); motivo None quiere decir que el día cuenta.
+    Un día cuenta si la estación es válida (cobertura, tope físico y contraste con la estación de referencia, C22) y
+    el inversor tiene lectura en al menos el 80 % de las horas de sol."""
+    for dia in sorted(irradiacion):
+        d = irradiacion[dia]
+        e, horas_sol = energia_dia.get(dia, (0.0, 0))
+        if not d['valido']:
+            motivo = d['motivo'] or 'estación sin dato válido'
+        elif horas_sol < MINIMO_HORAS_SOL_INVERSOR:
+            motivo = MOTIVO_INVERSOR_SIN_COBERTURA
+        else:
+            motivo = None
+        yield dia, e, d['h_kwh_m2'], motivo
+
+
 def _rango_bogota(start_date, end_date):
     inicio = COLOMBIA_TZ.localize(datetime.combine(start_date, datetime.min.time()))
     fin = COLOMBIA_TZ.localize(datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
@@ -87,12 +158,7 @@ def _energia_horaria_sin_cache(institution_scada_id, start_date, end_date):
 
     def kwh(scada_id, hora):
         s, n = inv.get((scada_id, hora), (None, 0))
-        if s is None:
-            return 0.0, n
-        e = max(s, 0.0) * DT_H / 1000.0
-        if MINIMO_MUESTRAS_MEDIDOR <= n < MUESTRAS_HORA:
-            e *= MUESTRAS_HORA / n          # repone lecturas perdidas sueltas en una hora casi completa
-        return e, n
+        return energia_inversor_hora_kwh(s, n), n
 
     horas = []
     for hora in _horas(inicio, fin):

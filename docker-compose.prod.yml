@@ -99,6 +99,23 @@ services:
       - SCADA_USERNAME=${SCADA_USERNAME}
       - SCADA_PASSWORD=${SCADA_PASSWORD}
       - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
+      # Tiempo de espera de las consultas a XM, en segundos (settings.XM_API_TIMEOUT)
+      - XM_API_TIMEOUT=${XM_API_TIMEOUT:-30}
+      - SOLAR_INSTALLATION_COST_COP=${SOLAR_INSTALLATION_COST_COP:-50000000}
+      # Modo invitado: cupos de lectura anónima por IP y proxies de confianza delante del backend
+      - SIVE_GUEST_READ_RATE=${SIVE_GUEST_READ_RATE:-120/min}
+      - SIVE_GUEST_XM_RATE=${SIVE_GUEST_XM_RATE:-30/min}
+      - SIVE_NUM_PROXIES=${SIVE_NUM_PROXIES:-1}
+      # Alertas (core/alerting.py) y correo saliente; los defectos son los mismos de core/settings.py
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - EMAIL_HOST=${EMAIL_HOST:-localhost}
+      - EMAIL_PORT=${EMAIL_PORT:-25}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-False}
+      - EMAIL_USE_SSL=${EMAIL_USE_SSL:-False}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-webmaster@localhost}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
@@ -168,6 +185,23 @@ services:
       - SCADA_USERNAME=${SCADA_USERNAME}
       - SCADA_PASSWORD=${SCADA_PASSWORD}
       - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
+      # Tiempo de espera de las consultas a XM, en segundos (settings.XM_API_TIMEOUT)
+      - XM_API_TIMEOUT=${XM_API_TIMEOUT:-30}
+      - SOLAR_INSTALLATION_COST_COP=${SOLAR_INSTALLATION_COST_COP:-50000000}
+      # Modo invitado: cupos de lectura anónima por IP y proxies de confianza delante del backend
+      - SIVE_GUEST_READ_RATE=${SIVE_GUEST_READ_RATE:-120/min}
+      - SIVE_GUEST_XM_RATE=${SIVE_GUEST_XM_RATE:-30/min}
+      - SIVE_NUM_PROXIES=${SIVE_NUM_PROXIES:-1}
+      # Alertas (core/alerting.py) y correo saliente; los defectos son los mismos de core/settings.py
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - EMAIL_HOST=${EMAIL_HOST:-localhost}
+      - EMAIL_PORT=${EMAIL_PORT:-25}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-False}
+      - EMAIL_USE_SSL=${EMAIL_USE_SSL:-False}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-webmaster@localhost}
       - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
       - media_data_prod:/app/media
@@ -224,6 +258,23 @@ services:
       - SCADA_USERNAME=${SCADA_USERNAME}
       - SCADA_PASSWORD=${SCADA_PASSWORD}
       - PYDATAXM_VERIFY_SSL=${PYDATAXM_VERIFY_SSL:-true}
+      # Tiempo de espera de las consultas a XM, en segundos (settings.XM_API_TIMEOUT)
+      - XM_API_TIMEOUT=${XM_API_TIMEOUT:-30}
+      - SOLAR_INSTALLATION_COST_COP=${SOLAR_INSTALLATION_COST_COP:-50000000}
+      # Modo invitado: cupos de lectura anónima por IP y proxies de confianza delante del backend
+      - SIVE_GUEST_READ_RATE=${SIVE_GUEST_READ_RATE:-120/min}
+      - SIVE_GUEST_XM_RATE=${SIVE_GUEST_XM_RATE:-30/min}
+      - SIVE_NUM_PROXIES=${SIVE_NUM_PROXIES:-1}
+      # Alertas (core/alerting.py) y correo saliente; los defectos son los mismos de core/settings.py
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - EMAIL_HOST=${EMAIL_HOST:-localhost}
+      - EMAIL_PORT=${EMAIL_PORT:-25}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-False}
+      - EMAIL_USE_SSL=${EMAIL_USE_SSL:-False}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-webmaster@localhost}
       - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
       - media_data_prod:/app/media

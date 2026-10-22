@@ -59,6 +59,15 @@ USE_X_FORWARDED_HOST = os.getenv('USE_X_FORWARDED_HOST', 'False').lower() == 'tr
 # --- Alerting (core/alerting.py) --- Canales opcionales; si ambos vacíos, solo se loguea.
 ALERT_WEBHOOK_URL = os.getenv('ALERT_WEBHOOK_URL', '')   # Slack/Discord/Teams/genérico
 ALERT_EMAIL_TO = os.getenv('ALERT_EMAIL_TO', '')          # requiere EMAIL_HOST/EMAIL_* configurados
+# Correo saliente (lo usan las alertas por email). Los valores por defecto son los de Django, así que sin estas
+# variables el comportamiento es el mismo de antes (SMTP en localhost:25, que en el contenedor no existe).
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '25'))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False').lower() == 'true'
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() == 'true'
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'webmaster@localhost')
 
 # ========================= Aplicaciones Registradas =========================
 
@@ -391,9 +400,8 @@ XM_API_TIMEOUT = int(os.getenv('XM_API_TIMEOUT', '30'))
 # external_energy/services.py: NO se desactiva la verificación SSL global del proceso.
 PYDATAXM_VERIFY_SSL = os.getenv('PYDATAXM_VERIFY_SSL', 'true').lower() not in ('0', 'false', 'no')
 
-# Parámetros del cálculo de factor de capacidad y ROI en los ahorros de energía.
-# Antes estaban hardcodeados en la vista (100 kW y 50.000.000 COP).
-SOLAR_INSTALLED_CAPACITY_KW = float(os.getenv('SOLAR_INSTALLED_CAPACITY_KW', '100'))
+# Costo de la instalación para el ROI de los ahorros de energía (antes, 50.000.000 COP fijos en la vista).
+# La capacidad instalada ya no es un parámetro global: es la de cada planta (indicators/institution_config.py).
 SOLAR_INSTALLATION_COST_COP = float(os.getenv('SOLAR_INSTALLATION_COST_COP', '50000000'))
 
 # ========================= Documentación de la API (drf-spectacular) =========================
@@ -451,6 +459,8 @@ SPECTACULAR_SETTINGS = {
         {'name': 'Autenticación', 'description': 'Login, refresco de token, cambio de contraseña, perfil y gestión de sesiones.'},
         {'name': 'Dashboard', 'description': 'Resumen de consumo/generación/balance e insumos de las gráficas del inicio.'},
         {'name': 'Indicadores', 'description': 'Indicadores de medidores eléctricos, inversores y estaciones meteorológicas, más el catálogo de instituciones.'},
+        {'name': 'Indicadores solares', 'description': 'Indicadores del sistema fotovoltaico de cada institución (generación, rendimiento, Performance Ratio, demanda, autoconsumo, ahorro y CO₂ evitado), calculados bajo demanda, y lista de instituciones con sistema fotovoltaico.'},
+        {'name': 'Disponibilidad de datos', 'description': 'Primera y última fecha con indicadores calculados (diarios o mensuales, y horarios) de una sede y una categoría de dispositivo. Los selectores de rango la usan para acotar las fechas.'},
         {'name': 'Reportes', 'description': 'Generación y descarga de reportes en PDF, Excel y CSV.'},
         {'name': 'SCADA', 'description': 'Proxy al conector SCADA remoto y consulta de los datos locales sincronizados.'},
         {'name': 'Mercado Energético (XM)', 'description': 'Datos del mercado eléctrico colombiano vía XM: precios, ahorros, demanda y emisiones.'},

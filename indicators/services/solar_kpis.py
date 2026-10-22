@@ -14,7 +14,8 @@ from indicators.institution_config import (
     FACTOR_CO2_KG_KWH, config_institucion,
 )
 from indicators.services.institution_energy import (
-    HORA_FIN_DIA_SOLAR, HORA_INICIO_DIA_SOLAR, MUESTRAS_HORA, energia_horaria, irradiacion_diaria,
+    HORA_FIN_DIA_SOLAR, HORA_INICIO_DIA_SOLAR, MUESTRAS_HORA, dias_pr, energia_diaria_para_pr, energia_horaria,
+    irradiacion_diaria,
 )
 
 GRANULARIDADES = ('day', 'month', 'year')
@@ -86,15 +87,9 @@ def calcular(institution, start_date, end_date, granularidad='month'):
     horas = energia_horaria(institution.scada_id, start_date, end_date)
     irr = irradiacion_diaria(institution.scada_id, start_date, end_date)
 
-    # Energía AC por día y horas de sol con lectura del inversor, para el PR: un día cuenta solo si la estación
-    # es válida Y el inversor tiene lectura en ≥ 80 % de las horas de sol (sin eso, el PR mide el hueco de datos).
-    e_dia, horas_sol_dato = {}, {}
-    for h in horas:
-        dia = h['hora'].date()
-        e_dia[dia] = e_dia.get(dia, 0.0) + h['g_kwh']
-        if HORA_INICIO_DIA_SOLAR <= h['hora'].hour < HORA_FIN_DIA_SOLAR and h['n_g'] > 0:
-            horas_sol_dato[dia] = horas_sol_dato.get(dia, 0) + 1
-    minimo_horas_sol = 0.8 * (HORA_FIN_DIA_SOLAR - HORA_INICIO_DIA_SOLAR)
+    # PR: la clasificación de días es la de institution_energy.dias_pr, la misma que usa el PR de la pantalla
+    # Inversores (cobertura y validez de la estación, contraste con la de referencia y cobertura del inversor).
+    energia_dia = energia_diaria_para_pr(horas)
 
     periodos = OrderedDict()
     total = _nuevo_acumulador()
@@ -123,18 +118,16 @@ def calcular(institution, start_date, end_date, granularidad='month'):
                 acc['g_sin_medidor'] += h['g_kwh']
             acc['tarifa_extrapolada'] |= extrapolada
 
-    for dia, d_irr in irr.items():
+    for dia, e, h_dia, motivo in dias_pr(energia_dia, irr):
         for acc in ([periodos[_clave(dia, granularidad)]] if _clave(dia, granularidad) in periodos else []) + [total]:
-            if d_irr['valido'] and horas_sol_dato.get(dia, 0) < minimo_horas_sol:
-                acc['pr_motivos'].add('inversor sin lecturas en ≥ 80 % de las horas de sol')
-            elif d_irr['valido']:
-                acc['pr_e'] += e_dia.get(dia, 0.0)
-                acc['pr_ref'] += d_irr['h_kwh_m2'] * kwp
-                acc['pr_dias'] += 1
-                acc['h_suma'] += d_irr['h_kwh_m2']
-                acc['h_dias'] += 1
+            if motivo:
+                acc['pr_motivos'].add(motivo)
             else:
-                acc['pr_motivos'].add(d_irr['motivo'])
+                acc['pr_e'] += e
+                acc['pr_ref'] += h_dia * kwp
+                acc['pr_dias'] += 1
+                acc['h_suma'] += h_dia
+                acc['h_dias'] += 1
 
     acumulada = 0.0
     filas = []

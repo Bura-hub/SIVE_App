@@ -89,8 +89,8 @@ class ElectricMeterIndicatorsTestCase(TestCase):
         # (order_by/exists/count), así que creamos mediciones reales dentro del día.
         # Mediodía aware: cae dentro de [test_date, test_date+1) para cualquier offset de TZ.
         base = timezone.make_aware(datetime.combine(self.test_date, time(12, 0)))
-        # Insertadas por el helper real de ingesta (dual-write v1+v2): la tarea
-        # migrada lee la tabla tipada MeterMeasurement.
+        # Insertadas por el helper real de ingesta: la tarea lee la tabla
+        # tipada MeterMeasurement.
         from scada_proxy.tasks import upsert_measurements_page
         upsert_measurements_page(self.device, [
             (base, {
