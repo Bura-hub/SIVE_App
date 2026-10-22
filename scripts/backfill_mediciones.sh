@@ -11,7 +11,7 @@
 # HUDN (jul–sep), 17 % de Udenar (ago), 4 % de Mariana (ago) y 1,7 % de Cesmag (sep).
 #
 # Qué hace (todo idempotente, no borra mediciones):
-#   1. backup_db.sh (respaldo verificado; aborta si falla)
+#   1. backup_db.sh --manual (respaldo verificado, fuera de la rotación diaria; aborta si falla)
 #   2. resync_measurements_v2 --force del rango (upsert por (device, date))
 #   3. recalcula indicadores diarios y mensuales por componente, chart diario, KPI mensual
 #      y rollup horario del rango
@@ -35,7 +35,7 @@ manage() { docker compose -f "$COMPOSE_FILE" exec -T backend python manage.py "$
   echo "# inicio: $(date -Is)"
 
   echo "== 1. respaldo"
-  ./scripts/backup_db.sh
+  ./scripts/backup_db.sh --manual
 
   echo "== 2. backfill de mediciones $DESDE -> $HASTA"
   manage resync_measurements_v2 --from "$DESDE" --to "$HASTA" --chunk-days 7 --force

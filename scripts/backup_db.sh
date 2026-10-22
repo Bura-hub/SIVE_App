@@ -8,6 +8,10 @@
 # Uso (desde la raíz del repo, en el host):
 #   ./scripts/backup_db.sh            # backup diario
 #   ./scripts/backup_db.sh --weekly   # además rota una copia semanal
+#   ./scripts/backup_db.sh --manual   # respaldo puntual (antes de un despliegue o de un backfill)
+#
+# Los manuales van con su propio prefijo (manual_sive_db_*) y su propia retención: antes compartían
+# la de los diarios y siete despliegues en un día dejaron fuera todos los diarios de la semana (22-oct-2026).
 #
 # Cron sugerido (diario 02:30; domingos con --weekly):
 #   30 2 * * 1-6  cd /ruta/al/repo && ./scripts/backup_db.sh          >> logs/backup.log 2>&1
@@ -20,6 +24,7 @@ BACKUP_DIR="./backups"
 MIN_BYTES=10000          # un dump válido de esta BD pesa MB; <10 KB = fallo
 KEEP_DAILY=7
 KEEP_WEEKLY=4
+KEEP_MANUAL=10
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 die() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
@@ -35,7 +40,12 @@ DB_USER="$(read_env user_postgres)";  DB_USER="${DB_USER:-BuraHub}"
 
 mkdir -p "$BACKUP_DIR"
 timestamp="$(date '+%Y%m%d_%H%M%S')"
-outfile="$BACKUP_DIR/sive_db_${timestamp}.dump"
+case "${1:-}" in
+    ""|--weekly) prefix="sive_db" ;;
+    --manual)    prefix="manual_sive_db" ;;
+    *)           die "Opción desconocida: $1 (usa --weekly o --manual)" ;;
+esac
+outfile="$BACKUP_DIR/${prefix}_${timestamp}.dump"
 
 log "Iniciando pg_dump (-Fc) de '$DB_NAME' como '$DB_USER' -> $outfile"
 
@@ -77,8 +87,13 @@ prune() {  # $1 = glob, $2 = cuántos conservar
         rm -f "$old"
     done
 }
-prune "$BACKUP_DIR/sive_db_*.dump" "$KEEP_DAILY"
-prune "$BACKUP_DIR/weekly_sive_db_*.dump" "$KEEP_WEEKLY"
+# Cada tipo rota solo con los suyos: un respaldo manual no saca a ningún diario ni semanal.
+if [ "${1:-}" = "--manual" ]; then
+    prune "$BACKUP_DIR/manual_sive_db_*.dump" "$KEEP_MANUAL"
+else
+    prune "$BACKUP_DIR/sive_db_*.dump" "$KEEP_DAILY"
+    prune "$BACKUP_DIR/weekly_sive_db_*.dump" "$KEEP_WEEKLY"
+fi
 
 log "Backup finalizado correctamente."
 
