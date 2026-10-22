@@ -1397,6 +1397,28 @@ def generate_report(self, institution_id, category, devices, report_type, time_r
             raise e
 
 
+def _device_filter(devices):
+    """Q de los dispositivos elegidos en Exportar Reportes, o None si no se eligió ninguno.
+
+    El frontend envía el `scada_id` (UUID) de cada dispositivo; se aceptan también ids enteros. Antes se hacía
+    `int(device_id)`, que fallaba con los UUID, y el `except` quitaba el filtro en silencio: el reporte traía todos
+    los dispositivos de la institución.
+    """
+    if not devices:
+        logger.info("Sin filtro de dispositivos: no se eligió ninguno")
+        return None
+    if not isinstance(devices, list):
+        raise ValueError(f"Lista de dispositivos inválida: {devices!r}")
+    ids, scada_ids = [], []
+    for device in devices:
+        valor = str(device).strip() if device is not None else ''
+        if not valor:
+            raise ValueError(f"Dispositivo vacío en la lista: {devices!r}")
+        (ids if valor.isdigit() else scada_ids).append(int(valor) if valor.isdigit() else valor)
+    logger.info(f"Filtro de dispositivos: ids={ids} scada_ids={scada_ids}")
+    return Q(device_id__in=ids) | Q(device__scada_id__in=scada_ids)
+
+
 def generate_electric_meter_report(institution_id, devices, report_type, time_range, start_date, end_date):
     """
     Genera datos para reportes de medidores eléctricos
@@ -1417,20 +1439,10 @@ def generate_electric_meter_report(institution_id, devices, report_type, time_ra
         date__range=(start_date, end_date)
     )
     
-    # Validar y filtrar dispositivos
-    if devices and isinstance(devices, list) and len(devices) > 0:
-        # Asegurar que todos los IDs sean números
-        try:
-            device_ids = [int(device_id) for device_id in devices if device_id is not None]
-            if device_ids:
-                filters &= Q(device_id__in=device_ids)
-                logger.info(f"Filtro de dispositivos aplicado: {device_ids}")
-            else:
-                logger.info("No se aplicó filtro de dispositivos - lista vacía después de conversión")
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Error convirtiendo IDs de dispositivos: {e}. Dispositivos: {devices}")
-    else:
-        logger.info("No se aplicó filtro de dispositivos - parámetro vacío o inválido")
+    # Filtrar por los dispositivos elegidos (scada_id del frontend o id entero)
+    device_filter = _device_filter(devices)
+    if device_filter is not None:
+        filters &= device_filter
     
     # Obtener datos según el tipo de reporte
     if report_type == 'Resumen de Consumo':
@@ -1478,9 +1490,9 @@ def generate_electric_meter_report(institution_id, devices, report_type, time_ra
             
             # Formatear valor
             if isinstance(value, (int, float)):
-                if 'pct' in col or 'factor' in col:
+                if 'pct' in col:
                     row[col.split('__')[-1]] = f"{value:.2f}%"
-                elif 'kw' in col or 'kwh' in col:
+                elif 'kw' in col or 'kwh' in col or 'factor' in col:
                     row[col.split('__')[-1]] = f"{value:.2f}"
                 else:
                     row[col.split('__')[-1]] = value
@@ -1512,20 +1524,10 @@ def generate_inverter_report(institution_id, devices, report_type, time_range, s
         date__range=(start_date, end_date)
     )
     
-    # Validar y filtrar dispositivos
-    if devices and isinstance(devices, list) and len(devices) > 0:
-        # Asegurar que todos los IDs sean números
-        try:
-            device_ids = [int(device_id) for device_id in devices if device_id is not None]
-            if device_ids:
-                filters &= Q(device_id__in=device_ids)
-                logger.info(f"Filtro de dispositivos aplicado: {device_ids}")
-            else:
-                logger.info("No se aplicó filtro de dispositivos - lista vacía después de conversión")
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Error convirtiendo IDs de dispositivos: {e}. Dispositivos: {devices}")
-    else:
-        logger.info("No se aplicó filtro de dispositivos - parámetro vacío o inválido")
+    # Filtrar por los dispositivos elegidos (scada_id del frontend o id entero)
+    device_filter = _device_filter(devices)
+    if device_filter is not None:
+        filters &= device_filter
     
     # Obtener datos según el tipo de reporte
     if report_type == 'Resumen de Generación':
@@ -1606,20 +1608,10 @@ def generate_weather_station_report(institution_id, devices, report_type, time_r
         date__range=(start_date, end_date)
     )
     
-    # Validar y filtrar dispositivos
-    if devices and isinstance(devices, list) and len(devices) > 0:
-        # Asegurar que todos los IDs sean números
-        try:
-            device_ids = [int(device_id) for device_id in devices if device_id is not None]
-            if device_ids:
-                filters &= Q(device_id__in=device_ids)
-                logger.info(f"Filtro de dispositivos aplicado: {device_ids}")
-            else:
-                logger.info("No se aplicó filtro de dispositivos - lista vacía después de conversión")
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Error convirtiendo IDs de dispositivos: {e}. Dispositivos: {devices}")
-    else:
-        logger.info("No se aplicó filtro de dispositivos - parámetro vacío o inválido")
+    # Filtrar por los dispositivos elegidos (scada_id del frontend o id entero)
+    device_filter = _device_filter(devices)
+    if device_filter is not None:
+        filters &= device_filter
     
     # Obtener datos según el tipo de reporte
     if report_type == 'Resumen Climático':
