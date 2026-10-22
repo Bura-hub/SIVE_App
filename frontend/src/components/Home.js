@@ -15,10 +15,14 @@
  *
  * Props (de commonProps en App.js):
  *   - navigateTo(page): cambia de vista dentro de la app.
- *   - isSuperuser: si es false, oculta los módulos restringidos (Datos
- *     Externos y Exportar Reportes), igual que el Sidebar.
+ *   - authToken: sin token la app está en modo invitado.
+ *   - isSuperuser: con sesión y sin permisos de administrador se oculta
+ *     Exportar Reportes, igual que el Sidebar. El invitado sí lo ve (al
+ *     pulsarlo, App.navigateTo despliega el login). Datos Externos es de
+ *     lectura pública y lo ve todo el mundo.
  */
 import React from 'react';
+import { IconSun } from './icons';
 
 // Icono flecha reutilizado en las filas del índice de módulos.
 const ArrowIcon = () => (
@@ -36,9 +40,16 @@ const ArrowIcon = () => (
   </svg>
 );
 
-function Home({ navigateTo, isSuperuser }) {
-  // Definición de los módulos del índice. `restricted` marca los que solo
-  // se muestran a administradores (coherente con el gate del Sidebar).
+// Cifra con dos dígitos, como «05 sedes».
+const twoDigits = (n) => String(n).padStart(2, '0');
+
+const NUMBER_WORDS = ['Cero', 'Un', 'Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis', 'Siete', 'Ocho', 'Nueve', 'Diez'];
+
+function Home({ navigateTo, isSuperuser, authToken }) {
+  const isGuest = !authToken;
+  // Definición de los módulos del índice, en el orden del menú lateral.
+  // `adminOnly` marca los que solo usan administradores (coherente con el
+  // gate del Sidebar: hoy solo Exportar Reportes).
   const modules = [
     {
       page: 'dashboard',
@@ -113,11 +124,23 @@ function Home({ navigateTo, isSuperuser }) {
       ),
     },
     {
+      page: 'solarIndicators',
+      color: '#d97706',
+      name: 'Indicadores Solares',
+      sub: 'Desempeño FV',
+      icon: <IconSun aria-hidden="true" />,
+      desc: (
+        <>
+          Desempeño del <b>sistema fotovoltaico</b> de cada sede: producción frente al diseño, cobertura de la
+          demanda, ahorro e impacto ambiental.
+        </>
+      ),
+    },
+    {
       page: 'externalEnergy',
       color: '#0d9488',
       name: 'Datos Externos',
       sub: 'Mercado XM',
-      restricted: true,
       icon: (
         <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -129,7 +152,7 @@ function Home({ navigateTo, isSuperuser }) {
       ),
       desc: (
         <>
-          Mercado eléctrico <b>XM</b>: precios de bolsa, ahorros, demanda del sistema y emisiones asociadas.
+          Mercado eléctrico <b>XM</b>: precios de bolsa, generación y demanda del sistema, intercambios internacionales y emisiones asociadas.
         </>
       ),
     },
@@ -138,7 +161,7 @@ function Home({ navigateTo, isSuperuser }) {
       color: '#7c3aed',
       name: 'Exportar Reportes',
       sub: 'Entregables',
-      restricted: true,
+      adminOnly: true,
       icon: (
         <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -156,6 +179,12 @@ function Home({ navigateTo, isSuperuser }) {
       ),
     },
   ];
+
+  // Mismo criterio que el Sidebar: con sesión y sin permisos no se ve lo de
+  // administradores; el invitado sí lo ve y al pulsarlo se despliega el login.
+  const visibleModules = modules.filter((mod) => !mod.adminOnly || isSuperuser || isGuest);
+  const moduleCount = visibleModules.length;
+  const moduleWord = NUMBER_WORDS[moduleCount] || String(moduleCount);
 
   // Permite activar las filas de módulo (divs) también con teclado.
   const handleRowKey = (event, page) => {
@@ -340,7 +369,7 @@ function Home({ navigateTo, isSuperuser }) {
           </div>
           <div className="hc-stat">
             <b>
-              <em>06</em> módulos
+              <em>{twoDigits(moduleCount)}</em> módulos
             </b>
             <span>Analítica de energía y clima</span>
           </div>
@@ -403,7 +432,7 @@ function Home({ navigateTo, isSuperuser }) {
           <div className="c-shead">
             <div>
               <span className="c-kick b">La plataforma</span>
-              <h2 className="c-htitle">Seis módulos, una lectura integral</h2>
+              <h2 className="c-htitle">{moduleWord} módulos, una lectura integral</h2>
             </div>
             <p className="aside">
               Cada módulo conserva el color con el que vive en el menú lateral, para orientarte sin fricción
@@ -419,9 +448,7 @@ function Home({ navigateTo, isSuperuser }) {
               <span></span>
             </div>
 
-            {modules
-              .filter((mod) => !mod.restricted || isSuperuser)
-              .map((mod) => (
+            {visibleModules.map((mod) => (
                 <div
                   key={mod.page}
                   className="c-row"

@@ -48,6 +48,8 @@ const DeviceDateRangeFilters = ({
   allOptionLabel,
   accentColor = 'green',
   onFiltersChange,
+  onInstitutionNameChange,
+  onDevicesLoaded,
 }) => {
   const accent = ACCENT_CLASSES[accentColor] || ACCENT_CLASSES.green;
 
@@ -88,9 +90,19 @@ const DeviceDateRangeFilters = ({
     } else {
       setDevices([]);
       setSelectedDevice('');
+      if (onDevicesLoaded) onDevicesLoaded(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInstitution]);
+
+  // Avisar al padre del nombre de la institución elegida (p. ej. para el banner de
+  // disponibilidad). null mientras no haya institución o no se conozca su nombre.
+  useEffect(() => {
+    if (!onInstitutionNameChange) return;
+    const inst = institutions.find((i) => String(i.id) === String(selectedInstitution));
+    onInstitutionNameChange(inst ? inst.name : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedInstitution, institutions]);
 
   // Tras cargar dispositivos de una institución recién elegida, enfoca el select.
   useEffect(() => {
@@ -192,6 +204,7 @@ const DeviceDateRangeFilters = ({
       const data = await response.json();
       const parsed = Array.isArray(data) ? data : (data.devices || data.results || []);
       setDevices(parsed);
+      if (onDevicesLoaded) onDevicesLoaded(parsed);
       // Si solo hay un dispositivo, seleccionarlo automáticamente.
       if (parsed.length === 1) {
         setSelectedDevice(parsed[0][deviceIdField]);
@@ -199,6 +212,8 @@ const DeviceDateRangeFilters = ({
     } catch (error) {
       console.error('Error al cargar dispositivos:', error);
       setDevices([]);
+      // Lista desconocida (no «cero dispositivos»): el padre no debe inventar un total.
+      if (onDevicesLoaded) onDevicesLoaded(null);
     } finally {
       setLoading(false);
     }

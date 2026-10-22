@@ -31,6 +31,40 @@ import { DASHBOARD_KPI_INFO } from '../utils/kpiInfo';
 
 // Importaciones desde Chart.js y el plugin de zoom
 
+// Sentido de cada indicador al comparar con el mes anterior: 1 = subir es bueno,
+// -1 = subir es malo, 0 = neutro (el clima no es ni bueno ni malo).
+export const CHANGE_DIRECTION = {
+  totalConsumption: -1,          // más demanda: malo
+  totalGeneration: 1,            // más generación: bueno
+  averageInstantaneousPower: 1,  // potencia media de la flota FV: generación
+  energyBalance: 1,              // balance generación − demanda: mejor si sube
+  avgDailyTemp: 0,
+  relativeHumidity: 0,
+  windSpeed: 0,
+  irradiance: 0,
+};
+
+const CHANGE_CLASSES = {
+  good: 'text-green-700 bg-green-100',
+  bad: 'text-red-700 bg-red-100',
+  neutral: 'text-gray-600 bg-gray-100',
+};
+
+/**
+ * Clases del distintivo de cambio porcentual («+5.23% vs mes pasado»). El color depende
+ * del indicador (CHANGE_DIRECTION) y del signo del porcentaje; 0 % o un indicador sin
+ * sentido definido salen en neutro.
+ */
+export function changeBadgeClass(key, change) {
+  const match = typeof change === 'string' ? change.match(/([+\-\u2212]?)(\d+(?:[.,]\d+)?)\s*%/) : null;
+  if (!match) return CHANGE_CLASSES.neutral;
+  const magnitude = parseFloat(match[2].replace(',', '.'));
+  const direction = CHANGE_DIRECTION[key] || 0;
+  if (!magnitude || direction === 0) return CHANGE_CLASSES.neutral;
+  const sign = match[1] === '-' || match[1] === '\u2212' ? -1 : 1;
+  return sign * direction > 0 ? CHANGE_CLASSES.good : CHANGE_CLASSES.bad;
+}
+
 // Estados posibles para las tareas
 export const TaskStatus = {
   IDLE: 'idle',
@@ -1074,13 +1108,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                             </span>
                           </div>
                           {item.change && item.change.includes('%') && (
-                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                              item.change.includes('+') 
-                                ? 'text-red-700 bg-red-100' 
-                                : item.change.includes('-') 
-                                ? 'text-green-700 bg-green-100' 
-                                : 'text-gray-600 bg-gray-100'
-                            }`}>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${changeBadgeClass(key, item.change)}`}>
                               {item.change.match(/[+-]?\d+\.?\d*%/)?.[0] || item.change}
                             </span>
                           )}

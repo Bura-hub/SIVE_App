@@ -5,6 +5,12 @@ import TransitionOverlay from './TransitionOverlay';
 import { fetchWithAuth, handleApiResponse } from '../utils/apiConfig';
 import { buildApiUrl, getEndpoint } from '../config';
 
+// Mensaje de «¿Olvidó su contraseña?»: solo el contacto institucional (decisión del autor),
+// sin correos personales, teléfono ni horario.
+export const PASSWORD_RECOVERY_MESSAGE =
+    'Para recuperar tu contraseña, escribe a wilachic@udenar.edu.co (Grupo de Investigación en ' +
+    'Ingeniería Eléctrica y Electrónica, GIIEE, Universidad de Nariño).';
+
 // onContinueAsGuest (opcional): vuelve a la app en modo invitado sin iniciar sesión.
 // reason (opcional): por qué se pidió iniciar sesión (p. ej. «para exportar reportes»).
 function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
@@ -308,14 +314,9 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
         }
     };
     
-    // Función para contactar soporte (olvidó contraseña)
+    // Función para contactar soporte (olvidó contraseña): solo el contacto institucional.
     const contactSupport = () => {
-        const supportEmail = 'bura.vent@gmail.com';
-        const supportPhone = '+57 (312) 756-0677';
-        
-        const message = `Para recuperar tu contraseña, contacta a nuestro equipo de soporte:\n\n📧 Email: ${supportEmail}\n📞 Teléfono: ${supportPhone}\n\nHorario de atención: Lunes a Viernes 8:00 AM - 6:00 PM`;
-        
-        alert(message);
+        alert(PASSWORD_RECOVERY_MESSAGE);
     };
 
     const handleSubmit = async (event) => {

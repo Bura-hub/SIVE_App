@@ -1,4 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+
+vi.mock('./KPI/ChartCard', () => ({ ChartCard: ({ title }) => <div data-testid="grafica">{title}</div> }));
+
+import WeatherStationDetails from './WeatherStationDetails';
 import { fmtOrNA, valueOrNull, pvPowerFromRow, stationPrWarning } from './WeatherStationDetails';
 
 // Corrección de octubre de 2026: null = no medido -> «No disponible»; potencia FV sin
@@ -41,11 +46,49 @@ describe('stationPrWarning (C16)', () => {
 
 describe('WeatherStationDetails, render', () => {
   it('monta sin errores', async () => {
-    const { render, waitFor } = await import('@testing-library/react');
-    const { default: WeatherStationDetails } = await import('./WeatherStationDetails');
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) }));
     const { container } = render(<WeatherStationDetails authToken="t" onLogout={() => {}} username="u"
       isSuperuser={false} navigateTo={() => {}} isSidebarMinimized={false} setIsSidebarMinimized={() => {}} />);
     await waitFor(() => expect(container.querySelector('header')).not.toBeNull());
+  });
+});
+
+const mockFetchWeather = () => {
+  global.fetch = vi.fn((url) => {
+    const u = String(url);
+    const body = u.includes('/api/institutions/') ? [{ id: 5, name: 'HUDN' }]
+      : u.includes('/api/weather-stations/list/') ? { devices: [{ id: 11, name: 'Estación HUDN' }] }
+      : u.includes('/api/data-availability/') ? {
+        daily_monthly: { min_date: '2025-04-04', max_date: '2026-10-20' }, last_updated: null }
+      : u.includes('/api/weather-station-indicators/') ? { results: [
+        { date: '2026-10-02', time_range: 'daily', institution_name: 'HUDN', device_name: 'Estación HUDN',
+          avg_temperature_c: null, daily_irradiance_kwh_m2: 4.1, daily_hsp_hours: 4.1,
+          avg_wind_speed_kmh: 5.0, avg_humidity_pct: 70 },
+      ] }
+      : { results: [] };
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body),
+      text: () => Promise.resolve(JSON.stringify(body)) });
+  });
+};
+
+describe('WeatherStationDetails con una sede elegida', () => {
+  it('temperatura sin dato: «No disponible» sin «°C», y el banner nombra la sede', async () => {
+    mockFetchWeather();
+    render(<WeatherStationDetails authToken={null} onLogout={() => {}} username="" isSuperuser={false}
+      navigateTo={() => {}} isSidebarMinimized={false} setIsSidebarMinimized={() => {}} />);
+    const select = await screen.findByLabelText('Institución');
+    await waitFor(() => expect(within(select).getByText('HUDN')).toBeInTheDocument());
+    fireEvent.change(select, { target: { value: '5' } });
+
+    const temperatureCard = () => screen.queryAllByText('Temperatura Ambiente')
+      .map((h) => h.closest('div.rounded-xl'))
+      .find((c) => c && within(c).queryByText('No disponible'));
+    await waitFor(() => expect(temperatureCard()).toBeTruthy());
+    const card = temperatureCard();
+    expect(within(card).queryByText('°C')).toBeNull();
+
+    await waitFor(() => expect(screen.getByText(/HUDN · estaciones meteorológicas/)).toBeInTheDocument());
+    expect(screen.queryByText(/Esta sede/)).toBeNull();
+    expect(screen.queryByText(/10 días/)).toBeNull();
   });
 });

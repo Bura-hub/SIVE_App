@@ -7,8 +7,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 export const ENDPOINTS = {
   dashboard: {
     kpi: '/api/dashboard/summary/',
-    charts: '/api/dashboard/chart-data/',
-    tasks: '/api/dashboard/tasks/'
+    charts: '/api/dashboard/chart-data/'
   },
   dataAvailability: '/api/data-availability/',
   electrical: {
@@ -23,18 +22,12 @@ export const ENDPOINTS = {
     calculate: '/api/electric-meters/calculate-new/',
   },
   inverters: {
-    status: '/api/inverters/status/',
-    generation: '/api/inverters/generation/',
-    details: '/api/inverters/details/',
     indicators: '/api/inverter-indicators/',
     chartData: '/api/inverter-chart-data/',
     calculate: '/api/inverters/calculate/',
     list: '/api/inverters/list/'
   },
   weather: {
-    current: '/api/weather/current/',
-    forecast: '/api/weather/forecast/',
-    details: '/api/weather/details/',
     indicators: '/api/weather-station-indicators/',
     chartData: '/api/weather-station-chart-data/',
     calculate: '/api/weather-stations/calculate/',

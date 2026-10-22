@@ -314,6 +314,8 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
   // Estados consolidados
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Nombre de la institución elegida (lo reporta DeviceDateRangeFilters) para el banner.
+  const [institutionName, setInstitutionName] = useState(null);
   const [showTransition, setShowTransition] = useState(false);
   const [transitionType, setTransitionType] = useState('info');
   const [transitionMessage, setTransitionMessage] = useState('');
@@ -382,7 +384,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
       temperature: {
         title: "Temperatura Ambiente",
         value: fmtOrNA(latestData.avg_temperature_c, 1),
-        unit: "°C",
+        unit: isNum(latestData.avg_temperature_c) ? "°C" : "",
         change: "Promedio del período",
         status: "normal",
         icon: initialKpiData.temperature.icon,
@@ -1090,6 +1092,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
             <DataAvailabilityBanner
               authToken={authToken}
               institutionId={filters.institutionId}
+              institutionName={institutionName}
               category="weatherStation"
             />
             {stationPrWarning(weatherData?.results) && (
@@ -1105,19 +1108,9 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
               allOptionLabel="Todas las estaciones"
               accentColor="orange"
               onFiltersChange={handleFilterChange}
+              onInstitutionNameChange={setInstitutionName}
             />
 
-            {/* Mensaje informativo sobre fechas por defecto */}
-            {filters.institutionId && !filters.startDate && !filters.endDate && (
-              <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                <div className="flex items-center text-sm text-orange-700">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Mostrando datos de los últimos 10 días. Selecciona fechas específicas para personalizar el rango.</span>
-                </div>
-        </div>
-            )}
 
             {/* Estado de carga */}
             {weatherLoading && (
@@ -1455,15 +1448,6 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                       <div>
                         <h3 className="text-base lg:text-lg xl:text-xl font-bold text-gray-800">Indicadores Meteorológicos Detallados</h3>
                         <p className="text-gray-600 mt-1 text-sm">Datos históricos y análisis de tendencias climáticas</p>
-                        {/* Indicador de fechas por defecto */}
-                        {filters.institutionId && !filters.startDate && !filters.endDate && (
-                          <div className="mt-2 inline-flex items-center px-2 py-1 bg-orange-50 border border-orange-200 rounded-full text-xs text-orange-700">
-                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Últimos 10 días
-                          </div>
-                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">

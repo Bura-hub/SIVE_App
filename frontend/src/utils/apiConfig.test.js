@@ -1,4 +1,4 @@
-import { getDefaultFetchOptions, handleApiResponse, REQUIRE_LOGIN_EVENT, requestLogin } from './apiConfig';
+import { ENDPOINTS, getDefaultFetchOptions, handleApiResponse, REQUIRE_LOGIN_EVENT, requestLogin } from './apiConfig';
 
 beforeEach(() => {
   localStorage.clear();
@@ -47,4 +47,18 @@ test('requestLogin emite el evento con el motivo', () => {
   window.removeEventListener(REQUIRE_LOGIN_EVENT, handler);
   expect(handler).toHaveBeenCalledTimes(1);
   expect(handler.mock.calls[0][0].detail.reason).toBe('motivo');
+});
+
+test('ENDPOINTS no conserva rutas sin backend', () => {
+  expect(ENDPOINTS.dashboard).not.toHaveProperty('tasks');
+  for (const key of ['status', 'generation', 'details']) {
+    expect(ENDPOINTS.inverters).not.toHaveProperty(key);
+  }
+  for (const key of ['current', 'forecast', 'details']) {
+    expect(ENDPOINTS.weather).not.toHaveProperty(key);
+  }
+  // Las que sí se usan siguen ahí.
+  expect(ENDPOINTS.inverters.list).toBe('/api/inverters/list/');
+  expect(ENDPOINTS.weather.stations).toBe('/api/weather-stations/list/');
+  expect(ENDPOINTS.dashboard.kpi).toBe('/api/dashboard/summary/');
 });

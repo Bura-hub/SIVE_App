@@ -119,6 +119,32 @@ export const PR_HOURLY_UNAVAILABLE =
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const mean = (values) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null);
 
+/**
+ * Inversores con registros en el rango. Con «Todos los inversores» el backend consolida
+ * cada periodo en una sola fila con device_name='Todos', así que contar nombres distintos
+ * en `results` da siempre 1. El conteo sale de `summary.devices` (nombres distintos del
+ * queryset antes de consolidar); si no viene, de las filas por dispositivo.
+ */
+export function countActiveInverters(data) {
+  if (!data) return 0;
+  const summaryDevices = data.summary && Array.isArray(data.summary.devices) ? data.summary.devices : null;
+  if (summaryDevices) {
+    return new Set(summaryDevices.map((d) => d && d.device__name).filter(Boolean)).size;
+  }
+  const results = Array.isArray(data.results) ? data.results : [];
+  return new Set(
+    results
+      .map((item) => item.device_id || item.device || item.device_name)
+      .filter((id) => id && id !== 'Todos')
+  ).size;
+}
+
+/** Texto de la línea secundaria de «Inversores Activos». */
+export function activeInvertersChangeText(activeCount, totalCount) {
+  if (totalCount === null || totalCount === undefined) return 'Con registros en el rango';
+  return `de ${totalCount} en la institución`;
+}
+
 export function summarizeInverterResults(results, timeRange) {
   const rows = Array.isArray(results) ? results : [];
   const hourly = timeRange === 'hourly';
@@ -183,7 +209,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
   const activeIcon = <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-cpu" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><path d="M9 1v3"></path><path d="M15 1v3"></path><path d="M9 21v3"></path><path d="M15 21v3"></path><path d="M1 9h3"></path><path d="M1 15h3"></path><path d="M21 9h3"></path><path d="M21 15h3"></path></svg>;
 
   // Función para calcular KPIs dinámicamente basándose en los datos reales
-  const calculateDynamicKPIs = useCallback((data, timeRange) => {
+  const calculateDynamicKPIs = useCallback((data, timeRange, totalInverters = null) => {
     if (!data || !data.results || data.results.length === 0) {
       return {
         totalGeneration: { 
@@ -282,9 +308,8 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     // Generación del rango (kWh -> MWh).
     const totalGenerationMWh = summary.energyKWh / 1000;
 
-    // Inversores distintos con registros en el rango.
-    const uniqueInverters = new Set(results.map(item => item.device_id || item.device_name).filter(id => id));
-    const activeInvertersCount = uniqueInverters.size;
+    // Inversores distintos con registros en el rango (ver countActiveInverters).
+    const activeInvertersCount = countActiveInverters(data);
 
     const maxPowerKW = summary.maxPowerKW;
     const averagePowerFactor = summary.avgPowerFactor;
@@ -329,7 +354,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         title: "Inversores Activos", 
         value: activeInvertersCount.toString(), 
         unit: "", 
-        change: `de ${activeInvertersCount} total`, 
+        change: activeInvertersChangeText(activeInvertersCount, totalInverters),
         status: activeInvertersCount > 0 ? "positivo" : "normal", 
         icon: activeIcon,
         color: "text-purple-700"
@@ -418,6 +443,10 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
 
   // Estado para los KPIs dinámicos
   const [kpiData, setKpiData] = useState({});
+  // Inversores de la institución (GET /api/inverters/list/, el mismo que llena el
+  // selector) y su nombre, que reportan los filtros. null = aún no se conoce.
+  const [institutionInverters, setInstitutionInverters] = useState(null);
+  const [institutionName, setInstitutionName] = useState(null);
 
   // Info-al-click de cada tarjeta (centralizada en utils/kpiInfo.js).
   const getKpiDetailedInfo = (kpiKey) => INVERTER_KPI_INFO[kpiKey] || null;
@@ -502,8 +531,12 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
 
   // Recalcular KPIs cuando cambian los datos (null → {results:[]} al montar)
   useEffect(() => {
-    setKpiData(calculateDynamicKPIs(inverterData || { results: [] }, filters.timeRange));
-  }, [inverterData, calculateDynamicKPIs, filters.timeRange]);
+    setKpiData(calculateDynamicKPIs(
+      inverterData || { results: [] },
+      filters.timeRange,
+      institutionInverters ? institutionInverters.length : null,
+    ));
+  }, [inverterData, calculateDynamicKPIs, filters.timeRange, institutionInverters]);
 
   // Función para mostrar transición
 
@@ -972,6 +1005,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
             <DataAvailabilityBanner
               authToken={authToken}
               institutionId={filters.institutionId}
+              institutionName={institutionName}
               category="inverter"
             />
             <DeviceDateRangeFilters
@@ -982,19 +1016,10 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
               allOptionLabel="Todos los inversores"
               accentColor="red"
               onFiltersChange={handleFiltersChange}
+              onInstitutionNameChange={setInstitutionName}
+              onDevicesLoaded={setInstitutionInverters}
             />
 
-            {/* Mensaje informativo sobre fechas por defecto */}
-            {filters.institutionId && !filters.startDate && !filters.endDate && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center text-sm text-blue-700">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Mostrando datos de los últimos 10 días. Selecciona fechas específicas para personalizar el rango.</span>
-                </div>
-              </div>
-            )}
 
             {inverterLoading && (
               <div className="flex items-center justify-center py-8 lg:py-12 transition-opacity duration-300 ease-in-out">
@@ -1195,15 +1220,6 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                       <div>
                         <h3 className="text-base lg:text-lg xl:text-xl font-bold text-gray-800">Indicadores de Inversores Detallados</h3>
                         <p className="text-gray-600 mt-1 text-sm">Datos históricos y análisis de tendencias</p>
-                        {/* Indicador de fechas por defecto */}
-                        {filters.institutionId && !filters.startDate && !filters.endDate && (
-                          <div className="mt-2 inline-flex items-center px-2 py-1 bg-red-50 border border-red-200 rounded-full text-xs text-red-700">
-                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Últimos 10 días
-                          </div>
-                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">

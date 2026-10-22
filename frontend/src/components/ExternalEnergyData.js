@@ -10,7 +10,6 @@ const ExternalEnergyData = () => {
   const [loading, setLoading] = useState(true);
   const [energyData, setEnergyData] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
-  const [savingsData, setSavingsData] = useState(null);
   const [error, setError] = useState(null);
   const [xmApiStatus, setXmApiStatus] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
@@ -41,10 +40,10 @@ const ExternalEnergyData = () => {
         return response.ok ? await response.json() : null;
       };
 
-      // Lanzar las 7 peticiones en paralelo (antes eran secuenciales)
+      // Lanzar las 6 peticiones en paralelo. El ahorro (/savings/) ya no se pide:
+      // la pantalla no lo muestra y su fallo tumbaba la vista entera.
       const [
         pricesResult,
-        savingsResult,
         generationResult,
         demandResult,
         emissionsResult,
@@ -52,7 +51,6 @@ const ExternalEnergyData = () => {
         importsResult
       ] = await Promise.allSettled([
         fetchSectionJson('/api/external-energy/prices/'),
-        fetchSectionJson('/api/external-energy/savings/'),
         fetchSectionJson('/api/external-energy/generation/'),
         fetchSectionJson('/api/external-energy/demand/'),
         fetchSectionJson('/api/external-energy/emissions/'),
@@ -60,21 +58,13 @@ const ExternalEnergyData = () => {
         fetchSectionJson('/api/external-energy/imports/')
       ]);
 
-      // Precios y ahorro son obligatorios: si fallan, toda la vista pasa a estado de error
+      // Los precios son obligatorios: si fallan, toda la vista pasa a estado de error
       if (pricesResult.status === 'rejected') {
         throw pricesResult.reason;
       }
       const pricesData = pricesResult.value;
       if (pricesData === null) {
         throw new Error('Error al obtener precios de energía');
-      }
-
-      if (savingsResult.status === 'rejected') {
-        throw savingsResult.reason;
-      }
-      const savingsData = savingsResult.value;
-      if (savingsData === null) {
-        throw new Error('Error al obtener datos de ahorro');
       }
 
       // Secciones opcionales: si alguna falla queda en null y las demás renderizan igual
@@ -110,7 +100,6 @@ const ExternalEnergyData = () => {
       
       setEnergyData(combinedData);
       setPriceHistory(pricesData.price_history || []);
-      setSavingsData(savingsData);
       setLastUpdate(new Date());
       setError(null);
       
@@ -144,12 +133,6 @@ const ExternalEnergyData = () => {
       return 'N/A';
     }
     return `${Number(value).toFixed(2)} kWh`;
-  };
-
-  const calculateSavingsPercentage = (generated, consumed, price) => {
-    if (consumed === 0 || !generated || !consumed || !price) return 0;
-    const savings = (generated * price) / (consumed * price) * 100;
-    return Math.min(savings, 100);
   };
 
   // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación

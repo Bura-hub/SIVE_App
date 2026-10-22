@@ -59,3 +59,34 @@ test('muestra la ayuda para elegir institución cuando no hay ninguna selecciona
   await screen.findByLabelText(/rango de tiempo/i);
   expect(screen.getByText(/comienza eligiendo la institución/i)).toBeInTheDocument();
 });
+
+test('informa al padre del nombre de la institución y de su lista de dispositivos', async () => {
+  const onInstitutionNameChange = vi.fn();
+  const onDevicesLoaded = vi.fn();
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}}
+    onInstitutionNameChange={onInstitutionNameChange} onDevicesLoaded={onDevicesLoaded} />);
+  const select = await screen.findByLabelText('Institución');
+  await waitFor(() => expect(screen.getByRole('option', { name: 'Cesmag' })).toBeInTheDocument());
+  fireEvent.change(select, { target: { value: '1' } });
+  await waitFor(() => expect(onInstitutionNameChange).toHaveBeenLastCalledWith('Cesmag'));
+  await waitFor(() => expect(onDevicesLoaded).toHaveBeenLastCalledWith([{ scada_id: 'M1', name: 'Medidor 1' }]));
+
+  fireEvent.change(select, { target: { value: '' } });
+  await waitFor(() => expect(onInstitutionNameChange).toHaveBeenLastCalledWith(null));
+  expect(onDevicesLoaded).toHaveBeenLastCalledWith(null);
+});
+
+test('si falla la lista de dispositivos, el total queda desconocido (null), no en cero', async () => {
+  global.fetch = vi.fn((url) => (String(url).includes('/institutions/')
+    ? Promise.resolve({ ok: true, json: () => Promise.resolve([{ id: 1, name: 'Cesmag' }]) })
+    : Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) })));
+  const onDevicesLoaded = vi.fn();
+  const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}} onDevicesLoaded={onDevicesLoaded} />);
+  const select = await screen.findByLabelText('Institución');
+  await waitFor(() => expect(screen.getByRole('option', { name: 'Cesmag' })).toBeInTheDocument());
+  fireEvent.change(select, { target: { value: '1' } });
+  await waitFor(() => expect(onDevicesLoaded).toHaveBeenCalled());
+  expect(onDevicesLoaded).toHaveBeenLastCalledWith(null);
+  spy.mockRestore();
+});
