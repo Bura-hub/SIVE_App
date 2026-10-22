@@ -90,3 +90,14 @@ test('si falla la lista de dispositivos, el total queda desconocido (null), no e
   expect(onDevicesLoaded).toHaveBeenLastCalledWith(null);
   spy.mockRestore();
 });
+
+test('en vista mensual el selector no deja pasar de 12 meses (tope de 366 días de la API)', async () => {
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}} />);
+  const rangeSelect = await screen.findByLabelText(/rango de tiempo/i);
+  fireEvent.change(rangeSelect, { target: { value: 'monthly' } });
+  fireEvent.click(await screen.findByLabelText('Seleccionar rango de meses'));
+  fireEvent.click(screen.getByRole('button', { name: 'Ene' }));       // enero del año a la vista
+  expect(screen.getByRole('button', { name: 'Dic' })).toBeEnabled();  // 12 meses
+  fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  expect(screen.getByRole('button', { name: 'Ene' })).toBeDisabled(); // 13 meses
+});

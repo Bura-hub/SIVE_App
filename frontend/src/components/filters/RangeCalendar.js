@@ -14,7 +14,8 @@ import { createPortal } from 'react-dom';
  *      datetime -> 'YYYY-MM-DDTHH:MM'
  *  - onChange(startValue, endValue): SOLO se llama cuando el rango queda completo
  *  - accentColor: 'green' | 'red' | 'orange'
- *  - maxRangeDays: (opcional) máximo de días permitidos tras elegir el inicio
+ *  - maxRangeDays: (opcional) máximo de días permitidos tras elegir el inicio. En modo month
+ *      cuenta hasta el último día del mes de fin, que es la fecha que se pide al servidor.
  */
 
 // Nombres en español (definidos localmente; dateUtils no los exporta).
@@ -211,13 +212,19 @@ const RangeCalendar = ({
     if (maxRangeDays && selecting === 'end' && rangeStart) {
       const max = new Date(rangeStart);
       max.setDate(max.getDate() + maxRangeDays);
-      return dayKey(date) < dayKey(rangeStart) || dayKey(date) > dayKey(max);
+      if (mode === 'month') {
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+        return dayKey(lastDay) > dayKey(max);
+      }
+      // Solo el tope superior: una fecha anterior al inicio sigue valiendo como nuevo inicio.
+      return dayKey(date) > dayKey(max);
     }
     return false;
   };
 
   // Selección de una fecha (día o mes) según el patrón secuencial tipo Avianca.
   const handlePick = (date) => {
+    if (isDisabled(date)) return;
     if (selecting === 'start' || !rangeStart) {
       setRangeStart(date);
       setRangeEnd(null);
@@ -313,7 +320,8 @@ const RangeCalendar = ({
     const between = rangeStart && rangeEnd &&
       monthKey(d) > monthKey(rangeStart) && monthKey(d) < monthKey(rangeEnd);
     let cls = 'py-2 text-sm rounded-lg transition-colors ';
-    if (isStart || isEnd) cls += `${accent.sel} font-semibold`;
+    if (isDisabled(d)) cls += 'opacity-30 cursor-not-allowed text-gray-400';
+    else if (isStart || isEnd) cls += `${accent.sel} font-semibold`;
     else if (between) cls += `${accent.range} text-gray-800`;
     else cls += `${accent.hover} text-gray-700`;
     return cls;
@@ -393,6 +401,7 @@ const RangeCalendar = ({
                   <button
                     key={name}
                     type="button"
+                    disabled={isDisabled(d)}
                     onClick={() => handlePick(d)}
                     className={monthCellClass(d)}
                   >

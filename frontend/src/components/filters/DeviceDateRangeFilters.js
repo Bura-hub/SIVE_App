@@ -9,6 +9,12 @@ import {
 } from '../../utils/dateUtils';
 import RangeCalendar from './RangeCalendar';
 
+// Topes de la API de indicadores (indicators/services/date_ranges.py), en días tras el inicio:
+// diario y mensual, (fin - inicio).days <= 366; horario, (fin - inicio).days + 1 <= 31.
+// Sin ellos el selector dejaba elegir rangos que el servidor rechaza con 400.
+const MAX_RANGE_DAYS = 366;
+const HOURLY_MAX_RANGE_DAYS = 30;
+
 // Mapa fijo de clases Tailwind por color de acento. NO concatenar cadenas
 // dinámicas: Tailwind solo detecta clases presentes literalmente en el código.
 const ACCENT_CLASSES = {
@@ -299,6 +305,7 @@ const DeviceDateRangeFilters = ({
             endValue={endMonth}
             onChange={(s, e) => { setStartMonth(s); setEndMonth(e); }}
             accentColor={accentColor}
+            maxRangeDays={MAX_RANGE_DAYS}
           />
         </div>
       ) : timeRange === 'hourly' ? (
@@ -310,7 +317,7 @@ const DeviceDateRangeFilters = ({
             endValue={endDatetime}
             onChange={(s, e) => { setStartDatetime(s); setEndDatetime(e); }}
             accentColor={accentColor}
-            maxRangeDays={31}
+            maxRangeDays={HOURLY_MAX_RANGE_DAYS}
           />
         </div>
       ) : (
@@ -322,6 +329,7 @@ const DeviceDateRangeFilters = ({
             endValue={endDate}
             onChange={(s, e) => { setStartDate(s); setEndDate(e); }}
             accentColor={accentColor}
+            maxRangeDays={MAX_RANGE_DAYS}
           />
         </div>
       )}

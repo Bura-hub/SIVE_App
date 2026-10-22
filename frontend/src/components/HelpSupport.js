@@ -171,7 +171,7 @@ function HelpSupport({ onClose }) {
                 },
                 {
                     subtitle: 'Filtros y rango de fechas',
-                    text: 'En Medidores, Inversores, Estaciones e Indicadores Solares elige la institución, el dispositivo y el rango de fechas. La vista horaria admite hasta 31 días. El aviso «Datos disponibles» indica desde y hasta cuándo hay mediciones para la selección.',
+                    text: 'En Medidores, Inversores, Estaciones e Indicadores Solares elige la institución, el dispositivo y el rango de fechas. La vista horaria admite hasta 31 días, y la diaria y la mensual, hasta un año (doce meses). El aviso «Datos disponibles» indica desde y hasta cuándo hay mediciones para la selección.',
                     icon: IconBolt
                 },
                 {
