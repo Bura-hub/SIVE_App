@@ -306,6 +306,7 @@ const DeviceDateRangeFilters = ({
             onChange={(s, e) => { setStartMonth(s); setEndMonth(e); }}
             accentColor={accentColor}
             maxRangeDays={MAX_RANGE_DAYS}
+            maxRangeLabel="Rango máximo de 12 meses."
           />
         </div>
       ) : timeRange === 'hourly' ? (
@@ -318,6 +319,7 @@ const DeviceDateRangeFilters = ({
             onChange={(s, e) => { setStartDatetime(s); setEndDatetime(e); }}
             accentColor={accentColor}
             maxRangeDays={HOURLY_MAX_RANGE_DAYS}
+            maxRangeLabel="Rango máximo de 31 días."
           />
         </div>
       ) : (
@@ -330,6 +332,7 @@ const DeviceDateRangeFilters = ({
             onChange={(s, e) => { setStartDate(s); setEndDate(e); }}
             accentColor={accentColor}
             maxRangeDays={MAX_RANGE_DAYS}
+            maxRangeLabel="Rango máximo de un año."
           />
         </div>
       )}

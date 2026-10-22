@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom';
  *  - accentColor: 'green' | 'red' | 'orange'
  *  - maxRangeDays: (opcional) máximo de días permitidos tras elegir el inicio. En modo month
  *      cuenta hasta el último día del mes de fin, que es la fecha que se pide al servidor.
+ *  - maxRangeLabel: (opcional) texto del pie para ese tope; por defecto «Rango máximo de N días.»
  */
 
 // Nombres en español (definidos localmente; dateUtils no los exporta).
@@ -117,6 +118,7 @@ const RangeCalendar = ({
   onChange,
   accentColor = 'green',
   maxRangeDays,
+  maxRangeLabel,
 }) => {
   const accent = ACCENT[accentColor] || ACCENT.green;
 
@@ -489,7 +491,7 @@ const RangeCalendar = ({
 
           {maxRangeDays && (
             <p className={`mt-3 text-xs ${accent.text}`}>
-              Rango máximo de {maxRangeDays} días.
+              {maxRangeLabel || `Rango máximo de ${maxRangeDays} días.`}
             </p>
           )}
         </div>,

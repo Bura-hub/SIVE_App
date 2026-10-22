@@ -101,3 +101,18 @@ test('en vista mensual el selector no deja pasar de 12 meses (tope de 366 días 
   fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   expect(screen.getByRole('button', { name: 'Ene' })).toBeDisabled(); // 13 meses
 });
+
+test('el pie del calendario dice el tope de cada vista: 31 días, un año y 12 meses', async () => {
+  render(<DeviceDateRangeFilters {...baseProps} onFiltersChange={() => {}} />);
+  const rangeSelect = await screen.findByLabelText(/rango de tiempo/i);
+  fireEvent.click(screen.getByLabelText('Seleccionar rango de fechas'));
+  expect(screen.getByText('Rango máximo de un año.')).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  fireEvent.change(rangeSelect, { target: { value: 'hourly' } });
+  fireEvent.click(await screen.findByLabelText('Seleccionar rango de fechas'));
+  expect(screen.getByText('Rango máximo de 31 días.')).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  fireEvent.change(rangeSelect, { target: { value: 'monthly' } });
+  fireEvent.click(await screen.findByLabelText('Seleccionar rango de meses'));
+  expect(screen.getByText('Rango máximo de 12 meses.')).toBeInTheDocument();
+});
