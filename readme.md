@@ -349,12 +349,15 @@ docker-compose -f docker-compose.prod.yml restart db
   medidores integrados de la potencia (C17–C20); inversor con FP y frecuencia mientras genera y PR validado (C1–C5, C22);
   reposición de lecturas perdidas sueltas (C21); ahorro con la tarifa al usuario (C13); pantalla Indicadores Solares;
   modo invitado
+- **21 de octubre de 2026**: PR de Inversores con las reglas de Indicadores Solares, alertas, cupos y XM configurables
+  desde `.env`, el CI con todas las suites (236 pruebas), ayuda integrada al día y correcciones del frontend
+  (`f42ca0a`, `5048d56`, `34b5e14`)
 
 ### 🎯 Pendiente
-- El PR de la pantalla Inversores no aplica todavía la regla de cobertura del inversor (≥ 80 %) ni la reposición C21
-  que sí aplica Indicadores Solares
-- El CI (GitHub Actions) no corre las suites añadidas en julio y octubre
-- `docker-compose.prod.yml` no pasa las variables de alertas, del cupo de invitados ni del tiempo de espera de XM
+- Destino de las alertas: el compose ya pasa `ALERT_WEBHOOK_URL`, `ALERT_EMAIL_TO` y `EMAIL_*`, pero el `.env` de
+  producción no define ningún canal, así que las alertas solo quedan en el log
+- La energía que muestra la pantalla Inversores no aplica la reposición de lecturas sueltas (C21); el PR sí, igual que
+  Indicadores Solares (`5048d56`)
 - Irradiancia POA para un PR en el plano de los módulos (hoy es con irradiancia horizontal)
 
 ## 🤝 Contribución
