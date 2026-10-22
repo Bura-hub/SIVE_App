@@ -62,6 +62,7 @@ def _inverter_row(**overrides):
     """Fila mínima válida para `compute_inverter_indicators` (todas las columnas de
     INVERTER_FIELDS presentes, en None salvo lo que se sobreescriba)."""
     row = {field: None for field in INVERTER_FIELDS}
+    row['date'] = timezone.make_aware(datetime(2025, 7, 1, 12, 0))   # la energía se agrupa por hora (C21)
     row.update(overrides)
     return row
 

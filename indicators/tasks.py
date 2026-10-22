@@ -2146,8 +2146,11 @@ def generate_pdf_file(report_data, file_path, report_type, context=None):
         columns = columns[:8]
     
     # Detectar columnas numéricas para alinear a la derecha y totalizar.
+    # Se mira toda la columna y no solo la primera fila: un primer valor nulo (p. ej. un PR sin días válidos)
+    # dejaba la cabecera en crudo («Performance ratio pct»).
     numeric_set = {c for c in columns
-                   if c not in ('name', 'date') and branding.to_number(report_data[0].get(c)) is not None}
+                   if c not in ('name', 'date')
+                   and any(branding.to_number(r.get(c)) is not None for r in report_data)}
     col_index = {c: i for i, c in enumerate(columns)}
 
     # Cabeceras legibles (con unidad en las numéricas)
@@ -2162,7 +2165,8 @@ def generate_pdf_file(report_data, file_path, report_type, context=None):
             value = data_row.get(col, '')
             if isinstance(value, str) and len(value) > 40:
                 value = value[:37] + '...'
-            row.append(str(value))
+            # Un dato no disponible (None) va como celda vacía, igual que en CSV y Excel, no como «None».
+            row.append('' if value is None else str(value))
         table_data.append(row)
 
     if len(report_data) > max_rows:

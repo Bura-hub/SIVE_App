@@ -31,7 +31,7 @@ Cuando este documento y el código no coincidan, manda el código. Los archivos 
 
 `services/institution_energy.py` construye, para cada hora de Bogotá, la generación G, la demanda D, la exportación y
 el autoconsumo de una institución (D2). La usan el inicio (Dashboard), los Indicadores Solares, el ahorro y el PR de
-las dos pantallas.
+las dos pantallas. La energía de la pantalla Inversores sale de la misma regla por hora (§3).
 
 - **Generación G.** Suma de la energía de los inversores de generación vigentes ese día. Por inversor y hora:
   - E = máx(Σ acPower, 0) × Δt / 1000, en kWh;
@@ -83,11 +83,18 @@ La energía de cada mes se guarda en caché (26 h para los meses cerrados, 10 mi
 
 `services/inverter_calc.py` y la tarea `calculate_inverter_indicators`. Se calculan por día y por mes.
 
-- **Energía generada.** E = Σ acPower·Δt / 1000, en kWh, con las lecturas tal cual (sin la reposición de C21). Es la
-  energía de la pantalla Inversores.
-- **Gráfica horaria (C5 y C7).** Energía de cada hora de Bogotá = Σ acPower·Δt / 1000. Antes era la media horaria
-  × Δt, la energía de una sola lectura: 30 veces menos. Una hora sin lecturas queda en NULL. La corrida mensual ya no
-  escribe la gráfica (pisaba la del día 1).
+- **Energía generada.** Es la misma energía horaria que la generación de Indicadores Solares (§1,
+  `energia_inversor_hora_kwh` y `horas_inversor`): por hora de Bogotá, E = máx(Σ acPower, 0) × Δt / 1000, con la
+  reposición de C21 si la hora tiene entre 15 y 29 lecturas y «faltante = 0» con menos. La energía del día o del mes
+  (`energy_ac_daily_kwh` y `total_generated_energy_kwh`) es la suma de sus horas, y una hora sin lecturas aporta 0,
+  como en Indicadores Solares. La energía DC (`energy_dc_daily_kwh`, una sola entrada MPPT) sigue la misma regla.
+  Para una planta y un día o mes en que su inversor de generación es el vigente, Inversores e Indicadores Solares dan
+  la misma generación (`tests/test_energia_inversor_igual_solar.py`). Hasta el 21-oct-2026 era Σ acPower·Δt / 1000
+  de todo el periodo, sin reponer ni recortar las horas negativas.
+- **Gráfica horaria (C5 y C7).** Energía de cada hora de Bogotá con la misma regla (C21 incluida); su suma es la
+  energía del día. Antes era la media horaria × Δt, la energía de una sola lectura: 30 veces menos. Una hora sin
+  lecturas queda en NULL (no medida) en la gráfica. La corrida mensual ya no escribe la gráfica (pisaba la del día 1).
+  El detalle horario (`HourlyInverterIndicators.energy_ac_kwh`) usa la misma regla.
 - **Frecuencia (C1).** Media de `acFrequency` solo con lecturas en que el inversor genera (acFrequency > 0 y
   acPower > 0). De noche reporta 0 Hz y eso hundía la media (HUDN: 54,4 Hz con todas, 59,99 Hz generando). La
   estabilidad de frecuencia usa las mismas lecturas.
@@ -119,7 +126,7 @@ PR = Σ E_AC_día / Σ (H_día × kWp / 1 kW/m²), sobre los días válidos del 
 **El PR de Inversores y el de Indicadores Solares son el mismo.** Los dos clasifican los días con
 `institution_energy.dias_pr` y usan la misma irradiación (`irradiacion_diaria`) y la misma energía por hora
 (`energia_inversor_hora_kwh`). Cada planta tiene un único inversor de generación, así que para la misma planta y el
-mismo periodo dan la misma cifra (`tests/test_pr_inversor_igual_solar.py`). La pantalla Inversores guarda un PR por
+mismo periodo dan la misma cifra (`tests/test_pr_inversor_igual_solar.py`); la energía también coincide (§3). La pantalla Inversores guarda un PR por
 día y uno por mes; Indicadores Solares lo calcula al vuelo para cualquier rango.
 
 ---

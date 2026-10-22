@@ -146,7 +146,7 @@ export const INVERTER_KPI_INFO = {
   totalGeneration: {
     title: "Generación Total",
     description: "Energía AC total generada por los inversores en el rango seleccionado.",
-    calculation: "Suma de total_generated_energy_kwh (=Σ acPower·Δt/1000) sobre todos los registros del rango.",
+    calculation: "Suma de total_generated_energy_kwh sobre los registros del rango. Por hora: Σ acPower × 2 min / 1000; si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes (C21); con menos, una lectura que no llegó no suma. Es la misma energía que la generación de Indicadores Solares.",
     dataSource: "Inversores solares del conector SCADA.",
     units: "MWh.",
     frequency: "Muestreo ~2 min; suma sobre el rango de fechas.",

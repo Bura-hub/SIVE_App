@@ -30,14 +30,15 @@ UDENAR = '04abaa1c-9f61-4ae4-8b53-44f66cce93c6'
 UDENAR_INV = 'c03a5f4a-f78e-47d7-8818-b50544b3f531'
 
 
-def _row(**kw):
-    row = {f: None for f in INVERTER_FIELDS}
-    row.update(kw)
-    return row
-
-
 def _bog(y, m, d, h, mi=0):
     return COLOMBIA_TZ.localize(datetime(y, m, d, h, mi))
+
+
+def _row(**kw):
+    row = {f: None for f in INVERTER_FIELDS}
+    row['date'] = _bog(2025, 7, 1, 12)   # la energía se agrupa por hora (C21)
+    row.update(kw)
+    return row
 
 
 class FrecuenciaYFactorDePotenciaTests(SimpleTestCase):

@@ -5,11 +5,17 @@ Extraído de la task `calculate_inverter_indicators`: recibe un iterable de fila
 (`.values(*INVERTER_FIELDS)`) y devuelve el dict de indicadores calculados, sin tocar la
 BD ni Celery. La task queda como envoltorio (query + update_or_create de InverterIndicators
 y de InverterChartData). `measurement_count`/`last_measurement_date` NO se calculan aquí.
+
+Energía (unificación con «Indicadores Solares», octubre de 2026): la energía AC del inversor sale de
+la misma energía horaria que usa Indicadores Solares (`institution_energy.horas_inversor` y
+`energia_inversor_hora_kwh`): por hora de Bogotá, max(Σ P, 0)·Δt, con reposición de lecturas
+sueltas cuando la hora tiene entre 15 y 29 lecturas (C21) y «faltante = 0» con menos de 15. Una hora
+sin lecturas aporta 0 kWh, como en Indicadores Solares.
 """
 import statistics
 
-from indicators.energy import SAMPLE_INTERVAL_HOURS
 from indicators.services.date_ranges import COLOMBIA_TZ
+from indicators.services.institution_energy import energia_inversor_hora_kwh, horas_inversor
 from indicators.services.rows import _row_get
 
 # Umbral mínimo de corriente promedio (A) para evaluar desbalance de corriente de
@@ -20,9 +26,9 @@ from indicators.services.rows import _row_get
 # (MIN_CURRENT_A_FOR_UNBALANCE). Ajustable si el equipo de campo define otro valor.
 MIN_CURRENT_A_FOR_UNBALANCE = 1.0
 
-# Columnas v2 que consume el cálculo del inversor.
+# Columnas v2 que consume el cálculo del inversor. `date` hace falta para agrupar la energía por hora (C21).
 INVERTER_FIELDS = (
-    'acPower', 'dcPower', 'reactivePower', 'apparentPower',
+    'date', 'acPower', 'dcPower', 'reactivePower', 'apparentPower',
     'powerFactor', 'acFrequency',
     'acVoltagePhaseA', 'acVoltagePhaseB', 'acVoltagePhaseC',
     'acCurrentPhaseA', 'acCurrentPhaseB', 'acCurrentPhaseC',
@@ -40,14 +46,18 @@ def compute_inverter_indicators(rows):
     frequency_values = []
     voltage_phases = []
     current_phases = []
+    ac_samples = []   # (date, acPower) para la energía horaria con C21
+    dc_samples = []   # (date, dcPower), misma regla
     for data in rows:
         # Potencia AC y DC
         ac_power = _row_get(data, 'acPower')
         dc_power = _row_get(data, 'dcPower')
         if ac_power is not None:
             ac_power_values.append(ac_power)
+            ac_samples.append({'date': data['date'], 'acPower': ac_power})
         if dc_power is not None:
             dc_power_values.append(dc_power)
+            dc_samples.append({'date': data['date'], 'acPower': dc_power})
 
         # Potencia reactiva y aparente
         reactive_power = _row_get(data, 'reactivePower')
@@ -91,14 +101,12 @@ def compute_inverter_indicators(rows):
 
     # Calcular indicadores
 
-    # Δt (h) de la integración de potencia. Se define SIEMPRE al inicio para que
-    # esté disponible aunque solo haya irradiancia (antes se definía dentro del
-    # if de ac/dc y provocaba NameError al calcular la irradiancia acumulada).
-    delta_t = SAMPLE_INTERVAL_HOURS
-
-    # Energía AC (y DC de la única entrada MPPT medida), Σ P·Δt.
-    energy_ac_daily_kwh = sum(ac_power_values) * delta_t / 1000 if ac_power_values else 0.0
-    energy_dc_daily_kwh = sum(dc_power_values) * delta_t / 1000 if dc_power_values else 0.0
+    # Energía AC: la misma energía horaria que «Indicadores Solares» (institution_energy.horas_inversor):
+    # Σ por hora de Bogotá de max(Σ P, 0)·Δt, con reposición de lecturas sueltas si la hora tiene 15–29
+    # lecturas (C21) y «faltante = 0» con menos. Antes era Σ P·Δt de todo el periodo, sin reponer.
+    # La DC (una sola entrada MPPT medida) sigue la misma regla para que las dos energías sean comparables.
+    energy_ac_daily_kwh = sum(h['g_kwh'] for h in horas_inversor(ac_samples))
+    energy_dc_daily_kwh = sum(h['g_kwh'] for h in horas_inversor(dc_samples))
 
     # 4.1. Eficiencia de conversión DC-AC (C3/D6): NO se calcula. `dcPower` mide una sola entrada
     # MPPT (tesis H-12; DC/AC ≈ 0,55 en el HUDN, y el cociente se recortaba a 100 %). Queda en None.
@@ -287,8 +295,10 @@ def compute_inverter_hourly_chart(rows):
     """Datos por hora de Bogotá para `InverterChartData`, a partir de filas
     `.values('date', 'acPower', 'dcPower')` de UN día.
 
-    - hourly_generation[h] = Σ acPower·Δt / 1000: la energía real de la hora en kWh (C5; antes
-      era la media horaria × Δt, la energía de una sola muestra: 30 veces menos).
+    - hourly_generation[h]: la energía de la hora en kWh (C5; antes era la media horaria × Δt, la
+      energía de una sola muestra: 30 veces menos), con la regla de «Indicadores Solares»
+      (`institution_energy.energia_inversor_hora_kwh`): max(Σ acPower, 0)·Δt / 1000, con reposición
+      de lecturas sueltas si la hora tiene 15–29 lecturas (C21). Su suma es la energía diaria.
     - hourly_ac_power / hourly_dc_power: medias horarias en W.
     - Las horas se toman en hora de Bogotá (C7; antes `date.hour` en UTC, 5 h corridas).
     - Una hora sin muestras queda en None (no medida), no en 0.
@@ -311,7 +321,7 @@ def compute_inverter_hourly_chart(rows):
     return {
         'hourly_efficiency': [None] * 24,
         'hourly_generation': [
-            ac_sum[h] * SAMPLE_INTERVAL_HOURS / 1000.0 if ac_n[h] else None for h in range(24)
+            energia_inversor_hora_kwh(ac_sum[h], ac_n[h]) if ac_n[h] else None for h in range(24)
         ],
         'hourly_irradiance': [None] * 24,
         'hourly_temperature': [None] * 24,
