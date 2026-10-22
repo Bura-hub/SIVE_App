@@ -69,7 +69,7 @@ def energy_prices(request):
         range_param = request.GET.get('range', 'month')
         
         # Calcular fechas según el rango
-        end_date = timezone.now().date()
+        end_date = timezone.localdate()
         if range_param == 'week':
             start_date = end_date - timedelta(days=7)
         elif range_param == 'month':
@@ -225,7 +225,7 @@ def energy_savings(request):
         range_param = request.GET.get('range', 'month')
         
         # Calcular fechas según el rango
-        end_date = timezone.now().date()
+        end_date = timezone.localdate()
         if range_param == 'week':
             start_date = end_date - timedelta(days=7)
         elif range_param == 'month':
@@ -363,7 +363,7 @@ def market_overview(request):
     Obtiene una vista general del mercado de energía
     """
     try:
-        today = timezone.now().date()
+        today = timezone.localdate()
         
         # Obtener datos más recientes del mercado
         market_data = EnergyMarketData.objects.filter(
@@ -416,8 +416,11 @@ def market_overview(request):
 
 
 def _range_to_dates(range_param):
-    """Mapea el parámetro 'range' a (start_date, end_date). Rango desconocido → 30 días."""
-    end_date = timezone.now().date()
+    """Mapea el parámetro 'range' a (start_date, end_date). Rango desconocido → 30 días.
+
+    La fecha de fin es la de Colombia (localdate, TIME_ZONE='America/Bogota'): con now().date() era la UTC y,
+    desde las 19:00 de Bogotá, el periodo decía terminar al día siguiente."""
+    end_date = timezone.localdate()
     days = {'week': 7, 'month': 30, 'quarter': 90, 'year': 365}.get(range_param, 30)
     return end_date - timedelta(days=days), end_date
 

@@ -917,7 +917,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
       {/* Header con banner profesional */}
       <header className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg -mx-4 lg:-mx-8 -mt-4 lg:-mt-8">
         <div className="px-8 py-8 lg:py-12">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pr-16 lg:pr-64">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pr-16 lg:pr-[var(--u-float-reserve,16rem)]">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-white/20 rounded-xl">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -39,6 +39,21 @@ function UserMenu({ username, isSuperuser, isGuest = false, onLogin = () => {}, 
   // un componente desmontado si el usuario cierra sesión en medio de la animación).
   const timeoutsRef = useRef([]);
   useEffect(() => () => { timeoutsRef.current.forEach(clearTimeout); }, []);
+
+  // Ancho real del menú flotante en --u-float-reserve, para que las cabeceras le reserven sitio
+  // (lg:pr-[var(--u-float-reserve,16rem)]). Como invitado lleva además «Iniciar sesión» y no cabía en los
+  // 16rem fijos: tapaba «XM Conectado» en Datos Externos. 48px = right:1.5rem del widget más un margen.
+  const floatRef = useRef(null);
+  useEffect(() => {
+    const el = floatRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const root = document.documentElement;
+    const ro = new ResizeObserver(([entry]) => {
+      root.style.setProperty('--u-float-reserve', `${Math.ceil(entry.contentRect.width) + 48}px`);
+    });
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.removeProperty('--u-float-reserve'); };
+  }, []);
   const scheduleTimeout = (fn, ms) => { timeoutsRef.current.push(setTimeout(fn, ms)); };
 
   // Modo invitado: sin sesión se muestra «Invitado» (solo lectura).
@@ -224,7 +239,7 @@ function UserMenu({ username, isSuperuser, isGuest = false, onLogin = () => {}, 
 
   return (
     <>
-      <div className="u-float">
+      <div className="u-float" ref={floatRef}>
         <div className="flex items-center gap-2">
         {/* Modo invitado: acceso directo al inicio de sesión junto al chip */}
         {isGuest && (

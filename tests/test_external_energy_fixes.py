@@ -210,3 +210,16 @@ class XMFailureNotCachedTests(TestCase):
         # XM cae después: se sirve la respuesta buena guardada.
         en_cache = self._get(service_side_effect=TimeoutError('caída'))
         self.assertEqual(en_cache.json()['source'], 'XM')
+
+
+class XMRangeLocalDateTests(TestCase):
+    """(e) El periodo de las series de XM termina en la fecha de Colombia, no en la UTC: desde las 19:00 de
+    Bogotá la fecha UTC ya es la del día siguiente y el periodo decía terminar «mañana»."""
+
+    def test_fin_del_periodo_en_hora_de_colombia(self):
+        from datetime import datetime, timezone as dt_timezone
+        noche_bogota = datetime(2026, 10, 22, 3, 0, tzinfo=dt_timezone.utc)  # 21-oct, 22:00 en Bogotá
+        with mock.patch('django.utils.timezone.now', return_value=noche_bogota):
+            start, end = views._range_to_dates('week')
+        self.assertEqual(end, date(2026, 10, 21))
+        self.assertEqual(start, date(2026, 10, 14))

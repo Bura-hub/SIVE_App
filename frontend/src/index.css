@@ -1032,7 +1032,7 @@ code {
 /* Colapso responsive: al pasar a solo-avatar, el chip ocupa menos y el badge
    de estado del header nunca queda tapado. */
 /* Colapso a solo-avatar por debajo de `lg` (1024px), alineado con la reserva
-   `lg:pr-64` de los headers para que el widget nunca tape el estado XM/SCADA. */
+   `lg:pr-[var(--u-float-reserve,16rem)]` de los headers (el ancho real lo publica UserMenu) para que el widget nunca tape el estado XM/SCADA. */
 @media (max-width:1023.98px){
   /* z-index 25: sobre la barra superior (z-20) pero bajo la capa oscura (z-30) y el cajón de
      navegación (z-40) del Sidebar, que solo existen por debajo de `lg`; con 50 el chip y

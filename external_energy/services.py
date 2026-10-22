@@ -473,7 +473,7 @@ class XMEnergyService:
         from .models import EnergyPrice
 
         try:
-            today = timezone.now().date()
+            today = timezone.localdate()
             start_date = today - timedelta(days=30)
 
             # Obtener precios desde XM (ya vienen agregados a nivel diario)
