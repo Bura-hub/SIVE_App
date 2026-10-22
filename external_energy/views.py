@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.db import models
 from django.views.decorators.cache import cache_page
+from django.utils.cache import add_never_cache_headers
 from django.views.decorators.vary import vary_on_headers
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -442,7 +443,7 @@ def _xm_metric_response(request, fetch_method, prefix, default_range, error_labe
         else:
             avg_v = max_v = min_v = total_v = 0
 
-        return Response({
+        response = Response({
             f'average_{prefix}': avg_v,
             f'max_{prefix}': max_v,
             f'min_{prefix}': min_v,
@@ -455,6 +456,12 @@ def _xm_metric_response(request, fetch_method, prefix, default_range, error_labe
                 'range': range_param,
             },
         })
+        if not data:
+            # Sin datos de XM (caída o timeout pasajero): `private` hace que cache_page no la
+            # guarde, para que la siguiente consulta vuelva a preguntar a XM en vez de servir
+            # «sin datos» durante XM_CACHE_TTL.
+            add_never_cache_headers(response)
+        return response
     except Exception as e:
         logger.error(f"Error en {prefix}_data: {str(e)}")
         return Response(

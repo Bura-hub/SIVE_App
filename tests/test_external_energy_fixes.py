@@ -172,3 +172,41 @@ class RequestsGlobalNotPatchedTests(TestCase):
             )
         finally:
             services._ssl_verify = original_flag
+
+
+class XMFailureNotCachedTests(TestCase):
+    """(d) Un fallo pasajero de XM no se guarda en la caché de la vista: si XM no respondió,
+    la siguiente consulta vuelve a preguntar en lugar de servir «sin datos» durante una hora."""
+
+    URL = '/api/external-energy/generation/'
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def _get(self, service_side_effect=None, service_value=None):
+        with mock.patch('external_energy.views.XMEnergyService') as MockService:
+            fetch = MockService.return_value.fetch_generation_data
+            if service_side_effect is not None:
+                fetch.side_effect = service_side_effect
+            else:
+                fetch.return_value = service_value
+            return self.client.get(self.URL, {'range': 'week'})
+
+    def test_fallo_de_xm_no_queda_en_cache(self):
+        caida = self._get(service_side_effect=TimeoutError("La consulta a XM 'Gene' superó el timeout de 30s"))
+        self.assertEqual(caida.status_code, 200)
+        self.assertEqual(caida.json()['source'], 'unavailable')
+
+        serie = [{'date': '2026-10-20 00:00', 'value': 9000.0}, {'date': '2026-10-20 01:00', 'value': 8000.0}]
+        repuesta = self._get(service_value=serie)
+        self.assertEqual(repuesta.json()['source'], 'XM')
+        self.assertAlmostEqual(repuesta.json()['average_generation'], 8500.0)
+
+    def test_respuesta_con_datos_sigue_en_cache(self):
+        serie = [{'date': '2026-10-20 00:00', 'value': 9000.0}]
+        self._get(service_value=serie)
+        # XM cae después: se sirve la respuesta buena guardada.
+        en_cache = self._get(service_side_effect=TimeoutError('caída'))
+        self.assertEqual(en_cache.json()['source'], 'XM')

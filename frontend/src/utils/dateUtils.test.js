@@ -1,7 +1,7 @@
 import {
   formatMonthYearLabel, monthInputToStartDate, monthInputToEndDate,
   dateStringToMonthInput, getDefaultMonthlyRange, getDefaultDailyRange,
-  formatHourLabel, buildAxisLabel,
+  formatHourLabel, buildAxisLabel, formatAPIDateLabel,
 } from './dateUtils';
 
 describe('dateUtils nuevas utilidades', () => {
@@ -46,5 +46,19 @@ describe('dateUtils nuevas utilidades', () => {
   });
   test('buildAxisLabel usa hora en modo horario', () => {
     expect(buildAxisLabel({ hour: '2026-07-18T14:00:00-05:00' }, 'hourly')).toMatch(/^\d{2}:\d{2}$/);
+  });
+  test('formatAPIDateLabel no corre la fecha un día al oeste de UTC', () => {
+    const tz = process.env.TZ;
+    process.env.TZ = 'America/Bogota';
+    try {
+      expect(formatAPIDateLabel('2025-08-01')).toBe('1/8/2025');
+      expect(formatAPIDateLabel('2025-08-31')).toBe('31/8/2025');
+    } finally {
+      process.env.TZ = tz;
+    }
+  });
+  test('formatAPIDateLabel sin fecha devuelve cadena vacía', () => {
+    expect(formatAPIDateLabel('')).toBe('');
+    expect(formatAPIDateLabel(null)).toBe('');
   });
 });

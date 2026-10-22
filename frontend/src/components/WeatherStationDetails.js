@@ -6,7 +6,7 @@ import DeviceDateRangeFilters from './filters/DeviceDateRangeFilters';
 import DataAvailabilityBanner from './DataAvailabilityBanner';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { ENDPOINTS, buildApiUrl } from '../utils/apiConfig';
-import { buildAxisLabel } from '../utils/dateUtils';
+import { buildAxisLabel, formatAPIDateLabel } from '../utils/dateUtils';
 import { WEATHER_KPI_INFO } from '../utils/kpiInfo';
 import { IconCloudSun, IconRefresh, IconSun, IconWind, IconDroplets } from './icons';
 
@@ -1080,7 +1080,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
                     <svg className="w-3 h-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    {new Date(filters.startDate).toLocaleDateString('es-ES')} - {new Date(filters.endDate).toLocaleDateString('es-ES')}
+                    {formatAPIDateLabel(filters.startDate)} - {formatAPIDateLabel(filters.endDate)}
                   </div>
                 )}
               </div>

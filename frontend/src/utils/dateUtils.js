@@ -116,6 +116,17 @@ export const parseAPIDate = (dateString) => {
 };
 
 /**
+ * Fecha de la API (YYYY-MM-DD) como 'D/M/AAAA', sin correrla un día: new Date('YYYY-MM-DD')
+ * la toma como medianoche UTC, que en Colombia (UTC-5) es todavía el día anterior.
+ * @param {string} dateString - Fecha en formato YYYY-MM-DD
+ * @returns {string} Fecha en formato local es-ES, o '' si no hay fecha
+ */
+export const formatAPIDateLabel = (dateString) => {
+  if (!dateString) return '';
+  return parseAPIDate(dateString).toLocaleDateString('es-ES');
+};
+
+/**
  * Convierte una fecha ISO string a fecha en Colombia
  * @param {string} isoString - Fecha en formato ISO
  * @returns {Date} Fecha en zona horaria de Colombia
