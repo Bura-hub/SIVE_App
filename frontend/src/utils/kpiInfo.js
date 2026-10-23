@@ -23,7 +23,7 @@ export const DASHBOARD_KPI_INFO = {
   totalConsumption: {
     title: "Demanda de los circuitos medidos",
     description: "Energía demandada en el mes por los circuitos del Medidor 1 de cada institución (Udenar, Mariana, UCC, HUDN y Cesmag). No es el consumo total de cada institución: el Medidor 1 mide un circuito o bloque.",
-    calculation: "Por institución y hora: media de totalActivePower del Medidor 1 (horas con ≥ 15 de 30 lecturas). En los medidores en el punto de conexión (Udenar, Mariana, UCC) se suma la generación aguas abajo: D = máx(0, P_M1 + FV). Misma convención que la tesis y el mercado P2P.",
+    calculation: "Por institución y hora: media de totalActivePower del Medidor 1 (horas con ≥ 15 de 30 lecturas). En los medidores en el punto de conexión (Udenar, Mariana, UCC) se suma la generación aguas abajo: D = máx(0, P_M1 + FV).",
     dataSource: "Medidor 1 de cada institución (conector SCADA, reconciliado a diario).",
     units: "kWh (se muestra en MWh según magnitud).",
     frequency: "Muestreo ~2 min; el mes en curso se compara con el anterior con el MISMO tiempo transcurrido.",
@@ -32,7 +32,7 @@ export const DASHBOARD_KPI_INFO = {
   totalGeneration: {
     title: "Generación de las plantas FV",
     description: "Energía AC entregada en el mes por los inversores de las cinco plantas del proyecto (17,55 kWp cada una).",
-    calculation: "Σ acPower × 2 min / 1000 de cada inversor de planta, por hora. Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes; con menos, una lectura que no llegó no suma. Udenar antes del 2025-09-03: Fronius 1 × 1,2054 (CAL-44).",
+    calculation: "Σ acPower × 2 min / 1000 de cada inversor de planta, por hora. Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes; con menos, una lectura que no llegó no suma. Udenar antes del 2025-09-03: Fronius 1 × 1,2054.",
     dataSource: "Inversores de las plantas (conector SCADA). No incluye equipos de prueba ni inversores retirados.",
     units: "kWh (se muestra en MWh según magnitud).",
     frequency: "Muestreo ~2 min; comparación con el mismo tiempo transcurrido del mes anterior.",
