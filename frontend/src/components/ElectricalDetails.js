@@ -9,6 +9,7 @@ import { buildAxisLabel, formatAPIDateLabel } from '../utils/dateUtils';
 import { IconGauge, IconRefresh } from './icons';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { METER_KPI_INFO } from '../utils/kpiInfo';
+import { powerFactorLevel, POWER_FACTOR_LABEL, POWER_FACTOR_DOT } from '../utils/powerFactor';
 
 //###########################################################################
 // Importaciones Chart.js
@@ -440,7 +441,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
         powerFactor: {
           ...prev.powerFactor,
           value: avgPowerFactor.toFixed(2),
-          change: avgPowerFactor > 0.95 ? 'Óptimo' : avgPowerFactor > 0.90 ? 'Bueno' : 'Mejorable'
+          change: POWER_FACTOR_LABEL[powerFactorLevel(avgPowerFactor)]
         }
       }));
     }
@@ -1076,10 +1077,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                                   <div className="text-xs lg:text-sm font-semibold text-gray-900">
                                     {(item.avg_power_factor || 0).toFixed(2)}
                                   </div>
-                                  <div className={`ml-2 w-2 h-2 rounded-full ${
-                                    (item.avg_power_factor || 0) > 0.95 ? 'bg-green-500' : 
-                                    (item.avg_power_factor || 0) > 0.85 ? 'bg-yellow-500' : 'bg-red-500'
-                                  }`}></div>
+                                  <div className={`ml-2 w-2 h-2 rounded-full ${POWER_FACTOR_DOT[powerFactorLevel(item.avg_power_factor)]}`}></div>
                                 </div>
                               </td>
                             </tr>

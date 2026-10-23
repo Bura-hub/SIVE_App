@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.core.cache import cache
 from django.conf import settings
 import logging
+from .client_ip import get_client_ip
 
 logger = logging.getLogger('security')
 
@@ -102,15 +103,9 @@ class IPSecurityMiddleware(MiddlewareMixin):
         return None
     
     def _get_client_ip(self, request):
-        """
-        Obtiene la IP real del cliente
-        """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+        """IP del cliente con la regla del proxy de confianza (authentication/client_ip.py).
+        El primer salto de X-Forwarded-For lo escribe el cliente y permitía falsear la IP."""
+        return get_client_ip(request)
     
     def _is_ip_blacklisted(self, ip):
         """
@@ -170,15 +165,9 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         return response
     
     def _get_client_ip(self, request):
-        """
-        Obtiene la IP real del cliente
-        """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+        """IP del cliente con la regla del proxy de confianza (authentication/client_ip.py).
+        El primer salto de X-Forwarded-For lo escribe el cliente y permitía falsear la IP."""
+        return get_client_ip(request)
 
 
 class SessionSecurityMiddleware(MiddlewareMixin):
@@ -230,12 +219,6 @@ class SessionSecurityMiddleware(MiddlewareMixin):
         return False
     
     def _get_client_ip(self, request):
-        """
-        Obtiene la IP real del cliente
-        """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+        """IP del cliente con la regla del proxy de confianza (authentication/client_ip.py).
+        El primer salto de X-Forwarded-For lo escribe el cliente y permitía falsear la IP."""
+        return get_client_ip(request)

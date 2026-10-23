@@ -13,6 +13,9 @@ export const PASSWORD_RECOVERY_MESSAGE =
 
 // onContinueAsGuest (opcional): vuelve a la app en modo invitado sin iniciar sesión.
 // reason (opcional): por qué se pidió iniciar sesión (p. ej. «para exportar reportes»).
+// Hora de desbloqueo en español y sin segundos («10:08 p. m.»).
+const formatHour = (date) => date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
 function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -112,15 +115,34 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
         }
     }, []);
     
-    // Función para bloquear temporalmente
-    const blockTemporarily = () => {
-        const blockDuration = Math.min(30 * Math.pow(2, failedAttempts - 5), 300); // Máximo 5 minutos
-        const blockUntil = new Date(Date.now() + blockDuration * 1000);
-        
-        setIsBlocked(true);
-        setBlockUntil(blockUntil);
-        localStorage.setItem('loginBlockUntil', blockUntil.toISOString());
+    // El bloqueo es el del servidor (30 minutos tras 5 intentos fallidos): la pantalla
+    // muestra su hora y se levanta sola al vencer, sin recargar la página.
+    const clearBlock = () => {
+        setIsBlocked(false);
+        setBlockUntil(null);
+        setFailedAttempts(0);
+        localStorage.removeItem('loginFailedAttempts');
+        localStorage.removeItem('loginBlockUntil');
     };
+
+    const applyServerBlock = (lockedUntil) => {
+        const until = lockedUntil ? new Date(lockedUntil) : null;
+        if (!until || Number.isNaN(until.getTime()) || until <= new Date()) return;
+        setIsBlocked(true);
+        setBlockUntil(until);
+        localStorage.setItem('loginBlockUntil', until.toISOString());
+    };
+
+    useEffect(() => {
+        if (!blockUntil) return undefined;
+        const ms = blockUntil.getTime() - Date.now();
+        if (ms <= 0) {
+            clearBlock();
+            return undefined;
+        }
+        const timer = setTimeout(clearBlock, ms);
+        return () => clearTimeout(timer);
+    }, [blockUntil]);
 
     // Función para validar contraseña
     const validatePassword = (password) => {
@@ -323,11 +345,11 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
         event.preventDefault();
         
         // Verificar si está bloqueado
-        if (isBlocked) {
-            const remainingTime = Math.ceil((blockUntil - new Date()) / 1000);
-            setMessage({ 
-                text: `Demasiados intentos fallidos. Intenta de nuevo en ${Math.ceil(remainingTime / 60)} minutos`, 
-                type: 'error' 
+        if (isBlocked && blockUntil) {
+            const minutes = Math.max(1, Math.ceil((blockUntil.getTime() - Date.now()) / 60000));
+            setMessage({
+                text: `Tu cuenta está bloqueada hasta las ${formatHour(blockUntil)}. Intenta de nuevo en ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}.`,
+                type: 'error'
             });
             return;
         }
@@ -363,6 +385,7 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
                 const err = new Error(serverMsg || `HTTP ${response.status}`);
                 err.status = response.status;   // para ramificar el mensaje en el catch
                 err.serverMsg = serverMsg;
+                err.lockedUntil = errorData.locked_until;   // hora de desbloqueo que da el servidor
                 throw err;
             }
 
@@ -403,8 +426,13 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
             } else if (status === 401 || status === 400 || serverMsg.includes('Credenciales inválidas') || serverMsg.includes('Datos de entrada inválidos')) {
                 errorMessage = 'Usuario o contraseña incorrectos.';
                 shouldIncrementAttempts = true;
+                if (error.lockedUntil) {
+                    errorMessage = `Usuario o contraseña incorrectos. Tu cuenta quedó bloqueada hasta las ${formatHour(new Date(error.lockedUntil))}.`;
+                }
             } else if (status === 423 || serverMsg.includes('bloqueada')) {
-                errorMessage = 'Tu cuenta está temporalmente bloqueada. Intenta más tarde.';
+                errorMessage = error.lockedUntil
+                    ? `Tu cuenta está bloqueada hasta las ${formatHour(new Date(error.lockedUntil))}.`
+                    : 'Tu cuenta está temporalmente bloqueada. Intenta más tarde.';
             } else if (serverMsg.includes('Cambio de contraseña')) {
                 errorMessage = 'Debes cambiar tu contraseña antes de continuar.';
             } else if (serverMsg.includes('inactivo') || serverMsg.includes('desactivada')) {
@@ -425,11 +453,8 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
                 setFailedAttempts(newFailedAttempts);
                 localStorage.setItem('loginFailedAttempts', newFailedAttempts.toString());
 
-                // Bloquear después de 5 intentos
-                if (newFailedAttempts >= 5) {
-                    blockTemporarily();
-                }
             }
+            applyServerBlock(error.lockedUntil);
             
                 setMessage({ text: errorMessage, type: 'error' });
                 setShowTransition(false);
@@ -585,7 +610,7 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
                                     Intentos fallidos: {failedAttempts}/5
                                 </span>
                             </div>
-                            {failedAttempts >= 5 && (
+                            {isBlocked && (
                                 <span className="text-red-600 font-medium bg-red-100 px-3 py-1 rounded-full text-sm">
                                     Cuenta bloqueada
                                 </span>
@@ -596,7 +621,7 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
                                 <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                Bloqueado hasta: {blockUntil.toLocaleTimeString('es-CO')}
+                                Bloqueado hasta: {formatHour(blockUntil)}
                             </div>
                         )}
                     </div>

@@ -55,7 +55,7 @@ class LoginRequestSerializer(serializers.Serializer):
                     if profile.is_locked():
                         raise serializers.ValidationError(
                             "Tu cuenta está temporalmente bloqueada debido a múltiples intentos fallidos. "
-                            f"Intenta nuevamente después de {profile.locked_until.strftime('%H:%M')}."
+                            f"Intenta nuevamente después de las {timezone.localtime(profile.locked_until).strftime('%H:%M')}."
                         )
                     
                     # Verificar si requiere cambio de contraseña

@@ -10,6 +10,7 @@ import { buildApiUrl, ENDPOINTS } from '../utils/apiConfig';
 import { buildAxisLabel, formatAPIDateLabel } from '../utils/dateUtils';
 import { INVERTER_KPI_INFO } from '../utils/kpiInfo';
 import { IconInverter, IconScale, IconActivity, IconWaveform, IconRefresh } from './icons';
+import { powerFactorLevel, POWER_FACTOR_DOT } from '../utils/powerFactor';
 
 //###########################################################################
 // Importaciones Chart.js
@@ -1296,10 +1297,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                                     <div className="text-xs lg:text-sm font-semibold text-gray-900">
                                       {item.avg_power_factor.toFixed(3)}
                                     </div>
-                                    <div className={`ml-2 w-2 h-2 rounded-full ${
-                                      item.avg_power_factor > 0.95 ? 'bg-green-500' :
-                                      item.avg_power_factor > 0.85 ? 'bg-yellow-500' : 'bg-red-500'
-                                    }`}></div>
+                                    <div className={`ml-2 w-2 h-2 rounded-full ${POWER_FACTOR_DOT[powerFactorLevel(item.avg_power_factor)]}`}></div>
                                   </>
                                 ) : (
                                   <div className="text-xs text-gray-500" title="Sin muestras con el inversor generando">

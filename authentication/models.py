@@ -75,8 +75,14 @@ class UserProfile(models.Model):
         """Incrementa (atómicamente) el contador de intentos fallidos y bloquea al superar el umbral.
 
         Usa F() + UPDATE para evitar la condición de carrera del read-modify-write
-        bajo intentos concurrentes.
+        bajo intentos concurrentes. Si había un bloqueo y ya venció, el contador
+        vuelve a cero antes de contar: sin esto, pasada la media hora, un solo
+        fallo más volvía a bloquear la cuenta otros 30 minutos.
         """
+        if self.locked_until and not self.is_locked():
+            type(self).objects.filter(pk=self.pk, locked_until=self.locked_until).update(
+                failed_login_attempts=0, locked_until=None
+            )
         type(self).objects.filter(pk=self.pk).update(
             failed_login_attempts=F('failed_login_attempts') + 1
         )

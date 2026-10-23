@@ -18,6 +18,8 @@ from rest_framework.exceptions import AuthenticationFailed
 
 # Rate limiting
 from django_ratelimit.decorators import ratelimit
+
+from .client_ip import get_client_ip as _client_ip, ratelimit_key
 from django.utils.decorators import method_decorator
 
 # Utilidades de Django
@@ -58,20 +60,9 @@ logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
-    """
-    Obtiene la IP del cliente.
-
-    Por defecto usa REMOTE_ADDR. La cabecera X-Forwarded-For es falsificable por
-    el cliente, así que solo se usa si el despliegue está detrás de un proxy de
-    confianza (settings.TRUST_X_FORWARDED_FOR=True), tomando el último salto
-    (el añadido por el proxy más cercano). Evita el spoofing que permitía saltarse
-    blacklist/rate-limit y falsear la auditoría.
-    """
-    if getattr(settings, 'TRUST_X_FORWARDED_FOR', False):
-        xff = request.META.get('HTTP_X_FORWARDED_FOR')
-        if xff:
-            return xff.split(',')[-1].strip()
-    return request.META.get('REMOTE_ADDR')
+    """IP del cliente: último salto de X-Forwarded-For que añade el proxy de confianza
+    (REST_FRAMEWORK['NUM_PROXIES']); ver authentication/client_ip.py."""
+    return _client_ip(request)
 
 
 # ========================= Vistas de Autenticación =========================
@@ -92,7 +83,7 @@ def get_client_ip(request):
     ],
     description="Obtiene tokens de acceso y refresco para el usuario especificado."
 )
-@method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=False), name='post')
+@method_decorator(ratelimit(key=ratelimit_key, rate='5/m', method='POST', block=False), name='post')
 class LoginView(ObtainAuthToken):
     """
     Vista de login mejorada con rate limiting, logging de seguridad y tokens de refresco
@@ -135,11 +126,14 @@ class LoginView(ObtainAuthToken):
 
             # Credenciales inválidas: contar el intento fallido (y bloquear al superar el umbral).
             if not serializer.is_valid():
-                self._register_failed_attempt(existing_user, username, client_ip, user_agent)
-                return Response({
-                    'error': 'Credenciales inválidas',
-                    'message': 'Usuario o contraseña incorrectos'
-                }, status=status.HTTP_401_UNAUTHORIZED)
+                locked_until = self._register_failed_attempt(existing_user, username, client_ip, user_agent)
+                body = {'error': 'Credenciales inválidas', 'message': 'Usuario o contraseña incorrectos'}
+                if locked_until:
+                    # Este intento bloqueó la cuenta: la pantalla muestra hasta cuándo.
+                    body['locked_until'] = locked_until
+                    body['message'] = ('Usuario o contraseña incorrectos. Tu cuenta quedó bloqueada '
+                                       f'hasta las {timezone.localtime(locked_until).strftime("%H:%M")}')
+                return Response(body, status=status.HTTP_401_UNAUTHORIZED)
 
             user = serializer.validated_data['user']
             profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -197,14 +191,18 @@ class LoginView(ObtainAuthToken):
     def _register_failed_attempt(self, user, username, client_ip, user_agent):
         """Registra un intento fallido: incrementa el contador (atómico, si el
         usuario existe) y crea el LoginAttempt de auditoría."""
+        locked_until = None
         if user is not None:
             profile, _ = UserProfile.objects.get_or_create(user=user)
             profile.increment_failed_attempts()
+            if profile.is_locked():
+                locked_until = profile.locked_until
         LoginAttempt.objects.create(
             user=user, username=username or '', ip_address=client_ip or '0.0.0.0',
             user_agent=user_agent, status=LoginAttempt.FAILED,
             failure_reason='Credenciales inválidas'
         )
+        return locked_until
 
     def _locked_response(self, user, username, client_ip, user_agent, profile):
         """Registra el intento sobre cuenta bloqueada y devuelve 423."""
@@ -215,7 +213,7 @@ class LoginView(ObtainAuthToken):
         )
         return Response({
             'error': 'Cuenta bloqueada',
-            'message': f'Tu cuenta está bloqueada hasta {profile.locked_until.strftime("%H:%M")}',
+            'message': f'Tu cuenta está bloqueada hasta las {timezone.localtime(profile.locked_until).strftime("%H:%M")}',
             'locked_until': profile.locked_until
         }, status=status.HTTP_423_LOCKED)
 
@@ -349,7 +347,7 @@ class LogoutView(APIView):
     responses={200: RefreshTokenResponseSerializer},
     description="Renueva el token de acceso usando un token de refresco válido."
 )
-@method_decorator(ratelimit(key='ip', rate='10/m', method='POST', block=False), name='post')
+@method_decorator(ratelimit(key=ratelimit_key, rate='10/m', method='POST', block=False), name='post')
 class RefreshTokenView(APIView):
     """
     Vista para renovar tokens de acceso usando tokens de refresco
@@ -584,7 +582,7 @@ class SessionInfoView(APIView):
     responses={201: "Usuario registrado exitosamente"},
     description="Registra un nuevo usuario en el sistema."
 )
-@method_decorator(ratelimit(key='ip', rate='3/h', method='POST', block=False), name='post')
+@method_decorator(ratelimit(key=ratelimit_key, rate='3/h', method='POST', block=False), name='post')
 class UserRegistrationView(APIView):
     """
     Vista para registro de usuarios
