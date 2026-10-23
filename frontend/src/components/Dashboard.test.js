@@ -1,4 +1,4 @@
-import { changeBadgeClass } from './Dashboard';
+import { changeBadgeClass, changeBadgeText, dashboardValue } from './Dashboard';
 
 // El color del cambio frente al mes anterior depende del indicador, no solo del signo.
 const GOOD = 'text-green-700 bg-green-100';
@@ -33,4 +33,18 @@ test('0 %, sin porcentaje o indicador desconocido: neutro', () => {
   expect(changeBadgeClass('totalConsumption', 'Datos disponibles')).toBe(NEUTRAL);
   expect(changeBadgeClass('otro', '+5%')).toBe(NEUTRAL);
   expect(changeBadgeClass('totalGeneration', undefined)).toBe(NEUTRAL);
+});
+
+// Con la coma decimal del backend («-4,42% vs mes pasado»), la etiqueta conserva el signo y los decimales.
+test('la etiqueta del cambio toma el porcentaje completo, con coma decimal', () => {
+  expect(changeBadgeText('-4,42% vs mes pasado')).toBe('-4,42%');
+  expect(changeBadgeText('+12,05% vs mes pasado')).toBe('+12,05%');
+  expect(changeBadgeText('+3.5% vs mes pasado')).toBe('+3.5%');
+  expect(changeBadgeText('Datos disponibles')).toBe('Datos disponibles');
+});
+
+test('el valor de la tarjeta del Dashboard se escribe con coma decimal', () => {
+  expect(dashboardValue(29.55)).toBe('29,55');
+  expect(dashboardValue(16.3)).toBe('16,3');
+  expect(dashboardValue('Cargando...')).toBe('Cargando...');
 });

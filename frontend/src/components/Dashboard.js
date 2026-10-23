@@ -56,6 +56,15 @@ const CHANGE_CLASSES = {
  * del indicador (CHANGE_DIRECTION) y del signo del porcentaje; 0 % o un indicador sin
  * sentido definido salen en neutro.
  */
+// Porcentaje del cambio para la etiqueta, con su signo y sus decimales (coma o punto).
+export const changeBadgeText = (change) =>
+  (typeof change === 'string' ? change.match(/[+\-\u2212]?\d+(?:[.,]\d+)?\s*%/)?.[0] : null) || change;
+
+// Valor de la tarjeta con coma decimal; los textos («Cargando...») se muestran tal cual.
+export const dashboardValue = (value) => (typeof value === 'number'
+  ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(value)
+  : value);
+
 export function changeBadgeClass(key, change) {
   const match = typeof change === 'string' ? change.match(/([+\-\u2212]?)(\d+(?:[.,]\d+)?)\s*%/) : null;
   if (!match) return CHANGE_CLASSES.neutral;
@@ -1077,7 +1086,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                     </div>
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">{item.title}</h3>
                     <div className="flex items-baseline">
-                      <p className={`text-3xl font-bold ${item.color}`}>{item.value}</p>
+                      <p className={`text-3xl font-bold ${item.color}`}>{dashboardValue(item.value)}</p>
                       <span className="ml-2 text-lg text-gray-600">{item.unit}</span>
                     </div>
                     <div className="mt-3 pt-3 border-t border-gray-100">
@@ -1110,7 +1119,7 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                           </div>
                           {item.change && item.change.includes('%') && (
                             <span className={`text-xs font-semibold px-2 py-1 rounded-full ${changeBadgeClass(key, item.change)}`}>
-                              {item.change.match(/[+-]?\d+\.?\d*%/)?.[0] || item.change}
+                              {changeBadgeText(item.change)}
                             </span>
                           )}
                         </div>
