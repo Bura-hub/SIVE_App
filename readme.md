@@ -1,406 +1,155 @@
-# 🌟 MTE SIVE - Sistema de Visualización Energético
+# SIVE, Sistema de Visualización Energético
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
-[![Django](https://img.shields.io/badge/Django-5.2.16-green.svg)](https://www.djangoproject.com/)
-[![React](https://img.shields.io/badge/React-19.1.0-blue.svg)](https://reactjs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue.svg)](https://www.postgresql.org/)
+SIVE es la aplicación web del proyecto MTE «Desarrollo de un modelo transaccional de energía no convencional de
+múltiples agentes para el departamento de Nariño» para consultar los datos históricos y los indicadores de consumo,
+generación y clima de las cinco plantas fotovoltaicas del proyecto, en Udenar, Unimar, UCC, HUDN y Unicesmag. Toma
+las mediciones del conector SCADA del proyecto y los datos públicos del mercado eléctrico colombiano de XM.
 
-## 📋 Descripción General
+Corre en producción en https://mte.udenar.edu.co/sive/. Sin iniciar sesión se pueden consultar en solo lectura las
+pantallas de datos, es decir, Dashboard, Medidores, Inversores, Estaciones, Indicadores Solares y Datos Externos.
+Sincronizar, recalcular, exportar reportes y administrar piden sesión.
 
-**MTE SIVE** es una aplicación web integral para la visualización de datos históricos e indicadores clave relacionados con el consumo y generación de energía eléctrica, así como variables climáticas relevantes. Construida con una arquitectura desacoplada utilizando **Django (Python)** para el backend y **React (JavaScript)** para el frontend.
+El uso de cada pantalla está en el Manual de Usuario y el diseño interno, en el Documento de Desarrollo, los dos
+entregados con este código.
 
-### 🎯 Objetivo Principal
-Transformar datos complejos en información accionable, proporcionando a analistas y ejecutivos una visión clara y dinámica del comportamiento de los sistemas energéticos y climáticos.
+## Arquitectura
 
-**Estado del Proyecto:** en producción bajo `https://mte.udenar.edu.co/sive/` (desde el 10 de octubre de 2026,
-con la corrección de ingesta e indicadores, la pantalla Indicadores Solares y el modo invitado; ver *Estado de
-Desarrollo* más abajo).
+Seis servicios en Docker Compose (`docker-compose.prod.yml`, proyecto `mtesive_app`):
 
-## 🚀 Características Principales
-
-### 🔐 Acceso, Autenticación y Seguridad
-- **Modo invitado**: sin iniciar sesión se consultan en solo lectura el Dashboard, Medidores, Inversores, Estaciones,
-  Indicadores Solares y Datos Externos (`IsAuthenticatedOrPublicRead`, con cupo por IP: `SIVE_GUEST_READ_RATE`,
-  120/min, y `SIVE_GUEST_XM_RATE`, 30/min). Sincronizar, recalcular, exportar y administrar piden sesión.
-- **Sistema de Autenticación Robusto**: Login seguro con gestión de usuarios y roles
-- **Gestión de Perfiles Avanzada**: Configuración de información personal, avatares y preferencias
-- **Gestión de Sesiones**: Control de dispositivos conectados con capacidad de cerrar sesiones
-- **Seguridad Mejorada**: Rate limiting, bloqueo temporal por intentos fallidos
-- **Tokens de Acceso**: Sistema de autenticación basado en tokens con expiración automática
-
-### 📊 Dashboard y Visualizaciones
-- **Dashboard Interactivo**: resumen del mes en curso (demanda de los circuitos medidos, generación de las plantas,
-  balance, potencia media de la flota y clima), comparado con el mes anterior en el mismo tiempo transcurrido
-- **Visualizaciones Dinámicas**: Gráficos interactivos (líneas y barras) impulsados por Chart.js
-- **KPIs actualizados cada hora**: se recalculan tras cada ingesta y tras la reconciliación nocturna; no son datos en vivo
-- **Selector de rango en español** y aviso de **disponibilidad de datos** por dispositivo
-- **Versión móvil**: menú lateral como cajón con botón de tres líneas, filtros y gráficas a todo el ancho
-- **Persistencia de Estado**: Recuerda el estado de la barra lateral y pestañas activas
-
-### 🔌 Módulos Especializados
-- **Medidores**: energía importada, demanda pico, factor de carga y factor de potencia, por medidor o para todos
-- **Inversores**: generación, potencia máxima, FP y frecuencia mientras genera, desbalances y Performance Ratio;
-  «No disponible» con su motivo en lugar de 0
-- **Estaciones**: irradiancia y HSP, temperatura, viento (con rosa de los vientos), precipitación y potencia FV teórica
-- **Indicadores Solares**: desempeño de la planta de cada institución (energía, kWh/kWp, factor de capacidad, frente al
-  diseño, PR, cobertura, autoconsumo, ahorro, CO₂ y disponibilidad), con la convención de energía de la tesis y del
-  mercado P2P (`indicators/services/institution_energy.py`, `solar_kpis.py`)
-- **Datos Externos (XM)**: precios, generación y demanda nacional, factor de emisión y comercio internacional
-- **Exportación de Reportes** (administradores): Generación y descarga de reportes en PDF, Excel y CSV
-
-### ⚡ Integración SCADA y Procesamiento
-- **Integración con API SCADA**: ingesta horaria de las mediciones del conector a tablas tipadas por categoría
-- **Reconciliación con el conector (D1)**: compara por dispositivo y día el conteo local con el del conector y
-  vuelve a descargar los días distintos; recupera las colas que las RPi envían con retraso
-- **Cálculo Automático de KPIs**: Tareas asíncronas con Celery que calculan indicadores diarios y mensuales
-- **Sincronización de Metadatos**: Actualización automática de dispositivos, categorías e instituciones
-- **Procesamiento de Datos Históricos**: Almacenamiento y análisis de mediciones históricas
-
-## 🏗️ Arquitectura del Proyecto
-
-### Backend (Django 5.2)
-- **Django 5.2 + Django REST Framework**: APIs RESTful (auth por token `Token <key>`)
-- **PostgreSQL 17**: Base de datos principal
-- **Redis**: Broker para Celery y caché
-- **Celery + Celery Beat**: Procesamiento asíncrono y tareas periódicas (scheduler en BD)
-- **Capa `services/`**: la lógica de cálculo de indicadores vive en funciones puras
-  (`indicators/services/`), separada de tasks/vistas (vistas "finas")
-- **drf-spectacular**: OpenAPI en `/schema/`, Swagger en `/docs/`, Redoc en `/redocs/`
-  (accesibles solo a admin vía sesión de `/admin/`)
-
-### Frontend (React 19 + Vite)
-- **React 19**: Biblioteca de interfaz de usuario (JSX servido desde archivos `.js`)
-- **Vite 5**: Bundler y dev server (`npm start`); **Vitest** para tests (`npm test`)
-- **Chart.js** (`react-chartjs-2`, `chartjs-plugin-zoom`): gráficos, incluida la rosa de vientos polar
-- **Tailwind CSS**: framework de CSS utilitario
-- Navegación por **estado** (sin router de URL); la URL base de la API se inyecta en
-  build-time vía `VITE_API_URL`
-
-### Infraestructura
-- **Docker**: containerización completa (`docker-compose.prod.yml`)
-- **PostgreSQL** (persistencia) y **Redis** (cache/broker)
-- **Producción tras Apache**: publicado como subruta **`/sive/`** del dominio
-  `mte.udenar.edu.co`, reutilizando su certificado Let's Encrypt (ver sección de despliegue)
-
-## 🛠️ Requisitos del Sistema
-
-### Software Requerido
-- **Docker**: Versión 20.10 o superior
-- **Docker Compose**: Versión 2.0 o superior
-- **Git**: Para control de versiones
-
-### Hardware Recomendado
-- **RAM**: 4GB mínimo, 8GB recomendado
-- **Almacenamiento**: 20GB mínimo para desarrollo, 50GB+ para producción
-- **CPU**: Procesador de 2+ núcleos para desarrollo, 4+ núcleos para producción
-
-## ⚙️ Instalación y Configuración
-
-### 1. Clonar el Repositorio
-```bash
-git clone <URL_DEL_REPOSITORIO>
-cd <carpeta-del-repo>
-```
-
-### 2. Configurar Variables de Entorno
-```bash
-# Copiar archivo de ejemplo
-cp env.example .env
-
-# Editar variables de entorno (ver env.example para la lista completa)
-nano .env
-```
-
-### 3. Desplegar con Docker
-
-#### Para Desarrollo (Windows):
-```powershell
-.\scripts\deploy_to_new_machine.ps1
-```
-
-#### Para Producción (Windows):
-```powershell
-.\scripts\deploy_production.ps1 deploy
-```
-
-#### Para Producción (Linux/Mac):
-```bash
-chmod +x scripts/deploy_production.sh
-./scripts/deploy_production.sh deploy
-```
-
-### 4. Configurar Aplicación
-```bash
-# Crear superusuario
-docker exec -it mte_backend_prod python manage.py createsuperuser
-
-# Verificar servicios
-docker-compose -f docker-compose.prod.yml ps
-```
-
-## 🌐 URLs de Acceso
-
-### Desarrollo:
-- **Frontend**: http://localhost:${FRONTEND_PORT:-3503}
-- **Backend**: http://localhost:${BACKEND_PORT:-3504}
-- **Admin**: http://localhost:${BACKEND_PORT:-3504}/admin
-
-### Producción (bajo Apache, subruta `/sive/`):
-- **Aplicación**: https://mte.udenar.edu.co/sive/
-- **Admin**: https://mte.udenar.edu.co/sive/admin/
-- **API**: https://mte.udenar.edu.co/sive/api/
-- **Docs API** (solo admin, tras iniciar sesión en `/sive/admin/`): Swagger `/sive/docs/`,
-  Redoc `/sive/redocs/`, esquema OpenAPI `/sive/schema/`
-
-> Los contenedores escuchan solo en `127.0.0.1:3503` (frontend) y `127.0.0.1:3504`
-> (backend); **no** se exponen a Internet — solo Apache los alcanza. Ver
-> [Despliegue en producción bajo `/sive/`](#-despliegue-en-producción-bajo-sive).
-
-## 🌐 Despliegue en producción bajo `/sive/`
-
-SIVE se publica como **subruta `/sive/`** de `mte.udenar.edu.co`, reutilizando el Apache y
-el certificado Let's Encrypt existentes, sin abrir puertos nuevos.
-
-```
-Navegador ──HTTPS──> Apache (:443, cert de mte.udenar.edu.co)
-   /sive/api,/auth,/admin,... ├─(quita /sive)──> 127.0.0.1:3504  backend  (gunicorn)
-   /sive/django-static        ├────────────────> 127.0.0.1:3504  (WhiteNoise)
-   /sive/ (resto)             └────────────────> 127.0.0.1:3503  frontend (nginx)
-```
-
-- El **frontend** navega por estado (sin router de URL) y carga assets de forma relativa bajo `/sive/`.
-- El **backend** corre con `FORCE_SCRIPT_NAME=/sive`, así admin, DRF, Swagger y redirecciones generan URLs con `/sive`.
-- API y frontend comparten **el mismo origen** → sin CORS ni contenido mixto.
-
-**Variables clave del `.env`:**
-```env
-DEBUG=False
-ALLOWED_HOSTS=localhost,127.0.0.1,mte.udenar.edu.co
-CORS_ALLOWED_ORIGINS=https://mte.udenar.edu.co
-CSRF_TRUSTED_ORIGINS=https://mte.udenar.edu.co
-VITE_API_URL=https://mte.udenar.edu.co/sive     # se incrusta en el bundle en build-time
-FORCE_SCRIPT_NAME=/sive
-STATIC_URL=/sive/django-static/
-USE_X_FORWARDED_HOST=True
-BEHIND_TLS_PROXY=True
-SECURE_HSTS_SECONDS=0        # dominio compartido; HSTS lo gestiona Apache
-```
-
-**Reconstruir tras cambiar `VITE_API_URL`** (se hornea en build-time):
-```bash
-docker compose -f docker-compose.prod.yml build backend frontend
-docker compose -f docker-compose.prod.yml up -d
-```
-
-**Apache** (lo aplica el administrador; requiere `proxy`, `proxy_http`, `headers`): insertar el
-bloque de [`deploy/apache-sive.conf`](deploy/apache-sive.conf) dentro del `<VirtualHost *:443>`
-existente, luego `sudo apache2ctl configtest && sudo systemctl reload apache2`.
-
-**Verificación:**
-```bash
-curl -sk  https://mte.udenar.edu.co/sive/health/   # -> 200
-curl -sk  https://mte.udenar.edu.co/sive/api/      # -> 401 (la raíz de la API pide sesión)
-curl -sk  https://mte.udenar.edu.co/sive/api/dashboard/summary/   # -> 200 (lectura pública, modo invitado)
-curl -skI https://mte.udenar.edu.co/sive/          # -> 200 (index del frontend)
-```
-
-> Nota: los estáticos de admin/DRF se sirven con WhiteNoise; Apache quita el prefijo `/sive` y
-> WhiteNoise sirve en `/django-static/`. La ruta crítica (frontend + API JSON) no depende de
-> estáticos de Django.
-
-## 📊 Indicadores Clave de Rendimiento (KPIs)
-
-La metodología completa está en [`indicators/indicators.md`](indicators/indicators.md) y en la corrección de octubre de
-2026 ([`docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md`](docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md),
-con sus hallazgos C1–C22). Cada tarjeta explica su cálculo en la propia aplicación (`frontend/src/utils/kpiInfo.js`).
-
-### 🔋 Dashboard (mes en curso)
-- **Demanda de los circuitos medidos**: Medidor 1 de cada institución, horas con ≥ 15 de 30 lecturas (kWh)
-- **Generación de las plantas FV**: inversores de las cinco plantas de 17,55 kWp, sin equipos de prueba ni retirados (kWh)
-- **Balance generación − demanda** y **Potencia media de la flota** (generación × 1000 / horas transcurridas)
-- **Clima**: temperatura, humedad, viento e irradiancia de las estaciones
-- **Inversores con datos**: inversores de planta con lecturas en SIVE en las últimas 24 h (no es un dato en vivo)
-
-### 🔌 Medidores
-- **Energía importada**: integración de la potencia activa (C17)
-- **Demanda pico**: mayor media de bloques de reloj de 15 min (C18); **Factor de carga** = media / pico
-- **Factor de potencia**: promedio de |FP| (C19); con «Todos», sumas de medias y de picos (C20)
-
-### ☀️ Inversores e Indicadores Solares
-- **Generación**, **potencia máxima**, **FP** y **frecuencia** mientras genera, **desbalances** de tensión y corriente
-- **Performance Ratio** con la estación de la institución, validada contra la de referencia (C22)
-- **Rendimiento específico** (kWh/kWp), **factor de capacidad**, **frente al diseño**, **cobertura solar**,
-  **autoconsumo**, **ahorro estimado** (con el CU del comercializador, C13) y **CO₂ evitado**
-- La **eficiencia DC/AC** no se calcula: el inversor solo reporta una de sus entradas MPPT
-
-## 🔄 Tareas Programadas (Celery Beat)
-
-Definidas en `CELERY_BEAT_SCHEDULE` (`core/settings.py`) y cargadas en la BD por el `DatabaseScheduler`. Horas de Bogotá:
-
-| Tarea | Horario | Qué hace |
+| Servicio | Contenedor | Qué hace |
 |---|---|---|
-| `sync-scada-metadata-hourly` | cada hora, :00 | Sincroniza dispositivos, categorías e instituciones |
-| `check-devices-status-hourly` | cada hora, :01 | Estado de los dispositivos |
-| `repair-device-relationships-hourly` | cada hora, :02 | Repara relaciones dispositivo–institución |
-| `ingest-and-calculate-hourly` | cada hora, :10 | Ingesta de las últimas 3 h y recálculo de indicadores |
-| `reconcile-measurements-midnight` | 00:40 | Reconciliación y recálculo forzado del día de ayer (C15) |
-| `reconcile-measurements-daily` | 01:30 | Reconciliación de hoy y los 35 días anteriores |
-| `warm-solar-cache-daily` | 02:40 | Precalienta la caché por mes de Indicadores Solares |
-| `sync-external-energy-daily` | 03:00 | Sincroniza los datos de XM |
-| `calculate-energy-savings-daily` | 03:30 | Calcula los ahorros con los precios del día |
-| `reconcile-measurements-6h` | 06:40, 12:40, 18:40 | Reconciliación de hoy y los 2 días anteriores |
-| `refetch-verify-yesterday-daily` | deshabilitada | Sustituida por la reconciliación diaria |
+| `db` | `mte_postgres_prod` | PostgreSQL 17 con dispositivos, mediciones, indicadores y cuentas |
+| `redis` | `mte_redis_prod` | Broker de Celery y caché |
+| `backend` | `mte_backend_prod` | Django 5.2 y Django REST Framework con gunicorn, en `127.0.0.1:3504` |
+| `celery_worker` | `mte_celery_worker_prod` | Ingesta, reconciliación con el conector y cálculo de indicadores |
+| `celery_beat` | `mte_celery_beat_prod` | Programación de las tareas periódicas, guardada en la base |
+| `frontend` | `mte_frontend_prod` | React 19 compilado con Vite y servido por nginx, en `127.0.0.1:3503` |
 
-## 📚 Documentación
+Los puertos solo escuchan en el *loopback*. Apache, en el servidor, termina el TLS y publica la aplicación bajo
+`/sive/` del dominio `mte.udenar.edu.co`, con el bloque de [`deploy/apache-sive.conf`](deploy/apache-sive.conf).
 
-### Guías Principales
-- **[Despliegue en Producción](DEPLOYMENT_PRODUCTION.md)**: Guía completa de despliegue
-- **[Scripts de Gestión](scripts/README.md)**: Documentación de scripts de automatización
-- **[Frontend](frontend/README.md)**: Documentación del frontend React
-- **[Indicadores](indicators/indicators.md)**: Metodología de cálculo de KPIs
+Cada hora se descargan las mediciones de las últimas 3 horas y se recalculan los indicadores. Una reconciliación
+nocturna y otra cada 6 horas comparan los conteos de SIVE con los del conector y vuelven a descargar los días que no
+coinciden. Las tareas y sus horarios están en `CELERY_BEAT_SCHEDULE` de `core/settings.py`. Los indicadores no son
+datos en vivo.
 
-### Módulos Especializados
-- **[Datos Externos de Energía](external_energy/README.md)**: Integración con APIs externas (XM)
-- **[Inicio Rápido - Datos Externos](external_energy/quick_start.md)**: Configuración rápida
+## Requisitos
 
-### Diseño e informes
-- **[Corrección de ingesta e indicadores (oct-2026)](docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md)**: hallazgos C1–C22, decisiones y registro de cambios
-- **[Informe HUDN para la visita de ICONTEC](docs/informes/2026-10-hudn-icontec/README.md)**: cifras de la planta del HUDN desde el 2025-04-04
+- Docker Engine con Docker Compose v2 (la orden `docker compose`).
+- Git.
+- Unos 4,5 GB de memoria para los límites de los seis contenedores y espacio para los respaldos de la base, de
+  cientos de MB cada uno.
+- Para el desarrollo sin Docker, Python 3.11 y Node.js 20 o posterior.
+- Acceso de red al conector SCADA (`SCADA_BASE_URL`) y a la API pública de XM.
 
-### Referencia técnica
-- **[Análisis Backend/Frontend](BACKEND_FRONTEND_ANALYSIS.md)**: troubleshooting y fallas comunes de despliegue
-- **Convenciones completas**: `.cursor/rules/*.mdc` y `CLAUDE.md`
+## Instalación
 
-## 🛠️ Comandos de Gestión Útiles
-
-### Desarrollo y Pruebas
 ```bash
-# Ver logs
-docker-compose -f docker-compose.prod.yml logs -f
-
-# Ver estado de servicios
-docker-compose -f docker-compose.prod.yml ps
-
-# Reiniciar servicios
-docker-compose -f docker-compose.prod.yml restart
-
-# Crear backup (base verificada con backup_db.sh --manual, volumen de media y etiqueta antes-<marca> de las imágenes)
-./scripts/deploy_production.sh backup  # Linux/Mac
+git clone <URL_DEL_REPOSITORIO> SIVE_App
+cd SIVE_App
+cp env.example .env          # y completar los valores (ver «Variables de entorno»)
+docker volume create mtesive_app_redis_data_prod    # el compose lo define como externo
+docker compose -p mtesive_app -f docker-compose.prod.yml up -d --build
+docker compose -p mtesive_app -f docker-compose.prod.yml exec backend python manage.py createsuperuser
 ```
 
-### Mantenimiento
+Al arrancar, el backend aplica las migraciones, carga las instituciones, categorías y dispositivos del conector si la
+base está vacía, reúne los estáticos y arranca gunicorn. Para una prueba local basta con `DOMAIN_NAME=localhost` y
+`VITE_API_URL=http://localhost:3504`. La aplicación queda en http://localhost:3503 y la API en
+http://localhost:3504. El histórico de mediciones se trae con `scripts/backfill_mediciones.sh DESDE HASTA` (ver
+[`scripts/README.md`](scripts/README.md)).
+
+Para trabajar en la interfaz sin reconstruir la imagen, con el backend ya arriba:
+
 ```bash
-# Verificar salud
-./scripts/deploy_production.sh health  # Linux/Mac
-
-# Rollback a las imágenes del último despliegue (datos en backups/ultimo_despliegue.txt)
-./scripts/deploy_production.sh rollback  # Linux/Mac
-# ... y además restaurar la base con pg_restore (descarta lo ingerido desde el respaldo)
-./scripts/deploy_production.sh rollback --con-base
-
-# Limpiar recursos
-docker system prune -f
+cd frontend
+npm ci
+VITE_API_URL=http://localhost:3504 npm start    # servidor de Vite en http://localhost:3000
 ```
 
-## 🚨 Solución de Problemas
+El despliegue bajo `/sive/` detrás de Apache, las actualizaciones, la vuelta atrás y los respaldos están en
+[`DEPLOYMENT_PRODUCTION.md`](DEPLOYMENT_PRODUCTION.md).
 
-### Error: Puerto en uso
+## Variables de entorno
+
+La plantilla es `env.example`. El compose pasa a cada contenedor solo las variables que nombra, así que una variable
+que no figure en `docker-compose.prod.yml` no llega a Django.
+
+| Variable | Para qué |
+|---|---|
+| `SECRET_KEY`, `DEBUG` | Clave de Django. `DEBUG=False` siempre en producción |
+| `name_db`, `user_postgres`, `password_user_postgres` | Base de datos que crea el contenedor de PostgreSQL |
+| `REDIS_PASSWORD` | Contraseña de Redis |
+| `SCADA_BASE_URL`, `SCADA_USERNAME`, `SCADA_PASSWORD` | Conector SCADA de donde salen las mediciones |
+| `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` | Hosts y orígenes autorizados |
+| `DOMAIN_NAME`, `FRONTEND_PORT`, `BACKEND_PORT` | Dominio y puertos locales (3503 y 3504 por defecto) |
+| `VITE_API_URL` | URL de la API que Vite escribe en el JavaScript al construir la imagen del frontend. Cambiarla exige reconstruir esa imagen |
+| `FORCE_SCRIPT_NAME`, `STATIC_URL`, `USE_X_FORWARDED_HOST`, `BEHIND_TLS_PROXY` | Publicación bajo `/sive/` detrás de Apache |
+| `SIVE_GUEST_READ_RATE`, `SIVE_GUEST_XM_RATE`, `SIVE_NUM_PROXIES` | Cupos por IP de la lectura sin sesión (120/min y 30/min) y proxies de confianza (1) |
+| `XM_API_TIMEOUT`, `PYDATAXM_VERIFY_SSL`, `SOLAR_INSTALLATION_COST_COP` | Consultas a XM y costo de la instalación para el ROI |
+| `ALERT_WEBHOOK_URL`, `ALERT_EMAIL_TO`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | Destino de las alertas de fallos. Sin ellas, las alertas quedan en el registro |
+
+Otras entradas de `env.example` no tienen efecto. `TIME_ZONE` está fijada en el código en `America/Bogota`,
+`SECURE_HSTS_SECONDS` no la pasa el compose y Django queda en 0, que es lo correcto en un dominio compartido, y
+`REACT_APP_FRONTEND_URL`, `password_postgres`, `username_SIVE`, `password_SIVE`, `wsl_account`, `wsl_password`,
+`start_worker_celery` y `start_celery_beat` no las lee nadie.
+
+## Pruebas
+
+Backend, con las clases de prueba de Django. Cada corrida crea una base de prueba temporal y no toca los datos:
+
 ```bash
-# Verificar puertos
-netstat -an | findstr :80    # Windows
-netstat -tulpn | grep :80    # Linux/Mac
+docker compose -p mtesive_app -f docker-compose.prod.yml exec backend python manage.py test
+docker compose -p mtesive_app -f docker-compose.prod.yml exec backend python manage.py test tests.test_solar_indicators
 ```
 
-### Error: Docker no responde
-```bash
-# Windows
-Restart-Service -Name "com.docker.service"
+Frontend, con Vitest:
 
-# Linux/Mac
-sudo systemctl restart docker
+```bash
+cd frontend
+npm ci
+npm test
+npm run build
 ```
 
-### Error: Base de datos no conecta
-```bash
-# Verificar logs
-docker logs mte_postgres_prod
+`.github/workflows/ci.yml` corre las dos en cada *push* y *pull request*, y comprueba además que no falte ninguna
+migración. En `tests/` hay también guiones de diagnóstico que se ejecutan a mano contra una base real y no forman
+parte de la suite (lista en `tests/conftest.py`).
 
-# Reiniciar base de datos
-docker-compose -f docker-compose.prod.yml restart db
-```
+## Estructura del repositorio
 
-## 📈 Estado de Desarrollo
+| Ruta | Contenido |
+|---|---|
+| `core/` | Configuración de Django y Celery, URL, permisos, cupos, salud y alertas |
+| `authentication/` | Cuentas, token con expiración, sesiones, perfil y bloqueo por intentos |
+| `scada_proxy/` | Cliente del conector SCADA, ingesta, reconciliación y mediciones por categoría |
+| `indicators/` | Cálculo de indicadores, Indicadores Solares, reportes y vistas de la API. Metodología en [`indicators/indicators.md`](indicators/indicators.md) |
+| `external_energy/` | Datos de XM y ahorro de las plantas. Detalle en [`external_energy/README.md`](external_energy/README.md) |
+| `frontend/` | Interfaz en React. Detalle en [`frontend/README.md`](frontend/README.md) |
+| `tests/` | Suites del backend y guiones de diagnóstico |
+| `scripts/` | Despliegue, respaldo, relleno y recálculo del histórico. Detalle en [`scripts/README.md`](scripts/README.md) |
+| `deploy/` | Bloque de Apache para publicar bajo `/sive/` |
+| `requirements.txt`, `requirements/` | Dependencias de Python. La imagen se construye con `requirements.txt` |
+| `static/` | Estáticos reunidos de Django (administración y documentación de la API) |
+| `Dockerfile.backend`, `docker-compose.prod.yml`, `init-db.sql` | Imagen del backend, servicios e inicialización de la base |
 
-### ✅ Funcionalidades operativas
-- Autenticación por token con expiración/refresh, rate limiting y bloqueo temporal; modo invitado de solo lectura
-- Dashboard, Medidores, Inversores, Estaciones e Indicadores Solares, con selector de rango, disponibilidad de datos
-  y versión móvil
-- Ingesta horaria del conector SCADA en tablas tipadas (esquema v2) y reconciliación diaria con el conector
-- Integración con el mercado XM (`external_energy`, `pydataxm`)
-- Cálculo de indicadores en Celery + capa `services/` (funciones puras, vistas finas), con caché por mes
-- Reportes en PDF/Excel/CSV
-- Despliegue en producción en Docker bajo Apache, subruta `/sive/`
+La documentación de la API, generada con drf-spectacular, está en `/docs/` (Swagger), `/redocs/` y `/schema/`, solo
+para administradores con sesión iniciada en `/admin/`.
 
-### 🔧 Historia reciente
-- **Julio de 2026 (Olas 0–5)**: migración del frontend de CRA a **Vite**; lógica de indicadores en `indicators/services/`;
-  esquema v2 de mediciones; auditoría de las tarjetas KPI; selector de rango en español, disponibilidad de datos y
-  versión móvil (18-jul)
-- **Octubre de 2026 (corrección C1–C22, rama `correccion-indicadores-2026-10`, desplegada el 10-oct)**: reconciliación de
-  mediciones (D1) y backfill desde mayo de 2026; energía por institución con la convención de la tesis y del mercado P2P;
-  medidores integrados de la potencia (C17–C20); inversor con FP y frecuencia mientras genera y PR validado (C1–C5, C22);
-  reposición de lecturas perdidas sueltas (C21); ahorro con la tarifa al usuario (C13); pantalla Indicadores Solares;
-  modo invitado
-- **21 de octubre de 2026**: PR de Inversores con las reglas de Indicadores Solares, alertas, cupos y XM configurables
-  desde `.env`, el CI con todas las suites (236 pruebas), ayuda integrada al día y correcciones del frontend
-  (`f42ca0a`, `5048d56`, `34b5e14`); la energía de Inversores también igual a la de Indicadores Solares, con el
-  histórico recalculado desde el 2024-12-01 (`ec12df7`); después, la energía de Inversores (día, mes, gráfica y detalle horario) sale de
-  la misma energía horaria con la reposición de lecturas sueltas (C21) que Indicadores Solares
+## Licencia
 
-### 🎯 Pendiente
-- Destino de las alertas: el compose ya pasa `ALERT_WEBHOOK_URL`, `ALERT_EMAIL_TO` y `EMAIL_*`, pero por decisión del
-  autor el `.env` de producción no define ningún canal hasta que haya uno institucional; las alertas quedan en el log
-- Irradiancia POA para un PR en el plano de los módulos (hoy es con irradiancia horizontal)
+Copyright (c) 2025-2026 Universidad de Nariño. Todos los derechos reservados. Nadie puede usar, copiar, modificar ni
+distribuir este software sin autorización previa y por escrito de la Universidad de Nariño. Las bibliotecas de
+terceros conservan sus propias licencias. El texto completo está en [`LICENSE`](LICENSE).
 
-## 🤝 Contribución
+## Autores
 
-Las contribuciones son bienvenidas:
+- Brayan Stiven López-Méndez, Departamento de Electrónica, Universidad de Nariño.
+- Wilson Olmedo Achicanoy-Martínez, Ph. D., Departamento de Electrónica, Universidad de Nariño.
 
-1. **Fork** del repositorio
-2. **Crear** una rama para tu funcionalidad
-3. **Commit** tus cambios
-4. **Push** a la rama
-5. **Crear** un Pull Request
+Desarrollado en el Grupo de Investigación en Ingeniería Eléctrica y Electrónica (GIIEE) de la Universidad de Nariño,
+en el proyecto MTE, financiado por el Sistema General de Regalías (BPIN 2021000100499).
 
-### Guías de Contribución
-- Sigue las convenciones de código del proyecto
-- Incluye pruebas para nuevas funcionalidades
-- Actualiza la documentación según sea necesario
+## Contacto
 
-## 📞 Soporte y Contacto
-
-### Canales de Soporte
-- **Issues del Proyecto**: Reportar bugs y solicitar funcionalidades
-- **Documentación**: Guías de usuario y técnica
-- **Sistema de Ayuda**: Integrado en la aplicación
-
-### Información del Proyecto
-- **Código BPIN**: 2021000100499
-- **Tipo**: Sistema de Visualización Energético
-- **Ubicación**: Departamento de Nariño, Colombia
-- **Estado**: en producción bajo `/sive/`
-
-## 📄 Licencia
-
-SIVE es software con todos los derechos reservados a favor de la Universidad de Nariño, titular de los derechos
-patrimoniales. Sus autores son Brayan Stiven López-Méndez y Wilson Olmedo Achicanoy-Martínez. Ver [`LICENSE`](LICENSE).
-
-## 🙏 Agradecimientos
-
-- **Equipo de Desarrollo**: Por la implementación técnica robusta
-- **Usuarios**: Por el feedback y pruebas continuas
-- **Comunidad Open Source**: Por las librerías y herramientas utilizadas
-- **Instituciones Colaboradoras**: Por el apoyo y recursos proporcionados
-
----
-
-**Última Actualización**: Octubre 2026 (corrección de ingesta e indicadores C1–C22, reconciliación con el conector, Indicadores Solares y modo invitado).
+GIIEE, Universidad de Nariño, Pasto, Colombia. Correo wilachic@udenar.edu.co.

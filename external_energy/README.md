@@ -3,8 +3,7 @@
 La aplicación `external_energy` trae datos del mercado eléctrico colombiano desde **XM**, el operador del sistema, con
 la librería `pydataxm`, y calcula el **ahorro** de las plantas del proyecto. Alimenta la pantalla «Datos Externos».
 
-No hay otras integraciones. No se usan OpenWeatherMap ni Electricity Maps, y no hace falta ninguna clave de API: la API
-pública de XM no la pide.
+No hay otras integraciones ni hace falta una clave de API, porque la API pública de XM no la pide.
 
 ## Qué se consulta en XM
 
@@ -25,13 +24,13 @@ defecto) y no se desactiva para el resto del proceso.
 
 ## Endpoints
 
-Todos cuelgan de `/api/external-energy/`. Los `GET` son públicos en solo lectura (modo invitado); `sync/` pide un
-superusuario. El parámetro `range` acepta `week` (7 días), `month` (30), `quarter` (90) y `year` (365); un valor
+Todos cuelgan de `/api/external-energy/`. Los `GET` son públicos en solo lectura, en modo invitado, y `sync/` pide un
+superusuario. El parámetro `range` acepta `week` (7 días), `month` (30), `quarter` (90) y `year` (365). Un valor
 desconocido se toma como 30 días.
 
 | Método y ruta | Qué devuelve | Fuente | Rango por defecto | Caché | Cupo anónimo |
 |---|---|---|---|---|---|
-| `GET prices/` | Precio medio, máximo, mínimo, variación, tendencia, historial diario y datos del mercado del periodo | Base de datos; si está vacía para el rango, consulta XM y guarda | `month` | No | `anon_xm` |
+| `GET prices/` | Precio medio, máximo, mínimo, variación, tendencia, historial diario y datos del mercado del periodo | Base de datos. Si está vacía para el rango, consulta XM y guarda | `month` | 1 h | `anon_xm` |
 | `GET savings/` | Ahorro, demanda, generación, autoconsumo, exportación, factor de capacidad, ROI y ahorro por mes | `EnergySavings` | `month` | No | `anon_read` |
 | `GET market-overview/` | Último día de `EnergyMarketData`, los 7 precios más recientes y las alertas activas | Base de datos | (fijo) | 1 h | `anon_read` |
 | `GET generation/` | Serie de `Gene` con media, máximo, mínimo y total | XM en vivo | `month` | 1 h | `anon_xm` |
@@ -45,7 +44,7 @@ Si XM no responde, las series devuelven listas vacías con `source: "unavailable
 `source` de `prices/` dice si los precios son de XM (`XM`), simulados (`simulated`), mezclados (`mixed`) o si no hay
 (`none`).
 
-Los esquemas están en Swagger (`/docs/`), bajo la etiqueta «Mercado Energético (XM)»; `sync/` está en «Operación».
+Los esquemas están en Swagger (`/docs/`), bajo la etiqueta «Mercado Energético (XM)». `sync/` está en «Operación».
 
 ## Tareas programadas
 
@@ -56,18 +55,17 @@ Definidas en `CELERY_BEAT_SCHEDULE` (`core/settings.py`), en hora de Bogotá:
   (de `DemaCome` y `Gene`) con el precio del día en COP/MWh. La composición por tecnología no se puede obtener de
   esas métricas y queda en 0.
 - **`calculate-energy-savings-daily`** (03:30), tarea `calculate_energy_savings`. Calcula el ahorro diario de las
-  plantas del proyecto (decisión D8 y hallazgo C13 de la corrección de octubre de 2026):
-  - por institución y hora, con la energía de `indicators/services/institution_energy.py` (demanda del Medidor 1,
-    generación, autoconsumo y exportación);
-  - ahorro = energía autoconsumida × CU mensual del comercializador (ASC nivel 2 para Udenar, Mariana, UCC y HUDN;
-    Cedenar nivel 2 para Cesmag; `indicators/data/tarifas_cu.csv`). Un mes sin tarifa publicada usa la última
-    anterior;
-  - guarda en `EnergySavings` la suma de las instituciones por día;
-  - recalcula siempre los últimos 40 días (para recoger las lecturas que llegan tarde) y los días que falten desde el
+  plantas del proyecto.
+  - Por institución y hora, toma la energía de `indicators/services/institution_energy.py`, es decir, demanda del
+    Medidor 1, generación, autoconsumo y exportación.
+  - Ahorro = energía autoconsumida × CU mensual del comercializador de la institución, en nivel de tensión 2 y sin
+    contribución (`indicators/data/tarifas_cu.csv`). Un mes sin tarifa publicada usa la última anterior.
+  - Guarda en `EnergySavings` la suma de las instituciones por día.
+  - Recalcula siempre los últimos 40 días, para recoger las lecturas que llegan tarde, y los días que falten desde el
     2025-02-25. Con `start_date_str` y `end_date_str` recalcula un rango completo.
 
-El ahorro ya no depende del precio de bolsa: el precio de bolsa es lo que cuesta la energía en el mercado mayorista, no
-lo que paga una institución.
+El ahorro no usa el precio de bolsa, que es lo que cuesta la energía en el mercado mayorista y no lo que paga una
+institución.
 
 ## Cálculos de `savings/`
 
@@ -84,25 +82,25 @@ Sobre los días del rango en `EnergySavings`:
 
 Sin sesión se pueden leer todos los `GET`. El tráfico anónimo tiene cupos por IP (`core/throttling.py`):
 
-- `anon_read`, para las lecturas públicas en general: `SIVE_GUEST_READ_RATE`, 120/min por defecto;
-- `anon_xm`, más estricto, para las vistas que pueden consultar XM en vivo: `SIVE_GUEST_XM_RATE`, 30/min por defecto.
+- `anon_read`, para las lecturas públicas en general, con `SIVE_GUEST_READ_RATE`, 120/min por defecto.
+- `anon_xm`, más estricto, para las vistas que pueden consultar XM en vivo, con `SIVE_GUEST_XM_RATE`, 30/min por defecto.
 
-La IP del cliente se toma del último salto de `X-Forwarded-For` según `SIVE_NUM_PROXIES` (1 por defecto: Apache
-delante del backend). Los usuarios con sesión usan el cupo normal de usuario.
+La IP del cliente se toma del último salto de `X-Forwarded-For` según `SIVE_NUM_PROXIES`, 1 por defecto, que es
+Apache delante del backend. Los usuarios con sesión usan el cupo normal de usuario.
 
 ## Modelos
 
 - `EnergyPrice`: precio de bolsa medio por día (COP/kWh) y su fuente.
 - `EnergyMarketData`: demanda, oferta y precio del mercado por día.
 - `EnergySavings`: ahorro diario de las plantas.
-- `EnergyPriceForecast` y `EnergyAlert`: existen en el modelo, pero ninguna tarea los llena; solo el comando de datos
+- `EnergyPriceForecast` y `EnergyAlert`: existen en el modelo, pero ninguna tarea los llena, solo el comando de datos
   simulados.
 
 ## Datos simulados
 
 `python manage.py populate_external_energy_data [--days 90] [--clear]` llena las tablas con datos aleatorios para
-desarrollo. Esos precios llevan `source = 'ElectricityMaps'` (no vienen de ningún servicio) y `prices/` los marca como
-`simulated`. **No se usa en producción.**
+desarrollo. Esos precios llevan `source = 'ElectricityMaps'`, aunque no vienen de ningún servicio, y `prices/` los
+marca como `simulated`. No se usa en producción.
 
 ## Variables de entorno
 
@@ -115,7 +113,7 @@ desarrollo. Esos precios llevan `source = 'ElectricityMaps'` (no vienen de ning�
 | `SIVE_GUEST_XM_RATE` | `30/min` | Cupo anónimo de las vistas que consultan XM |
 | `SIVE_NUM_PROXIES` | 1 | Proxies de confianza delante del backend |
 
-`docker-compose.prod.yml` las pasa al backend y a los dos servicios de Celery; se documentan en `env.example`.
+`docker-compose.prod.yml` las pasa al backend y a los dos servicios de Celery. Están en `env.example`.
 
 ## Pruebas
 
@@ -123,4 +121,5 @@ desarrollo. Esos precios llevan `source = 'ElectricityMaps'` (no vienen de ning�
 docker compose -f docker-compose.prod.yml exec backend python manage.py test tests.test_external_energy_fixes tests.test_savings_cu tests.test_guest_mode
 ```
 
-`tests/test_external_energy.py` no es una suite: es un guion de diagnóstico que se corre a mano contra una base real.
+`tests/test_external_energy.py` es un guion de diagnóstico que se corre a mano contra una base real y no forma parte
+de la suite.
