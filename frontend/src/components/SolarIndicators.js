@@ -376,7 +376,7 @@ const SolarIndicators = () => {
     { clave: 'generacion', titulo: 'Energía generada', valor: num(t.generacion_kwh, 0), unidad: 'kWh',
       detalle: `${num(t.generacion_kwh / 1000, 2)} MWh en ${t.dias} días`, icono: <IconZap className="w-6 h-6" />, color: 'amber' },
     { clave: 'rendimiento', titulo: 'Rendimiento específico', valor: num(t.rendimiento_especifico_kwh_kwp, 0), unidad: 'kWh/kWp',
-      detalle: `${num(t.rendimiento_especifico_kwh_kwp / Math.max(t.dias, 1), 2)} kWh/kWp por día · ${datos.parametros.kwp} kWp`,
+      detalle: `${num(t.rendimiento_especifico_kwh_kwp / Math.max(t.dias, 1), 2)} kWh/kWp por día · ${num(datos.parametros.kwp, 2)} kWp`,
       icono: <IconSolarPanel className="w-6 h-6" />, color: 'orange' },
     { clave: 'factor_capacidad', titulo: 'Factor de capacidad', valor: num(t.factor_capacidad * 100, 1), unidad: '%',
       detalle: 'Energía / (kWp × horas del periodo)', icono: <IconGauge className="w-6 h-6" />, color: 'amber' },
@@ -431,7 +431,7 @@ const SolarIndicators = () => {
               {nombre} · {etiquetaPeriodo(datos.rango.desde)} – {etiquetaPeriodo(datos.rango.hasta)}
             </span>
             <span className="inline-flex items-center px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs text-gray-600">
-              {datos.parametros.kwp} kWp instalados · comercializador {datos.parametros.comercializador.toUpperCase()}
+              {num(datos.parametros.kwp, 2)} kWp instalados · comercializador {datos.parametros.comercializador.toUpperCase()}
             </span>
           </div>
         )}

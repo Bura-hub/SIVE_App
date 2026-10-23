@@ -328,7 +328,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
         if (value > 70) return "+Regular";
         return "+Bajo";
       }
-      return `${value > 0 ? '+' : ''}${value.toFixed(1)}${unit}`;
+      return `${value > 0 ? '+' : ''}${formatNumber(value, 1)}${unit}`;
     };
 
     const getStatus = (value, thresholds, invertLogic = false) => {
@@ -363,7 +363,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       maxPower: {
         title: "Potencia Máxima",
         ...(maxPowerKW === null ? { value: NA, unit: "" } : scaleUnit(maxPowerKW, 'kW', 1)),
-        change: maxPowerKW ? `${maxPowerKW.toFixed(1)} kW` : "Sin datos",
+        change: maxPowerKW ? `${formatNumber(maxPowerKW, 1)} kW` : "Sin datos",
         status: maxPowerKW ? "positivo" : "normal",
         icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M3 3v18h18"></path>
@@ -1281,12 +1281,12 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-semibold text-green-700">
-                                {((filters.timeRange === 'hourly' ? item.energy_ac_kwh : item.total_generated_energy_kwh) || 0).toFixed(2)}
+                                {formatNumber(filters.timeRange === 'hourly' ? item.energy_ac_kwh : item.total_generated_energy_kwh, 2)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                               <div className="text-xs lg:text-sm font-semibold text-blue-700">
-                                {((item.max_power_w || 0) / 1000).toFixed(1)}
+                                {formatNumber((item.max_power_w || 0) / 1000, 1)}
                               </div>
                             </td>
                             <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
@@ -1294,7 +1294,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                                 {isNum(item.avg_power_factor) ? (
                                   <>
                                     <div className="text-xs lg:text-sm font-semibold text-gray-900">
-                                      {item.avg_power_factor.toFixed(3)}
+                                      {formatNumber(item.avg_power_factor, 3)}
                                     </div>
                                     <div className={`ml-2 w-2 h-2 rounded-full ${POWER_FACTOR_DOT[powerFactorLevel(item.avg_power_factor)]}`}></div>
                                   </>
@@ -1309,7 +1309,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
                               {isNum(item.performance_ratio_pct) ? (
                                 <div className="text-xs lg:text-sm font-semibold text-green-700"
                                      title={`${item.performance_ratio_valid_days ?? '?'} día(s) válido(s); irradiancia horizontal`}>
-                                  {item.performance_ratio_pct.toFixed(1)}
+                                  {formatNumber(item.performance_ratio_pct, 1)}
                                 </div>
                               ) : (
                                 <div className="text-xs text-gray-500"

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { buildApiUrl } from '../config';
+import { formatNumber } from '../utils/unitUtils';
 
 function ProfileImageUpload({ currentImageUrl, onImageUpdate, onImageDelete }) {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -273,7 +274,7 @@ function ProfileImageUpload({ currentImageUrl, onImageUpdate, onImageDelete }) {
                                         <span className="font-semibold">Archivo:</span> {selectedFile.name}
                                     </p>
                                     <p className="text-sm text-slate-600">
-                                        <span className="font-semibold">Tamaño:</span> {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                        <span className="font-semibold">Tamaño:</span> {formatNumber(selectedFile.size / 1024 / 1024, 2)} MB
                                     </p>
                                     <p className="text-sm text-slate-600">
                                         <span className="font-semibold">Tipo:</span> {selectedFile.type}

@@ -4,6 +4,7 @@ import { ChartCard } from "./KPI/ChartCard";
 import TransitionOverlay from './TransitionOverlay';
 import { buildApiUrl, getDefaultFetchOptions } from '../utils/apiConfig';
 import { IconGlobe, IconRefresh } from './icons';
+import { formatNumber } from '../utils/unitUtils';
 
 // Componente para datos externos de energía - Integración XM
 const ExternalEnergyData = () => {
@@ -132,7 +133,7 @@ const ExternalEnergyData = () => {
     if (value === null || value === undefined || isNaN(value)) {
       return 'N/A';
     }
-    return `${Number(value).toFixed(2)} kWh`;
+    return `${formatNumber(value, 2)} kWh`;
   };
 
   // Objetos `data` memoizados: evitan recalcular labels/datasets (y por tanto la animación
@@ -426,7 +427,7 @@ const ExternalEnergyData = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Precio Promedio</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {energyData?.average_price ? `${Number(energyData.average_price).toFixed(2)}` : '0.00'}
+                  {formatNumber(energyData?.average_price || 0, 2)}
                 </p>
                 <p className="text-sm text-gray-500">COP/kWh</p>
               </div>

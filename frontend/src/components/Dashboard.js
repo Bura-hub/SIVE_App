@@ -28,6 +28,7 @@ import {
 // Importar funciones de manejo de errores de autenticación y utilidades de API
 import * as apiUtils from '../utils/apiConfig';
 import { DASHBOARD_KPI_INFO } from '../utils/kpiInfo';
+import { formatNumber } from '../utils/unitUtils';
 
 // Importaciones desde Chart.js y el plugin de zoom
 
@@ -1094,16 +1095,16 @@ function Dashboard({ authToken, onLogout, username, isSuperuser, navigateTo, isS
                               'text-amber-700'
                             }`}>
                               {key === 'averageInstantaneousPower' 
-                                ? `${(item.previousMonthValue / 1000).toFixed(2)} kW` 
+                                ? `${formatNumber(item.previousMonthValue / 1000, 2)} kW` 
                                 : key === 'avgDailyTemp'
-                                ? `${item.previousMonthValue.toFixed(1)} °C`
+                                ? `${formatNumber(item.previousMonthValue, 1)} °C`
                                 : key === 'relativeHumidity'
-                                ? `${item.previousMonthValue.toFixed(1)} %`
+                                ? `${formatNumber(item.previousMonthValue, 1)} %`
                                 : key === 'windSpeed'
-                                ? `${item.previousMonthValue.toFixed(1)} km/h`
+                                ? `${formatNumber(item.previousMonthValue, 1)} km/h`
                                 : key === 'irradiance'
-                                ? `${item.previousMonthValue.toFixed(1)} W/m²`
-                                : `${(item.previousMonthValue / 1000).toFixed(2)} MWh`
+                                ? `${formatNumber(item.previousMonthValue, 1)} W/m²`
+                                : `${formatNumber(item.previousMonthValue / 1000, 2)} MWh`
                               }
                             </span>
                           </div>

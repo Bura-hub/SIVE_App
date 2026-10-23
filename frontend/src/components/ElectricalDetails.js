@@ -1044,28 +1044,28 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                                 <div className="text-xs lg:text-sm font-semibold text-blue-700">
-                                  {(item.imported_energy_kwh || 0).toFixed(2)}
+                                  {formatNumber(item.imported_energy_kwh, 2)}
                                 </div>
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                                 <div className="text-xs lg:text-sm font-semibold text-red-700">
-                                  {(item.exported_energy_kwh || 0).toFixed(2)}
+                                  {formatNumber(item.exported_energy_kwh, 2)}
                                 </div>
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                                 <div className={`text-xs lg:text-sm font-semibold ${(item.net_energy_consumption_kwh || 0) >= 0 ? 'text-green-700' : 'text-orange-700'}`}>
-                                  {(item.net_energy_consumption_kwh || 0).toFixed(2)}
+                                  {formatNumber(item.net_energy_consumption_kwh, 2)}
                                 </div>
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                                 <div className="text-xs lg:text-sm font-semibold text-orange-700">
-                                  {(item.peak_demand_kw || 0).toFixed(2)}
+                                  {formatNumber(item.peak_demand_kw, 2)}
                                 </div>
                               </td>
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="text-xs lg:text-sm font-semibold text-gray-900">
-                                    {(item.load_factor_pct || 0).toFixed(1)}%
+                                    {formatNumber(item.load_factor_pct, 1)}%
                                   </div>
                                   <div className={`ml-2 w-2 h-2 rounded-full ${
                                     (item.load_factor_pct || 0) > 80 ? 'bg-green-500' : 
@@ -1076,7 +1076,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
                               <td className="px-2 lg:px-3 xl:px-4 py-2 lg:py-3 xl:py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="text-xs lg:text-sm font-semibold text-gray-900">
-                                    {(item.avg_power_factor || 0).toFixed(2)}
+                                    {formatNumber(item.avg_power_factor, 2)}
                                   </div>
                                   <div className={`ml-2 w-2 h-2 rounded-full ${POWER_FACTOR_DOT[powerFactorLevel(item.avg_power_factor)]}`}></div>
                                 </div>
