@@ -397,7 +397,7 @@ def log_pipeline_error(request, exc, traceback):
     """Errback del pipeline post-ingesta. Antes, si un cálculo de la cadena fallaba,
     la cadena se cortaba EN SILENCIO (los cálculos siguientes no corrían y nadie se
     enteraba). Ahora al menos queda registrado; es también el punto de enganche del
-    alerting (Ola 2)."""
+    alerting."""
     task_id = getattr(request, 'id', '?')
     logger.error(
         "PIPELINE POST-INGESTA FALLÓ (task_id=%s): %s. Los cálculos posteriores de la "
@@ -519,7 +519,7 @@ def fetch_historical_measurements_for_all_devices(self, time_range_seconds: int)
 
 
 # ============================================================================
-# Reconciliación de mediciones (D1 del diseño 2026-10-10)
+# Reconciliación de mediciones
 # ----------------------------------------------------------------------------
 # Las RPi guardan en cola cuando pierden conexión y envían días después; la
 # ingesta horaria solo pide las últimas 3 h, así que esas lecturas nunca
@@ -607,7 +607,7 @@ def reconcile_measurements(from_date, to_date, devices=None, recalc=True, client
     Si `recalc`, encola el recálculo SOLO de lo tocado (ver
     enqueue_recalc_for_reconciled). `force_recalc_days` (fechas) se
     recalculan SIEMPRE para todos los dispositivos revisados, aunque los
-    conteos coincidan: cierra C15, porque las filas que la ingesta horaria trae
+    conteos coincidan, porque las filas que la ingesta horaria trae
     después del último recálculo del día dejan los conteos iguales. `deadline`
     (time.monotonic) corta la corrida antes de empezar un día nuevo,
     registrándolo como error.
@@ -820,11 +820,11 @@ def enqueue_recalc_for_reconciled(changed):
 @shared_task(bind=True, soft_time_limit=RECONCILE_SOFT_TIME_LIMIT, time_limit=RECONCILE_TIME_LIMIT)
 @single_instance('reconcile-measurements', ttl=2 * RECONCILE_TIME_LIMIT)
 def reconcile_recent_measurements(self, days=35, force_recalc_days=0):
-    """Tarea periódica de D1: reconcilia hoy y los `days` días anteriores (Bogotá).
+    """Tarea periódica de reconciliación: reconcilia hoy y los `days` días anteriores (Bogotá).
 
     `force_recalc_days`=N recalcula siempre los N días anteriores a hoy (todos
     los dispositivos), aunque sus conteos coincidan. La corrida de las 00:40 usa
-    N=1 para cerrar el día de ayer completo (C15).
+    N=1 para cerrar el día de ayer completo.
 
     Sin autoretry: lo ya reconciliado queda guardado (upserts) y la siguiente
     corrida retoma lo que falte. Programada en CELERY_BEAT_SCHEDULE: 01:30 con
@@ -846,7 +846,7 @@ def reconcile_recent_measurements(self, days=35, force_recalc_days=0):
 def refetch_and_verify_yesterday(self):
     """Alias de compatibilidad: la entrada vieja del beat (o una llamada manual)
     sigue funcionando y delega en la reconciliación con days=1 (ayer y hoy).
-    Sustituida en el beat por reconcile-measurements-daily (D1)."""
+    Sustituida en el beat por reconcile-measurements-daily."""
     return reconcile_recent_measurements.run(days=1)
 
 

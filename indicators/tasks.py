@@ -34,7 +34,7 @@ from core.task_locks import single_instance
 
 logger = logging.getLogger(__name__)
 
-# Helpers puros extraídos a services/ (Ola 5); re-exportados para no romper los imports
+# Helpers puros extraídos a services/; re-exportados para no romper los imports
 # existentes (`from indicators.tasks import ...`).
 from indicators.services.date_ranges import (  # noqa: E402,F401
     COLOMBIA_TZ,
@@ -70,7 +70,7 @@ def calculate_monthly_consumption_kpi(self):
     """
     logger.info("=== INICIANDO TAREA: calculate_monthly_consumption_kpi ===")
     try:
-        # Ventanas con el MISMO tiempo transcurrido (C11): el mes en curso va del día 1 a las 00:00 hasta ahora, y el
+        # Ventanas con el MISMO tiempo transcurrido: el mes en curso va del día 1 a las 00:00 hasta ahora, y el
         # mes anterior del día 1 a las 00:00 hasta el mismo instante relativo (topado al fin de ese mes). Antes el mes
         # anterior llegaba hasta el mismo día COMPLETO, y la comparación salía sesgada a la baja sin cambio real.
         now = get_colombia_now()
@@ -85,8 +85,8 @@ def calculate_monthly_consumption_kpi(self):
 
         weather_stations = Device.objects.filter(category__name__iexact='weatherStation', is_active=True)
 
-        # --- Demanda y generación de las plantas del proyecto (C10, decisión D2) ---
-        # Como en la tesis y el mercado P2P: por institución, D del circuito del Medidor 1 (reconstruida en
+        # --- Demanda y generación de las plantas del proyecto ---
+        # Como en el mercado P2P: por institución, D del circuito del Medidor 1 (reconstruida en
         # medidores netos) y G de su inversor; ver indicators/services/institution_energy.py. Antes se sumaban
         # TODOS los medidores (M1–M5 de cada sede, circuitos parciales que se solapan) y todos los inversores.
         # Campos: total_consumption = demanda D de los circuitos medidos; total_gross_consumption = energía tomada
@@ -115,7 +115,7 @@ def calculate_monthly_consumption_kpi(self):
         def _weather_window(a, b):
             # Filtros físicos como en weather_calc (antes: Avg crudo, con 1968 W/m² y 400 km/h de lecturas
             # erróneas). La irradiancia es la media DIURNA (06:00–17:59) de las estaciones aptas: la de Udenar está
-            # descalibrada (C16).
+            # descalibrada.
             from django.db.models.functions import ExtractHour
             from indicators.institution_config import INSTITUCIONES
             no_aptas = [c['estacion'] for c in INSTITUCIONES.values() if not c.get('estacion_apta_pr', True)]
@@ -238,7 +238,7 @@ def calculate_and_save_daily_data(self, start_date_str: str = None, end_date_str
         range_a, range_b = colombia_day_range(start_date.date(), end_date.date())
         day_trunc = TruncDay('date', tzinfo=COLOMBIA_TZ)
 
-        # Demanda y generación por día de las plantas del proyecto (C10, decisión D2), como el KPI mensual: D del
+        # Demanda y generación por día de las plantas del proyecto, como el KPI mensual: D del
         # circuito del Medidor 1 de cada institución (reconstruida en medidores netos), G de su inversor y la energía
         # tomada de la red (D − autoconsumo). Antes se sumaban todos los medidores y todos los inversores.
         from indicators.services.institution_energy import energia_horaria
@@ -340,7 +340,7 @@ def _calculate_hourly_consumption(measurements):
         hour = row['date'].hour
         power_value = _row_get(row, 'totalActivePower')
         if power_value is None:
-            continue  # NULL = no medido (C9): no entra al promedio
+            continue  # NULL = no medido: no entra al promedio
         hourly_data[hour].append(power_value)
     
     # Calcular promedio por hora
@@ -397,7 +397,7 @@ def calculate_electric_meter_indicators(device_id, date_str, time_range='daily')
         if not measurements.exists():
             return f"No hay mediciones para {device.name} en {date}"
 
-        # Cálculo puro extraído a services/meter_calc.py (Ola 5).
+        # Cálculo puro extraído a services/meter_calc.py.
         computed = compute_meter_indicators(
             measurements.values(*METER_FIELDS).iterator(chunk_size=2000)
         )
@@ -467,11 +467,11 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
         if not measurements.exists():
             return f"No hay mediciones para {device.name} en {date}"
         
-        # Cálculo puro extraído a services/inverter_calc.py (Ola 5).
+        # Cálculo puro extraído a services/inverter_calc.py.
         computed = compute_inverter_indicators(
             measurements.values(*INVERTER_FIELDS).iterator(chunk_size=2000)
         )
-        # Performance Ratio con la estación de la institución (C4/D5).
+        # Performance Ratio con la estación de la institución.
         computed.update(_inverter_performance_ratio(
             device, start_date, end_date - timedelta(days=1), measurements))
 
@@ -514,7 +514,7 @@ def calculate_inverter_indicators(device_id, date_str, time_range='daily'):
 
 def _inverter_performance_ratio(device, first_day, last_day, measurements):
     """PR del inversor entre `first_day` y `last_day` (inclusive, días de Bogotá), con la estación
-    de su institución según `institution_config` (D5). Devuelve los campos performance_ratio_* y
+    de su institución según `institution_config`. Devuelve los campos performance_ratio_* y
     reference_energy_kwh, con el motivo cuando el PR no se puede calcular."""
     config = config_institucion(device.institution.scada_id) if device.institution else None
     if not config or str(device.scada_id) not in config['inversores_generacion']:
@@ -526,8 +526,8 @@ def _inverter_performance_ratio(device, first_day, last_day, measurements):
         return pr_unavailable(PR_REASON_NO_STATION.format(institucion=config['nombre']))
 
     # Mismas reglas y mismas funciones que «Indicadores Solares» (solar_kpis.calcular): irradiación diaria con
-    # cobertura, tope físico y contraste con la estación de referencia (C22); energía horaria con reposición de
-    # lecturas sueltas (C21), y un día solo cuenta si el inversor tiene lectura en ≥ 80 % de las horas de sol.
+    # cobertura, tope físico y contraste con la estación de referencia; energía horaria con reposición de
+    # lecturas sueltas, y un día solo cuenta si el inversor tiene lectura en ≥ 80 % de las horas de sol.
     # Cada planta tiene un único inversor de generación, así que para el mismo rango las dos pantallas dan el mismo
     # PR. La excepción sería un día con `respaldo_generacion` (Udenar antes del 2025-09-03), donde la planta usa
     # otro inversor; hoy no aplica porque la estación de Udenar no es apta para el PR.
@@ -543,7 +543,7 @@ def _inverter_performance_ratio(device, first_day, last_day, measurements):
 
 def _calculate_hourly_inverter_data(measurements):
     """Datos por hora (Bogotá) para la gráfica del inversor. Ver
-    `services.inverter_calc.compute_inverter_hourly_chart` (C5 y C7)."""
+    `services.inverter_calc.compute_inverter_hourly_chart`."""
     return compute_inverter_hourly_chart(measurements)
 
 
@@ -780,7 +780,7 @@ def calculate_daily_weather_indicators(station, measurements, start_date, end_da
     # Agrupar mediciones por día (filas dict v2: measurement['date'])
     daily_measurements = {}
     for measurement in measurements:
-        day = measurement['date'].astimezone(COLOMBIA_TZ).date()  # día de Bogotá (C7)
+        day = measurement['date'].astimezone(COLOMBIA_TZ).date()  # día de Bogotá
         if day not in daily_measurements:
             daily_measurements[day] = []
         daily_measurements[day].append(measurement)
@@ -827,7 +827,7 @@ def calculate_monthly_weather_indicators(station, measurements, start_date, end_
     # Agrupar mediciones por mes (filas dict v2: measurement['date'])
     monthly_measurements = {}
     for measurement in measurements:
-        month_start = measurement['date'].astimezone(COLOMBIA_TZ).date().replace(day=1)  # C7
+        month_start = measurement['date'].astimezone(COLOMBIA_TZ).date().replace(day=1)  # día de Bogotá
         if month_start not in monthly_measurements:
             monthly_measurements[month_start] = []
         monthly_measurements[month_start].append(measurement)
@@ -856,7 +856,7 @@ def calculate_monthly_weather_indicators(station, measurements, start_date, end_
     return total_processed
 
 
-# Cálculo meteorológico por día/mes/hora: extraído a services/weather_calc.py (Ola 5).
+# Cálculo meteorológico por día/mes/hora: extraído a services/weather_calc.py.
 # BUG corregido (vista horaria, Etapa 2): `calculate_single_day_weather_chart_data` se
 # invocaba más abajo (calculate_daily_weather_indicators / _calculate_daily_weather_station_data)
 # pero NUNCA estuvo importada; el NameError quedaba enmascarado por el `except Exception`
@@ -1535,12 +1535,12 @@ def generate_inverter_report(institution_id, devices, report_type, time_range, s
     # Obtener datos según el tipo de reporte
     if report_type == 'Resumen de Generación':
         data = InverterIndicators.objects.filter(filters).select_related('device')
-        # Sin eficiencia DC/AC: no se calcula (C3/D6, `dcPower` mide una sola entrada MPPT).
+        # Sin eficiencia DC/AC: no se calcula (`dcPower` mide una sola entrada MPPT).
         columns = ['device__name', 'date', 'total_generated_energy_kwh', 'energy_ac_daily_kwh', 'max_power_w']
         
     elif report_type == 'Análisis de Rendimiento':
         data = InverterIndicators.objects.filter(filters).select_related('device')
-        # PR con la estación de la institución (C4/D5); el inversor no mide irradiancia ni temperatura.
+        # PR con la estación de la institución; el inversor no mide irradiancia ni temperatura.
         columns = ['device__name', 'date', 'performance_ratio_pct', 'reference_energy_kwh', 'performance_ratio_valid_days']
         
     elif report_type == 'Métricas Operativas':

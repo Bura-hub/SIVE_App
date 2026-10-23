@@ -357,7 +357,7 @@ class DashboardChartUnitsSerializer(serializers.Serializer):
 class DashboardChartPointSerializer(serializers.Serializer):
     """Un punto (día) del gráfico del dashboard (ChartDataView). Los valores de energía
     vienen ya escalados a la unidad de `units`. Reemplaza el schema inline del @extend_schema
-    y hace explícita la forma de la respuesta (Ola 5)."""
+    y hace explícita la forma de la respuesta."""
     date = serializers.CharField()
     daily_consumption = serializers.FloatField()
     daily_generation = serializers.FloatField()

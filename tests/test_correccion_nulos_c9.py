@@ -1,5 +1,5 @@
 """
-C9 (corrección de octubre de 2026): una columna NULL es un dato no medido, no un 0.
+Corrección de octubre de 2026: una columna NULL es un dato no medido, no un 0.
 
 Antes `_row_get` devolvía 0 para NULL: una fase en NULL entraba al desbalance como 0 V y daba
 un desbalance enorme, y un NULL contaba como 0 en los promedios.

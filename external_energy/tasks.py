@@ -52,10 +52,10 @@ SAVINGS_RECALC_DAYS = 40
 
 @shared_task(bind=True, retry_backoff=60, max_retries=3)
 def calculate_energy_savings(self, recalc_days=SAVINGS_RECALC_DAYS, start_date_str=None, end_date_str=None):
-    """Ahorro DIARIO de las plantas del proyecto con la tarifa al usuario (diseño, C13 y D8).
+    """Ahorro DIARIO de las plantas del proyecto con la tarifa al usuario.
 
     Para cada día y cada institución configurada (indicators/institution_config.py):
-      - consumed  = demanda del circuito del Medidor 1 (kWh, convención de la tesis y del mercado P2P)
+      - consumed  = demanda del circuito del Medidor 1 (kWh, misma convención que el mercado P2P)
       - generated = generación del inversor de la planta (kWh)
       - ahorro    = energía AUTOCONSUMIDA × CU mensual del comercializador (ASC nivel 2 para Udenar,
                     Mariana, UCC y HUDN; Cedenar nivel 2 para Cesmag; indicators/data/tarifas_cu.csv).

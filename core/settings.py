@@ -321,7 +321,7 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'scada_proxy.tasks.fetch_historical_measurements_for_all_devices',
         'schedule': crontab(minute=10),  # Cada hora en :10 (después de sync)
         # Ventana de 3h con cadencia 1h: tolera caídas del connector de hasta
-        # ~2h sin pérdida (upserts idempotentes); >2h lo cubre la reconciliación (D1).
+        # ~2h sin pérdida (upserts idempotentes); >2h lo cubre la reconciliación diaria.
         'args': (int(timedelta(hours=3).total_seconds()),),
     },
     'check-devices-status-hourly': {
@@ -332,7 +332,7 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'scada_proxy.tasks.repair_device_relationships',
         'schedule': crontab(minute=2),
     },
-    # D1 (diseño 2026-10-10): las RPi envían colas atrasadas días después y la
+    # Reconciliación: las RPi envían colas atrasadas días después y la
     # ventana de 3 h no las recoge. La reconciliación compara por dispositivo y
     # día el conteo local con meta.total del connector, re-descarga solo los días
     # distintos y recalcula solo lo tocado.
@@ -354,7 +354,7 @@ CELERY_BEAT_SCHEDULE = {
     # La de las 00:40 es la misma reconciliación, pero recalcula SIEMPRE el día de
     # ayer completo (diarios, chart, rollup y mensual de su mes) aunque los conteos
     # coincidan: las filas que la ingesta horaria trae después del recálculo de las
-    # 23:10 no cambian los conteos y, sin esto, el diario de ayer quedaba a medias (C15).
+    # 23:10 no cambian los conteos y, sin esto, el diario de ayer quedaba a medias.
     'reconcile-measurements-midnight': {
         'task': 'scada_proxy.tasks.reconcile_recent_measurements',
         'schedule': crontab(hour=0, minute=40),

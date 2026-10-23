@@ -1,6 +1,6 @@
 name: CI
 
-# Red de seguridad de la Ola 4: corre todas las suites del backend y compila y prueba el
+# Red de seguridad: corre todas las suites del backend y compila y prueba el
 # frontend en cada push/PR. NO ejecuta los guiones de diagnóstico de tests/ (ver
 # tests/conftest.py); SCADA tiene valores ficticios y ninguna suite llama a XM de verdad.
 

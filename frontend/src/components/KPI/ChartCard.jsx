@@ -24,7 +24,7 @@ import { useIsMobile, useIsCoarsePointer } from '../../hooks/useMediaQuery';
 const NF2 = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NF1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
 
-// Registro CENTRAL de Chart.js (Ola 5). ChartCard es el único componente que dibuja
+// Registro CENTRAL de Chart.js. ChartCard es el único componente que dibuja
 // gráficos, así que registrar aquí garantiza que escalas/elementos existan entres por la
 // pantalla que entres. Antes cada pantalla lo registraba por su cuenta; con el
 // code-splitting de Vite, entrar directo a una ruta sin ese registro (p. ej. Datos

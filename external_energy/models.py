@@ -77,7 +77,7 @@ class EnergySavings(models.Model):
         return f"{self.date} - Ahorro: {self.total_savings_cop} COP"
     
     # Sin save() propio: antes recalculaba el ahorro como min(generación, consumo) × precio, lo que pisaba el
-    # cálculo con la tarifa al usuario y el autoconsumo real (external_energy.tasks.calculate_energy_savings, C13).
+    # cálculo con la tarifa al usuario y el autoconsumo real (external_energy.tasks.calculate_energy_savings).
 
 
 class EnergyPriceForecast(models.Model):

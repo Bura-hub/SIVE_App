@@ -1,5 +1,5 @@
 """
-Alerting mínimo para SIVE (Ola 2 de la auditoría: antes había CERO alertas).
+Alerting mínimo para SIVE (antes no había ninguna alerta).
 
 `notify_failure(source, detail)` registra siempre y, si hay canal configurado por
 entorno, envía por webhook (estilo Slack/Discord/Teams) y/o email. Es no-op silencioso

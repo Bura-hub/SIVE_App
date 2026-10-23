@@ -1,5 +1,5 @@
 """
-Ahorro diario con la tarifa al usuario (external_energy.tasks.calculate_energy_savings, diseño C13 y D8):
+Ahorro diario con la tarifa al usuario (external_energy.tasks.calculate_energy_savings):
 energía autoconsumida × CU mensual del comercializador, recalculando los días recientes.
 """
 from datetime import date, datetime, timedelta

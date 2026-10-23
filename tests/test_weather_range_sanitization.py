@@ -1,5 +1,5 @@
 """
-Test del saneamiento de rangos meteorológicos (arreglo de la Ola 1).
+Test del saneamiento de rangos meteorológicos.
 
 El cálculo de estaciones descarta lecturas fuera de rango físico plausible antes de
 promediar (temperatura -20..60 °C, humedad 0..100 %, viento 0..150 km/h, etc.). Este

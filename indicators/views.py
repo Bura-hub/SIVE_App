@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 scada_client = ScadaConnectorClient() 
 
-# Zona horaria y helpers de rango: extraídos a services/date_ranges.py (Ola 5).
+# Zona horaria y helpers de rango: extraídos a services/date_ranges.py.
 # Re-exportados para no romper los usos existentes en este módulo.
 from indicators.services.date_ranges import (  # noqa: E402
     COLOMBIA_TZ,
@@ -110,7 +110,7 @@ class ConsumptionSummaryView(APIView):
         if cached is not None:
             return Response(cached)
 
-        # Ya no se consulta el conector (C12: los inversores activos salen de la BD de SIVE); el resumen no
+        # Ya no se consulta el conector (los inversores activos salen de la BD de SIVE); el resumen no
         # depende de que el SCADA responda.
         try:
             # Obtener el registro de KPI pre-calculado
@@ -120,7 +120,7 @@ class ConsumptionSummaryView(APIView):
                 # Si el registro no existe, devolvemos valores por defecto en lugar de un error.
                 kpi_record = MonthlyConsumptionKPI()
 
-            # --- Demanda D de los circuitos medidos de las plantas (C10, ver institution_energy.totales_plantas) ---
+            # --- Demanda D de los circuitos medidos de las plantas (ver institution_energy.totales_plantas) ---
             total_consumption_current_month = kpi_record.total_consumption_current_month
             total_consumption_previous_month = kpi_record.total_consumption_previous_month
 
@@ -165,7 +165,7 @@ class ConsumptionSummaryView(APIView):
             avg_irradiance_previous = kpi_record.avg_irradiance_previous_month
             logger.info(f"Avg Irradiance: Current: {avg_irradiance_current} W/m², Previous: {avg_irradiance_previous} W/m²")
 
-            # --- Inversores activos (C12) ---
+            # --- Inversores activos ---
             # Solo los inversores de las plantas del proyecto vigentes hoy (institution_config: sin los de prueba ni
             # los Fronius de Udenar retirados el 2026-04-11), y «activo» = con lecturas en SIVE en las últimas 24 h.
             # Antes se contaba el `status` del conector para todos los inversores registrados; de noche los
@@ -177,7 +177,7 @@ class ConsumptionSummaryView(APIView):
             inverter_status_text = inv_summary['status']
             inverter_description_text = inv_summary['description']
 
-            # calculate_kpi_metrics: importado de services/kpi.py (Ola 5).
+            # calculate_kpi_metrics: importado de services/kpi.py.
             # KPI de Consumo Total (NETO)
             consumption_kpi = calculate_kpi_metrics(
                 total_consumption_current_month,
@@ -256,7 +256,7 @@ class ConsumptionSummaryView(APIView):
                 is_irradiance=True
             )
 
-            # KPI de inversores con datos en las últimas 24 h (C12)
+            # KPI de inversores con datos en las últimas 24 h
             active_inverters_kpi = {
                 "title": "Inversores con datos",
                 "value": str(active_inverters_count),
@@ -1522,7 +1522,7 @@ class WeatherStationIndicatorsView(APIView):
             # Sin device_id, daily/monthly consolida por periodo (Sum/Avg/Max/Min entre
             # dispositivos) para no devolver N puntos duplicados por fecha (N=dispositivos).
             if not device_id and time_range in ('daily', 'monthly'):
-                # C8: irradiación, HSP y precipitación son magnitudes por estación (por m² o por
+                # Irradiación, HSP y precipitación son magnitudes por estación (por m² o por
                 # pluviómetro): entre estaciones se promedian, no se suman (antes se sumaban).
                 results = aggregate_indicators_by_period(
                     indicators,

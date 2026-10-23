@@ -1,5 +1,5 @@
 """
-Indicadores de inversor, corrección de octubre de 2026 (C1, C2, C4, C5 y C7).
+Indicadores de inversor, corrección de octubre de 2026 (frecuencia, FP, PR, gráfica horaria y hora de Bogotá).
 """
 from datetime import date, datetime, timedelta
 
@@ -36,13 +36,13 @@ def _bog(y, m, d, h, mi=0):
 
 def _row(**kw):
     row = {f: None for f in INVERTER_FIELDS}
-    row['date'] = _bog(2025, 7, 1, 12)   # la energía se agrupa por hora (C21)
+    row['date'] = _bog(2025, 7, 1, 12)   # la energía se agrupa por hora
     row.update(kw)
     return row
 
 
 class FrecuenciaYFactorDePotenciaTests(SimpleTestCase):
-    """C1 y C2/D7."""
+    """Frecuencia solo generando y FP como media de |FP|/100."""
 
     def setUp(self):
         # Noche: 0 Hz, acPower 0, FP 0. Día: 60 Hz, FP −98 % y +96 %.
@@ -83,7 +83,7 @@ class FrecuenciaYFactorDePotenciaTests(SimpleTestCase):
 
 
 class IrradiacionParaPRTests(SimpleTestCase):
-    """D5: H = Σ irradiancia de 06–18 h en [0, 1400] × 2/60 / 1000; día válido con ≥ 288
+    """H = Σ irradiancia de 06–18 h en [0, 1400] × 2/60 / 1000; día válido con ≥ 288
     muestras diurnas (80 % de 360) y 0 < H ≤ 8 kWh/m²."""
 
     def _dia(self, n, valor, y=2025, m=7, d=1):
@@ -170,7 +170,7 @@ class PerformanceRatioPuroTests(SimpleTestCase):
 
 
 class GraficaHorariaTests(SimpleTestCase):
-    """C5 y C7."""
+    """Gráfica horaria: energía por hora en hora de Bogotá."""
 
     def test_generacion_horaria_es_la_energia_de_la_hora_en_hora_de_bogota(self):
         start = _bog(2025, 7, 1, 10)
@@ -185,7 +185,7 @@ class GraficaHorariaTests(SimpleTestCase):
 
 
 class PerformanceRatioTareaTests(TestCase):
-    """C4: PR de la tarea con la estación de la institución (institution_config)."""
+    """PR de la tarea con la estación de la institución (institution_config)."""
 
     def setUp(self):
         inv_cat = DeviceCategory.objects.create(scada_id='C_INV', name='inverter')

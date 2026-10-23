@@ -250,7 +250,7 @@ def energy_savings(request):
         total_generated = sum(float(s.total_generated_kwh) for s in savings)
         total_savings = sum(float(s.total_savings_cop) for s in savings)
         
-        # C13: el ahorro ya viene calculado por día con la tarifa al usuario (autoconsumo × CU del comercializador,
+        # El ahorro ya viene calculado por día con la tarifa al usuario (autoconsumo × CU del comercializador,
         # external_energy.tasks.calculate_energy_savings). El «costo evitado» ES ese ahorro: antes se recalculaba como
         # generación × precio medio de BOLSA, que no es lo que paga una institución.
         avoided_cost = total_savings

@@ -141,7 +141,7 @@ class InverterIndicators(models.Model):
     ], help_text="Tipo de rango de tiempo del registro.")
     
     # 4.1. Eficiencia de Conversión DC-AC
-    # C3/D6: no se calcula (`dcPower` mide una sola entrada MPPT); queda en NULL.
+    # No se calcula (`dcPower` mide una sola entrada MPPT); queda en NULL.
     dc_ac_efficiency_pct = models.FloatField(null=True, blank=True, default=None, help_text="Eficiencia de conversión DC-AC en porcentaje. No se calcula: dcPower mide una sola entrada MPPT.")
     energy_ac_daily_kwh = models.FloatField(default=0.0, help_text="Energía AC generada diaria en kWh.")
     energy_dc_daily_kwh = models.FloatField(default=0.0, help_text="Energía DC recibida diaria en kWh.")
@@ -150,7 +150,7 @@ class InverterIndicators(models.Model):
     total_generated_energy_kwh = models.FloatField(default=0.0, help_text="Energía total generada en kWh.")
     
     # 4.3. Performance Ratio (PR)
-    # C4/D5: PR = Σ E_AC / Σ (H × kWp) sobre los días válidos de la estación de la institución.
+    # PR = Σ E_AC / Σ (H × kWp) sobre los días válidos de la estación de la institución.
     performance_ratio_pct = models.FloatField(null=True, blank=True, default=None, help_text="Performance Ratio en porcentaje (irradiancia horizontal). NULL si no se puede calcular; ver performance_ratio_note.")
     reference_energy_kwh = models.FloatField(null=True, blank=True, default=None, help_text="Energía de referencia Σ H × kWp de los días válidos, en kWh.")
     performance_ratio_valid_days = models.IntegerField(null=True, blank=True, default=None, help_text="Días válidos usados en el PR.")
@@ -163,7 +163,7 @@ class InverterIndicators(models.Model):
     min_power_w = models.FloatField(default=0.0, help_text="Potencia mínima generada en W.")
     
     # 4.5. Factor de Potencia y Calidad de Inyección
-    # C2/D7: media de |FP|/100 mientras acPower > 0, escala 0–1. C1: frecuencia solo generando.
+    # Media de |FP|/100 mientras acPower > 0, escala 0–1. Frecuencia solo generando.
     avg_power_factor = models.FloatField(null=True, blank=True, default=None, help_text="Factor de potencia promedio (0–1) mientras el inversor genera.")
     avg_reactive_power_var = models.FloatField(default=0.0, help_text="Potencia reactiva promedio en VAr.")
     avg_apparent_power_va = models.FloatField(default=0.0, help_text="Potencia aparente promedio en VA.")

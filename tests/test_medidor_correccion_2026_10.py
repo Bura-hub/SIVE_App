@@ -1,5 +1,5 @@
 """
-Medidores (diseño, C17–C19): energía por integración de la potencia, demanda pico por bloques de reloj de 15 min y
+Medidores: energía por integración de la potencia, demanda pico por bloques de reloj de 15 min y
 factor de potencia con |FP|.
 """
 from datetime import datetime, timedelta

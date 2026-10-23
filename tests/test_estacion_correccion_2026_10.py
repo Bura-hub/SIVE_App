@@ -1,5 +1,5 @@
 """
-Estaciones meteorológicas, corrección de octubre de 2026 (C6, C7, C8 y media circular).
+Estaciones meteorológicas, corrección de octubre de 2026 (irradiación, hora de Bogotá, agregado entre estaciones y media circular).
 """
 from datetime import date, datetime, timedelta
 
@@ -102,7 +102,7 @@ class MensualEnDiasDeBogotaTests(SimpleTestCase):
     CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}},
 )
 class TodosPromediaTests(TestCase):
-    """C8: el agregado «Todos» promedia irradiación, HSP y precipitación entre estaciones."""
+    """El agregado «Todos» promedia irradiación, HSP y precipitación entre estaciones."""
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='twx', password='x')

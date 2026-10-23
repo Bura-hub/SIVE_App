@@ -6,7 +6,7 @@ import { buildApiUrl, getDefaultFetchOptions, requestLogin } from '../utils/apiC
  * Encapsula el estado (data/loading/error/filters) y la lógica de fetch: race-guard por
  * secuencia, dedup de filtros, fetch inmediato al elegir institución y debounce (450 ms)
  * en los demás cambios, más el disparo de cálculo (POST) con re-fetch. Extraído verbatim
- * de ElectricalDetails (Ola 5) para de-duplicar las tres pantallas.
+ * de ElectricalDetails para de-duplicar las tres pantallas.
  *
  * @param {object} p
  * @param {string} p.indicatorsEndpoint  endpoint GET de indicadores de la categoría

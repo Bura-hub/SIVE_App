@@ -1,5 +1,5 @@
 """
-Métricas de un KPI de dashboard (Ola 5).
+Métricas de un KPI de dashboard.
 
 Dado el valor actual y el del mes anterior (+ flags de tipo de indicador), devuelve el
 dict con el valor formateado, el cambio %, el estado y la descripción textual. Extraído
@@ -27,7 +27,7 @@ def summarize_inverter_status(scada_inverters):
 
 def summarize_plant_inverters(now=None, ventana_horas=24):
     """Inversores de las plantas del proyecto vigentes hoy y cuántos tienen lecturas en SIVE en las últimas
-    `ventana_horas` (C12). Lee la BD de SIVE, no el conector: funciona también para invitados."""
+    `ventana_horas`. Lee la BD de SIVE, no el conector: funciona también para invitados."""
     from datetime import timedelta
     from indicators.institution_config import INSTITUCIONES, inversor_vigente
     from indicators.services.date_ranges import get_colombia_now

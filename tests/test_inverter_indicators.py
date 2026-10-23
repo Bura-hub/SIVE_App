@@ -1,8 +1,8 @@
 """
 Tests de los indicadores de inversor.
 
-La eficiencia DC-AC se acotaba a [0, 100] (Ola 1) porque dcPower < acPower en ~92 % de las
-filas. La corrección de octubre de 2026 (C3/D6) explica por qué: dcPower mide una sola entrada
+La eficiencia DC-AC se acotaba a [0, 100] porque dcPower < acPower en ~92 % de las
+filas. La corrección de octubre de 2026 explica por qué: dcPower mide una sola entrada
 MPPT. Desde entonces la eficiencia no se calcula (NULL).
 """
 from datetime import datetime, time, timedelta
@@ -21,8 +21,8 @@ from scada_proxy.models import Device, Institution, DeviceCategory
 
 
 class InverterEfficiencyNotComputedTests(TestCase):
-    """C3/D6 (corrección de octubre de 2026): la eficiencia DC-AC ya no se calcula ni se acota.
-    `dcPower` mide una sola entrada MPPT (tesis H-12), así que el cociente no es una eficiencia.
+    """Corrección de octubre de 2026: la eficiencia DC-AC ya no se calcula ni se acota.
+    `dcPower` mide una sola entrada MPPT, así que el cociente no es una eficiencia.
     Antes estos tests comprobaban el recorte a 100 % (200 % -> 100) y un 80 % «normal»; ahora la
     eficiencia queda en NULL y no dispara la anomalía de eficiencia baja."""
 
@@ -62,7 +62,7 @@ def _inverter_row(**overrides):
     """Fila mínima válida para `compute_inverter_indicators` (todas las columnas de
     INVERTER_FIELDS presentes, en None salvo lo que se sobreescriba)."""
     row = {field: None for field in INVERTER_FIELDS}
-    row['date'] = timezone.make_aware(datetime(2025, 7, 1, 12, 0))   # la energía se agrupa por hora (C21)
+    row['date'] = timezone.make_aware(datetime(2025, 7, 1, 12, 0))   # la energía se agrupa por hora
     row.update(overrides)
     return row
 

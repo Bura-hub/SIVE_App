@@ -1,7 +1,7 @@
 /**
  * Información detallada (info-al-click) de las tarjetas KPI, centralizada para las 4 pantallas
  * (Inicio / Medidores / Inversores / Estaciones). Antes estaba duplicada en 3 componentes y
- * ausente en Inversores (causaba ReferenceError al abrir el overlay). Ver AUDITORIA_SIVE/PLAN_KPIS.md.
+ * ausente en Inversores (causaba ReferenceError al abrir el overlay).
  *
  * Cada entrada usa el esquema profesional de bloques:
  *   title           — nombre de la tarjeta
@@ -14,9 +14,9 @@
  *
  * Nota de exactitud: el conector SCADA muestrea ~cada 2 min (no "cada 5 min") y los KPIs del
  * Inicio son agregaciones MENSUALES recalculadas por tarea programada; "Inversores con datos" cuenta
- * lecturas guardadas en SIVE en las últimas 24 h (C12), no es tiempo real. Los detalles
- * (Medidores/Inversores/Estaciones) agregan sobre el rango de fechas. Corrección de octubre de 2026
- * (C17–C22): docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md.
+ * lecturas guardadas en SIVE en las últimas 24 h, no es tiempo real. Los detalles
+ * (Medidores/Inversores/Estaciones) agregan sobre el rango de fechas. Las fórmulas, tras la corrección de octubre de 2026,
+ * están en indicators/indicators.md.
  */
 
 export const DASHBOARD_KPI_INFO = {

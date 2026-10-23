@@ -1,7 +1,7 @@
 """
 Indicadores solares por institución (indicators/services/institution_energy.py y solar_kpis.py).
 
-Casos con datos sintéticos que reproducen lo que se contrastó con la tesis y el mercado P2P: medidor bruto
+Casos con datos sintéticos que reproducen lo que se contrastó con el mercado P2P: medidor bruto
 (HUDN: toda la FV se autoconsume), medidor neto con exportación (D = medida + FV), «faltante = 0» en la
 generación, hora del medidor inválida con menos de 15 muestras, PR solo con días de estación válidos y tarifa
 extrapolada cuando el mes no tiene CU publicado.

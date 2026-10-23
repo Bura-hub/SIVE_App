@@ -1,5 +1,5 @@
 """
-Helpers de queryset compartidos por las vistas de indicadores (Ola 5).
+Helpers de queryset compartidos por las vistas de indicadores.
 """
 from django.db.models import Sum, Avg, Max, Min
 

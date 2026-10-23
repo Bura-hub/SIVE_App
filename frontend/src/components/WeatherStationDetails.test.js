@@ -7,7 +7,7 @@ import WeatherStationDetails from './WeatherStationDetails';
 import { fmtOrNA, valueOrNull, pvPowerFromRow, stationPrWarning } from './WeatherStationDetails';
 
 // Corrección de octubre de 2026: null = no medido -> «No disponible»; potencia FV sin
-// confundir kWh/m² con W/m²; estación de Udenar marcada como no apta para el PR (C16).
+// confundir kWh/m² con W/m²; estación de Udenar marcada como no apta para el PR.
 describe('WeatherStationDetails, valores no disponibles', () => {
   it('null se muestra «No disponible», un 0 medido se muestra 0', () => {
     expect(fmtOrNA(null, 2)).toBe('No disponible');

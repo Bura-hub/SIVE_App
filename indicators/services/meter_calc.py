@@ -1,5 +1,5 @@
 """
-Cálculo PURO de indicadores de un medidor eléctrico (Ola 5).
+Cálculo PURO de indicadores de un medidor eléctrico.
 
 Extraído de la task `calculate_electric_meter_indicators`: recibe un iterable de filas
 dict (`.values(*METER_FIELDS)`) y devuelve el dict de indicadores calculados, sin tocar
@@ -115,17 +115,17 @@ def compute_meter_indicators(rows):
         ):
             current_tdd_values.extend([current_tdd_a, current_tdd_b, current_tdd_c])
 
-    # 3.2. Energía importada y exportada = integración de la potencia activa (C17, como la tesis y el mercado P2P):
+    # 3.2. Energía importada y exportada = integración de la potencia activa (como en el mercado P2P):
     # Σ max(P, 0)·Δt y Σ max(−P, 0)·Δt con P = totalActivePower en kW. Antes salía de los registros acumulados
     # importedActivePower*/exportedActivePower*, que en varios medidores están desescalados por la razón del TC
-    # (tesis H-16: Mariana M1 ×39,5, HUDN M3 ×38,6, Cesmag M1 y M3 ×78,5) y cuyo saneamiento aceptaba picos de ida
+    # (Mariana M1 ×39,5, HUDN M3 ×38,6, Cesmag M1 y M3 ×78,5) y cuyo saneamiento aceptaba picos de ida
     # y vuelta y tenía un tope que crecía con la ventana (el mensual no era la suma de los diarios). Una lectura
     # que no llegó no suma: la energía del mes es la suma exacta de la de sus días y horas.
     imported_energy_kwh = consumption_energy_kwh(sum(p for p in total_active_power_values if p > 0))
     exported_energy_kwh = consumption_energy_kwh(sum(-p for p in total_active_power_values if p < 0))
     net_energy_consumption_kwh = imported_energy_kwh - exported_energy_kwh
 
-    # 3.3. Demanda pico = máxima media de bloques de reloj de 15 min (C18). Antes: media móvil de 7 muestras por
+    # 3.3. Demanda pico = máxima media de bloques de reloj de 15 min. Antes: media móvil de 7 muestras por
     # POSICIÓN, que a través de un hueco de datos mezclaba lecturas separadas por horas.
     if total_active_power_values:
         bloques = {}
@@ -156,7 +156,7 @@ def compute_meter_indicators(rows):
         load_factor_pct = 0
 
     # 3.5. Factor de Potencia Promedio
-    # El FP del medidor viene con signo (el signo indica el sentido del flujo, p. ej. −0,955; tesis A7.5):
+    # El FP del medidor viene con signo (el signo indica el sentido del flujo, p. ej. −0,955):
     # promediar con signo cancela valores. Se promedia |FP|.
     if power_factor_values:
         avg_power_factor = sum(abs(pf) for pf in power_factor_values) / len(power_factor_values)

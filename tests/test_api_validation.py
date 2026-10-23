@@ -59,7 +59,7 @@ class DateRangeResolverTests(TestCase):
 
 class EnergyFormattingTests(TestCase):
     """services/formatting.py: escalado de unidades de energía (usado por ChartDataView
-    y ConsumptionSummaryView tras la extracción de la Ola 5)."""
+    y ConsumptionSummaryView tras la extracción a services/)."""
 
     def test_auto_energy_unit(self):
         self.assertEqual(auto_energy_unit(500), ("kWh", 1))
@@ -78,7 +78,7 @@ class EnergyFormattingTests(TestCase):
 
 
 class KpiMetricsTests(TestCase):
-    """services/kpi.py: calculate_kpi_metrics (extraído de ConsumptionSummaryView, Ola 5)."""
+    """services/kpi.py: calculate_kpi_metrics (extraído de ConsumptionSummaryView)."""
 
     def test_consumo_con_aumento(self):
         r = calculate_kpi_metrics(1500, 1000, "Consumo total", "kWh")

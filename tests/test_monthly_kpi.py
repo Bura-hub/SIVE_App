@@ -1,6 +1,6 @@
 """
-Tests del KPI mensual del inicio (calculate_monthly_consumption_kpi), con la convención de la tesis y del
-mercado P2P (diseño, C10, C11 y D2): la demanda es la del circuito del Medidor 1 de cada institución configurada,
+Tests del KPI mensual del inicio (calculate_monthly_consumption_kpi), con la misma convención que el
+mercado P2P: la demanda es la del circuito del Medidor 1 de cada institución configurada,
 la generación la de su inversor, y el mes anterior se compara con el mismo tiempo transcurrido.
 """
 from datetime import datetime, timedelta
@@ -43,7 +43,7 @@ class MonthlyKpiTests(TestCase):
     def test_demanda_m1_generacion_y_mes_anterior_con_igual_tiempo(self, _now):
         h_actual = COLOMBIA_TZ.localize(datetime(2026, 7, 15, 10, 0))
         self._hora(self.m1, h_actual, 'totalActivePower', 9.0)
-        self._hora(self.m2, h_actual, 'totalActivePower', 50.0)      # otro circuito: no se suma (C10)
+        self._hora(self.m2, h_actual, 'totalActivePower', 50.0)      # otro circuito: no se suma
         self._hora(self.inv, h_actual, 'acPower', 6000.0)
         # Mes anterior: una hora dentro de la ventana equivalente (15-jun 10:00) y otra fuera (20-jun).
         self._hora(self.m1, COLOMBIA_TZ.localize(datetime(2026, 6, 15, 10, 0)), 'totalActivePower', 4.0)
@@ -55,7 +55,7 @@ class MonthlyKpiTests(TestCase):
         self.assertAlmostEqual(kpi.total_generation_current_month, 6.0)
         # Medidor bruto: la FV se consume en el circuito; de la red se toma D − autoconsumo.
         self.assertAlmostEqual(kpi.total_gross_consumption_current_month, 3.0)
-        self.assertAlmostEqual(kpi.total_consumption_previous_month, 4.0)   # el 20-jun queda fuera (C11)
+        self.assertAlmostEqual(kpi.total_consumption_previous_month, 4.0)   # el 20-jun queda fuera
         horas = (AHORA - COLOMBIA_TZ.localize(datetime(2026, 7, 1))).total_seconds() / 3600
         self.assertAlmostEqual(kpi.avg_instantaneous_power_current_month, 6.0 * 1000 / horas)
 

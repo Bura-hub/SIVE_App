@@ -1,9 +1,9 @@
 """
-Energía horaria por institución con la convención de la tesis y del mercado P2P (diseño, decisiones D2 y D3).
+Energía horaria por institución con la misma convención que el mercado P2P.
 
 - G (generación): Σ acPower de los inversores de generación vigentes, en kWh por hora (Δt nominal de 2 min).
-  Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes (Σ P·Δt × 30/n),
-  como la tesis; con menos de 15 (amanecer, atardecer, caídas) rige «faltante = 0», como el mercado P2P. Así una RPi
+  Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes (Σ P·Δt × 30/n);
+  con menos de 15 (amanecer, atardecer, caídas) rige «faltante = 0», como el mercado P2P. Así una RPi
   que pierde lecturas sueltas (HUDN perdió hasta un 25 % en sep-2026) no se lee como menos generación: con
   «faltante = 0» puro, sep-2026 salía −25 % frente a Solar.web; reponiendo, −16 % (ese mes muchas horas tienen
   menos de 15 lecturas y no se reponen); may–nov 2025 queda a +0,1 %.
@@ -35,7 +35,7 @@ IRRADIACION_MAX_DIA_KWH_M2 = 8.0
 COBERTURA_MIN_ESTACION = 0.8   # fracción mínima de las 360 muestras diurnas para que el día cuente en el PR
 
 
-# Performance Ratio (decisión D5 y reglas de ee0d286 y C22): un día cuenta solo si la irradiación de la estación es
+# Performance Ratio (reglas de ee0d286 y contraste con la estación de referencia): un día cuenta solo si la irradiación de la estación es
 # válida (ver _irradiacion_diaria_sin_cache) y el inversor tiene lectura en al menos el 80 % de las horas de sol.
 FRACCION_MIN_HORAS_SOL_INVERSOR = 0.8
 MINIMO_HORAS_SOL_INVERSOR = FRACCION_MIN_HORAS_SOL_INVERSOR * (HORA_FIN_DIA_SOLAR - HORA_INICIO_DIA_SOLAR)
@@ -46,7 +46,7 @@ def energia_inversor_hora_kwh(suma_w, n):
     """Energía AC de un inversor en una hora (kWh) a partir de la suma de sus `n` lecturas de acPower (W).
 
     E = max(Σ P, 0) × Δt / 1000. Si la hora tiene entre 15 y 29 lecturas, las que faltan se reponen con la media de
-    las presentes (× 30/n, C21); con menos de 15 rige «faltante = 0». Sin lecturas, 0."""
+    las presentes (× 30/n); con menos de 15 rige «faltante = 0». Sin lecturas, 0."""
     if suma_w is None or not n:
         return 0.0
     e = max(suma_w, 0.0) * DT_H / 1000.0
@@ -92,7 +92,7 @@ def dias_pr(energia_dia, irradiacion):
 
     `energia_dia`: salida de `energia_diaria_para_pr`. `irradiacion`: salida de `irradiacion_diaria`.
     Devuelve, por día y en orden, (día, energía kWh, H kWh/m², motivo); motivo None quiere decir que el día cuenta.
-    Un día cuenta si la estación es válida (cobertura, tope físico y contraste con la estación de referencia, C22) y
+    Un día cuenta si la estación es válida (cobertura, tope físico y contraste con la estación de referencia) y
     el inversor tiene lectura en al menos el 80 % de las horas de sol."""
     for dia in sorted(irradiacion):
         d = irradiacion[dia]
@@ -253,7 +253,7 @@ def energia_horaria(institution_scada_id, start_date, end_date, forzar=False):
 
 
 def _irradiacion_diaria_sin_cache(institution_scada_id, start_date, end_date):
-    """{día: {'h_kwh_m2', 'muestras', 'valido', 'motivo'}} de la estación de la institución (decisión D5).
+    """{día: {'h_kwh_m2', 'muestras', 'valido', 'motivo'}} de la estación de la institución.
 
     H = Σ irradiancia de 06:00 a 17:59 (Bogotá) en [0, 1400] W/m² × Δt. Un día vale para el PR si tiene ≥ 80 % de
     las 360 muestras diurnas y H ≤ 8 kWh/m². Devuelve {} si la institución no tiene estación.

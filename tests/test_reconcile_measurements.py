@@ -1,5 +1,5 @@
 """
-Tests de la reconciliación de mediciones con el connector (D1, diseño 2026-10-10).
+Tests de la reconciliación de mediciones con el connector.
 
 Las RPi envían colas atrasadas días después y la ingesta horaria (últimas 3 h)
 no las recogía. reconcile_measurements compara por dispositivo y día de Bogotá
@@ -173,7 +173,7 @@ class ReconcileMeasurementsTests(ReconcileBase):
                          {("inv-1", self.day), ("m-1", self.day)})
 
     def test_forced_day_recalculates_even_with_equal_counts(self):
-        # C15: ayer ya está completo en SIVE (la ingesta horaria trajo lo último),
+        # Ayer ya está completo en SIVE (la ingesta horaria trajo lo último),
         # pero su diario se calculó a las 23:10: hay que recalcularlo igual.
         yesterday, today = self.day, self.day + timedelta(days=1)
         self._remote(self.inverter, yesterday, range(4))

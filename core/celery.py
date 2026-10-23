@@ -27,7 +27,7 @@ app.conf.update(
 )
 
 
-# Alerting (Ola 2): cualquier tarea que FALLE (lance excepción) dispara una alerta.
+# Alerting: cualquier tarea que FALLE (lance excepción) dispara una alerta.
 # No cubre tareas que "tragan" la excepción y devuelven un string de error — esas
 # requieren corrección individual — pero da una red mínima donde antes no había NADA.
 from celery.signals import task_failure  # noqa: E402

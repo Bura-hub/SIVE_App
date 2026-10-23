@@ -160,7 +160,7 @@ const ExternalEnergyData = () => {
   const generationChartData = useMemo(() => ({
     labels: energyData?.generation?.generation_history?.map(item => item.date) || [],
     datasets: [{
-      // XM entrega Gene en kWh por hora; /1000 = MWh en la hora = potencia media en MW (C14).
+      // XM entrega Gene en kWh por hora; /1000 = MWh en la hora = potencia media en MW.
       label: 'Generación (MW)',
       data: energyData?.generation?.generation_history?.map(item => item.value === null ? null : item.value / 1000) || [],
       borderColor: 'rgb(234, 179, 8)',
@@ -178,7 +178,7 @@ const ExternalEnergyData = () => {
   const demandChartData = useMemo(() => ({
     labels: energyData?.demand?.demand_history?.map(item => item.date) || [],
     datasets: [{
-      // XM entrega DemaCome en kWh por hora; /1000 = potencia media en MW (C14).
+      // XM entrega DemaCome en kWh por hora; /1000 = potencia media en MW.
       label: 'Demanda (MW)',
       data: energyData?.demand?.demand_history?.map(item => item.value === null ? null : item.value / 1000) || [],
       borderColor: 'rgb(249, 115, 22)',
@@ -214,7 +214,7 @@ const ExternalEnergyData = () => {
     labels: energyData?.exports?.exports_history?.map(item => item.date) || [],
     datasets: [
       {
-        // ExpoEner/ImpoEner vienen en kWh por hora; /1000 = MWh (C14).
+        // ExpoEner/ImpoEner vienen en kWh por hora; /1000 = MWh.
         label: 'Exportaciones (MWh)',
         data: energyData?.exports?.exports_history?.map(item => item.value === null ? null : item.value / 1000) || [],
         borderColor: 'rgb(59, 130, 246)',

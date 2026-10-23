@@ -1,5 +1,5 @@
 """
-Indicadores del sistema fotovoltaico de una institución (diseño, decisiones D3–D11).
+Indicadores del sistema fotovoltaico de una institución.
 
 Se calculan bajo demanda a partir de la energía horaria de `institution_energy`, sin tablas propias, para que
 siempre reflejen las mediciones que haya en SIVE (incluidas las que llegaron tarde y se reconciliaron).

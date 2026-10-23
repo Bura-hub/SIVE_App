@@ -1,5 +1,5 @@
 """
-Reconciliación manual de mediciones con el connector (D1 del diseño 2026-10-10).
+Reconciliación manual de mediciones con el connector.
 
 Usa la misma función que la tarea periódica reconcile_recent_measurements: por
 dispositivo y día de Bogotá compara el conteo local con `meta.total` del

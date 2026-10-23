@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Migración CRA -> Vite (Ola 5). Notas:
+// Migración CRA -> Vite. Notas:
 // - base './': rutas de assets relativas (la app se sirve bajo un subpath, /sive), igual
 //   que el antiguo "homepage": "." de CRA.
 // - outDir 'build': se conserva el nombre de CRA para no tocar el COPY del Dockerfile.

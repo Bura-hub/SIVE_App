@@ -178,7 +178,7 @@ const calculateTheoreticalPVPower = (irradiance, temperature = 25) => {
   }
 
   // Parámetros de referencia, unificados con el backend (theoretical_pv_power_w):
-  // eficiencia 17% sobre 1 m² de referencia. Ver AUDITORIA_SIVE/PLAN_KPIS.md.
+  // eficiencia 17% sobre 1 m² de referencia.
   const panelEfficiency = 0.17; // 17% (igual que el backend)
   const panelArea = 1.0; // 1 m² de referencia (igual que el backend)
   const temperatureCoefficient = -0.004; // -0.4% por °C
@@ -217,7 +217,7 @@ export function pvPowerFromRow(item, timeRange) {
 }
 
 // Estaciones no aptas para el Performance Ratio (indicators/institution_config.py,
-// estacion_apta_pr = False). C16: la de Udenar marca 7–12 kWh/m²/día, físicamente imposible.
+// estacion_apta_pr = False). La de Udenar marca 7–12 kWh/m²/día, físicamente imposible.
 export const INSTITUCIONES_ESTACION_NO_APTA_PR = ['Udenar'];
 
 export function stationPrWarning(results) {

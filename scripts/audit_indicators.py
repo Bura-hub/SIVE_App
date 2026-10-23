@@ -2,8 +2,7 @@
 """
 Auditoría de indicadores de energía de SIVE.
 
-Inspirado en los scripts data_quality_audit.py / audit_clean.py de la tesis
-Optimalidad-p2p-col: valida los datos crudos, determina empíricamente el intervalo
+Valida los datos crudos, determina empíricamente el intervalo
 de muestreo (Δt) y las UNIDADES de la potencia (W vs kW), y recalcula el consumo y
 la generación con la fórmula canónica Σ(P)·Δt/1000 para compararlos contra lo que
 el sistema tiene almacenado (MonthlyConsumptionKPI / DailyChartData) y contra los

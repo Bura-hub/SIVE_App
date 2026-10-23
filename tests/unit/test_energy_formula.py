@@ -5,8 +5,8 @@ Son tests PUROS (sin Django/BD): se pueden ejecutar en cualquier host con
     python3 -m unittest tests.unit.test_energy_formula
 desde la raíz del proyecto.
 
-Fijan el comportamiento correcto que corrige los bugs C1 (falta Δt / inconsistencia
-mensual-vs-diario), C2 (agregación de flota) y la UNIDAD por métrica (consumo en kW,
+Fijan el comportamiento correcto que corrige los bugs de falta de Δt (inconsistencia
+mensual-vs-diario), de agregación de flota y la UNIDAD por métrica (consumo en kW,
 generación en W) de indicators/tasks.py.
 """
 import unittest
@@ -38,7 +38,7 @@ class EnergyFormulaTests(unittest.TestCase):
     def test_fleet_energy_sums_devices_not_averages(self):
         # 10 inversores, cada uno 500 W constantes, 720 muestras/día c/u => 7200 muestras.
         # Energía de la flota = 10 * (500 W * 24 h / 1000) = 120 kWh.
-        # El bug C2 (dividir por el nº total de mediciones y multiplicar por 24) daba 12 kWh.
+        # El bug de agregación de flota (dividir por el nº total de mediciones y multiplicar por 24) daba 12 kWh.
         fleet_samples = [500.0] * (10 * 720)
         self.assertAlmostEqual(energy_kwh_from_samples(fleet_samples), 120.0, places=6)
 

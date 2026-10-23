@@ -1,9 +1,9 @@
 """
-Cálculo PURO de indicadores meteorológicos por día y por mes (Ola 5).
+Cálculo PURO de indicadores meteorológicos por día y por mes.
 
 Extraído verbatim de tasks.py: reciben filas dict de `.values()` y devuelven el dict
 de indicadores. Puras (no tocan la BD ni Celery). Descartan lecturas fuera de rango
-físico plausible antes de promediar (arreglo de datos de la Ola 1).
+físico plausible antes de promediar.
 """
 import math
 
@@ -189,7 +189,7 @@ def calculate_single_month_weather_indicators(measurements):
     day_measurements = []
 
     for measurement in measurements:
-        # Día de Bogotá (C7): `date.date()` daba el día UTC y partía cada día a las 19:00.
+        # Día de Bogotá: `date.date()` daba el día UTC y partía cada día a las 19:00.
         day = measurement['date'].astimezone(COLOMBIA_TZ).date()
         if current_day != day:
             if day_measurements:
@@ -324,10 +324,10 @@ def calculate_single_day_weather_chart_data(measurements):
     Recibe filas dict de UN día de Bogotá (`.values('date', <columnas meteorológicas>)`).
 
     Corrección de octubre de 2026:
-    - horas de Bogotá (C7; antes `date.hour` en UTC, 5 h corridas);
+    - horas de Bogotá (antes `date.hour` en UTC, 5 h corridas);
     - `hourly_irradiance` es la media horaria con el filtro físico del diario, y
       `daily_irradiance_kwh_m2` es Σ muestras válidas × 2/60 / 1000, igual que el indicador diario
-      (C6; antes se sumaban las 24 medias horarias × 2/60: 30 veces menos);
+      (antes se sumaban las 24 medias horarias × 2/60: 30 veces menos);
     - los promedios del día salen de las muestras (no de 24 medias con las horas vacías en 0);
     - las horas sin datos quedan en None.
     """
@@ -430,7 +430,7 @@ def calculate_wind_speed_distribution(wind_speeds):
 
 
 # ---------------------------------------------------------------------------------------------
-# Irradiación diaria para el Performance Ratio (D5, corrección de octubre de 2026)
+# Irradiación diaria para el Performance Ratio (corrección de octubre de 2026)
 # ---------------------------------------------------------------------------------------------
 
 PR_IRRADIANCE_MAX_WM2 = 1400.0         # tope físico de una muestra (con realce por nubes)

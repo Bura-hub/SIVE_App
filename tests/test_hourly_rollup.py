@@ -246,10 +246,10 @@ class WeatherDailyChartDataNameErrorRegressionTests(TestCase):
         # Antes del fix, esta fila JAMÁS se creaba (NameError silenciado).
         chart = WeatherStationChartData.objects.get(device=self.station, date=self.test_date)
         self.assertEqual(len(chart.hourly_irradiance), 24)
-        # Corrección de octubre de 2026 (C7): las horas son de Bogotá. Antes este test fijaba el
+        # Corrección de octubre de 2026: las horas son de Bogotá. Antes este test fijaba el
         # defecto (agrupaba por la hora UTC: 10:00 Bogotá caía en el bucket 15). Promedio de
         # las dos lecturas: (500 + 600) / 2 = 550, en la hora 10.
         self.assertAlmostEqual(chart.hourly_irradiance[10], 550.0)
         self.assertIsNone(chart.hourly_irradiance[15])
-        # C6: Σ muestras × 2/60 / 1000 = (500 + 600) × 2/60 / 1000.
+        # Σ muestras × 2/60 / 1000 = (500 + 600) × 2/60 / 1000.
         self.assertAlmostEqual(chart.daily_irradiance_kwh_m2, 1100 * (2 / 60) / 1000)

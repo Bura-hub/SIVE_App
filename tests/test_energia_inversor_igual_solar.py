@@ -4,7 +4,7 @@ que la generación de Indicadores Solares (institution_energy.energia_horaria) p
 (decisión del autor, oct-2026).
 
 Las dos salen de institution_energy.energia_inversor_hora_kwh: por hora de Bogotá, max(Σ P, 0)·Δt, con reposición
-de lecturas sueltas si la hora tiene 15–29 lecturas (C21) y «faltante = 0» con menos. Una hora sin lecturas aporta 0.
+de lecturas sueltas si la hora tiene 15–29 lecturas y «faltante = 0» con menos. Una hora sin lecturas aporta 0.
 """
 from datetime import date, timedelta
 
@@ -26,7 +26,7 @@ class EnergiaInversorIgualSolarTests(_Base):
         self.inst, devs = self._institucion(HUDN, 'HUDN')
         self.inv = devs[INSTITUCIONES[HUDN]['inversores_generacion'][0]]
         g = lambda dia, hora, w, n=30: self._serie(InverterMeasurement, self.inv, 'acPower', dia, hora, w, n=n)
-        # Día 1: horas completas, horas con 20 de 30 lecturas (C21 repone), con 10 (no repone) y noche con consumo.
+        # Día 1: horas completas, horas con 20 de 30 lecturas (se repone), con 10 (no repone) y noche con consumo.
         for hora in range(6, 18):
             n = 20 if hora in (9, 10) else 10 if hora in (6, 17) else 30
             g(DIAS[0], hora, 7000.0, n=n)

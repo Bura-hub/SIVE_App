@@ -3,8 +3,8 @@ El PR de la pantalla Inversores (InverterIndicators, tarea calculate_inverter_in
 Indicadores Solares (solar_kpis.calcular) para la misma planta y el mismo rango (decisión del autor, oct-2026).
 
 Las dos rutas usan institution_energy.dias_pr: estación válida (cobertura, tope físico y contraste con la estación
-de referencia, C22), inversor con lecturas en ≥ 80 % de las horas de sol (ee0d286) y energía horaria con reposición
-de lecturas sueltas en horas con ≥ 15 de 30 lecturas (C21).
+de referencia), inversor con lecturas en ≥ 80 % de las horas de sol (ee0d286) y energía horaria con reposición
+de lecturas sueltas en horas con ≥ 15 de 30 lecturas.
 """
 from datetime import date, timedelta
 
@@ -34,12 +34,12 @@ class PRInversorIgualSolarTests(_Base):
         for i, dia in enumerate(DIAS):
             for hora in range(6, 18):
                 self._serie(WeatherStationMeasurement, alvernia, 'irradiance', dia, hora, 500.0)
-                # Día 3: la estación del HUDN marca 300 W/m², −40 % frente a Alvernia (C22: no cuenta).
+                # Día 3: la estación del HUDN marca 300 W/m², −40 % frente a Alvernia: no cuenta.
                 self._serie(WeatherStationMeasurement, est, 'irradiance', dia, hora, 300.0 if i == 3 else 500.0)
         g = lambda dia, hora, w, n=30: self._serie(InverterMeasurement, self.inv, 'acPower', dia, hora, w, n=n)
         for hora in range(6, 18):
             g(DIAS[0], hora, 8000.0)                       # 96 kWh, día completo
-            g(DIAS[1], hora, 8000.0, n=20)                 # 20 de 30 lecturas por hora: C21 repone → 96 kWh
+            g(DIAS[1], hora, 8000.0, n=20)                 # 20 de 30 lecturas por hora: se repone → 96 kWh
             if hora < 15:
                 g(DIAS[2], hora, 8000.0)                   # 9 de 12 horas de sol (75 %): no cuenta
             g(DIAS[3], hora, 8000.0)                       # la estación no coincide con la referencia

@@ -2,7 +2,7 @@
 #
 # recalcular_historico.sh — Recalcula TODOS los indicadores guardados con las fórmulas vigentes, en un rango.
 #
-# Hace falta tras desplegar cambios de cálculo (p. ej. la corrección de octubre de 2026, C1–C16: la migración 0028
+# Hace falta tras desplegar cambios de cálculo (p. ej. la corrección de octubre de 2026: la migración 0028
 # deja en nulo el FP, la eficiencia y el PR del inversor guardados en la escala vieja). Todo es idempotente
 # (update_or_create); los comandos encolan tareas en Celery, así que el trabajo sigue en el worker después de que el
 # script termine: mírese `docker compose -f docker-compose.prod.yml logs -f celery_worker`.

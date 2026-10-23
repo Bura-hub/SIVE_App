@@ -1,5 +1,5 @@
 """
-Corrección de octubre de 2026 (C1–C4, D5–D7) en los indicadores de inversor.
+Corrección de octubre de 2026 en los indicadores de inversor.
 
 - avg_power_factor_pct -> avg_power_factor (escala 0–1, media de |FP|/100 mientras genera).
 - dc_ac_efficiency_pct, performance_ratio_pct, reference_energy_kwh, avg_irradiance_wm2,

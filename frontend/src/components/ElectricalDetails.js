@@ -118,7 +118,7 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
   const [transitionType, setTransitionType] = useState('info');
   const [transitionMessage, setTransitionMessage] = useState('');
   
-  // Filtros, datos y lógica de fetch: extraídos a useDeviceDetail (Ola 5).
+  // Filtros, datos y lógica de fetch: extraídos a useDeviceDetail.
   // (el hook se inicializa más abajo, tras definir showTransitionAnimation).
 
   // Estados de paginación

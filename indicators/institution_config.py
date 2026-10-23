@@ -2,18 +2,17 @@
 Configuración energética por institución: qué medidor da la demanda, de qué tipo es, qué inversor da la
 generación, capacidad FV, estación meteorológica y comercializador.
 
-Es la misma convención de la tesis (sistemabl, `preprocessing.py`) y del módulo de mercado P2P con blockchain
-(`mercado-p2p/motor_p2p/semillas/agentes.json`), para que SIVE, el Control Panel y el mercado den las mismas cifras.
-Ver docs/superpowers/specs/2026-10-10-correccion-ingesta-e-indicadores-design.md (decisiones D2, D4, D5 y D8).
+Es la misma convención del módulo de mercado P2P con blockchain (`mercado-p2p/motor_p2p/semillas/agentes.json`),
+para que SIVE, el Control Panel y el mercado den las mismas cifras. Ver indicators/indicators.md.
 
 Las claves son el `scada_id` del conector (UUID), que es estable; el `id` de Django no lo es entre instalaciones.
 
 - tipo_medidor:
     'gross'       el medidor mide la carga: D = max(0, P_M1)
     'net'         el medidor está en el punto de conexión y la FV queda aguas abajo: D = max(0, P_M1 + Σ inversores)
-    'net_partial' igual que 'net' (solo parte de la FV queda aguas abajo; la tesis lo reconstruye igual)
+    'net_partial' igual que 'net' (solo parte de la FV queda aguas abajo; se reconstruye igual)
 - inversores_generacion: inversores cuya suma es G. Un inversor solo cuenta hasta su fecha de retiro (exclusiva).
-- respaldo_generacion: antes de `desde`, G = inversor de respaldo × factor (CAL-44: el Inversor MTE de Udenar
+- respaldo_generacion: antes de `desde`, G = inversor de respaldo × factor (el Inversor MTE de Udenar
   existe desde el 2025-09-03; antes se escala el Fronius 1 por la razón de energías, k ≈ 1,2054, r = 0,997).
 - estacion_apta_pr: False si la estación no sirve para el PR (Udenar: 7–12 kWh/m²/día, físicamente imposible).
 - Validación cruzada del PR: un día de la estación de una institución solo cuenta si su irradiación queda a ±25 % de
@@ -24,7 +23,7 @@ Las claves son el `scada_id` del conector (UUID), que es estable; el `id` de Dja
 """
 from datetime import date
 
-KWP_POR_PLANTA = 17.55            # 30 módulos Jinko de 585 Wp (tesis H-67)
+KWP_POR_PLANTA = 17.55            # 30 módulos Jinko de 585 Wp
 DISENO_KWH_DIA = 59.4             # Informe Técnico 2: producción de diseño por sistema
 DISENO_IRRADIACION_KWH_M2_DIA = 4.5
 DISENO_PERDIDAS = 0.20

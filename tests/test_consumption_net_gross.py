@@ -1,6 +1,5 @@
 """
-Tests de la gráfica diaria del inicio (DailyChartData) con la convención de la tesis y del mercado P2P
-(diseño, C10 y D2):
+Tests de la gráfica diaria del inicio (DailyChartData) con la misma convención que el mercado P2P:
 
 - daily_consumption        = demanda D de los circuitos del Medidor 1 de cada institución. En medidores netos
                              (Mariana, UCC, Udenar) se reconstruye: D = max(0, P_M1 + FV aguas abajo).
@@ -8,7 +7,7 @@ Tests de la gráfica diaria del inicio (DailyChartData) con la convención de la
 - daily_generation         = generación del inversor de la institución.
 - daily_balance            = generación − demanda.
 
-Antes se sumaban todos los medidores de todas las sedes con su signo (C10).
+Antes se sumaban todos los medidores de todas las sedes con su signo.
 """
 from datetime import datetime, time, timedelta
 

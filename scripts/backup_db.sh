@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# backup_db.sh — Backup verificado de la BD de SIVE (Ola 0 del plan de remediación).
+# backup_db.sh — Backup verificado de la BD de SIVE.
 #
 # Corrige los defectos de los backups previos (auditoría): formato custom (pg_restore),
 # NO silencia stderr, ABORTA si el dump queda vacío, y aplica retención.

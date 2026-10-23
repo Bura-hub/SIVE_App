@@ -1,5 +1,5 @@
 """
-Iteración día-a-día / mes-a-mes de cálculos por dispositivo (Ola 5).
+Iteración día-a-día / mes-a-mes de cálculos por dispositivo.
 
 Colapsa los envoltorios `_calculate_{daily,monthly}_{electrical,inverter}_data`, que eran
 idénticos salvo la función de cálculo que invocaban. Reciben esa función como parámetro
