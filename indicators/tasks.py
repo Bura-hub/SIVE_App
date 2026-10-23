@@ -57,6 +57,7 @@ from indicators.services.inverter_calc import (  # noqa: E402
 )
 from indicators.institution_config import config_institucion, inversor_vigente  # noqa: E402
 from indicators.services.rows import _row_get  # noqa: E402,F401
+from indicators.services.formato import coma  # noqa: E402
 
 @shared_task(bind=True, retry_backoff=60, max_retries=3)
 @single_instance('calculate-monthly-kpi', ttl=1200)
@@ -2500,7 +2501,7 @@ def format_file_size(size_bytes):
         size_bytes /= 1024.0
         i += 1
     
-    return f"{size_bytes:.1f} {size_names[i]}"
+    return f"{coma(size_bytes, 1)} {size_names[i]}"
 
 
 def get_report_status(task_id, user_id=None):

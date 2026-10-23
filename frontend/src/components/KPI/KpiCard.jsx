@@ -1,6 +1,11 @@
 // KpiCard.jsx
 import React from 'react';
 
+// Cifras numéricas con coma decimal (es-CO); los textos ya formateados se muestran tal cual.
+const showValue = (value) => (typeof value === 'number'
+  ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(value)
+  : value);
+
 // Diccionario que asigna clases de color de texto según el estado del KPI
 const statusColors = {
   positivo: "text-emerald-600",
@@ -126,7 +131,7 @@ export const KpiCard = ({ title, value, unit, change, status, description, icon,
               ventana, hasta el tamaño normal (text-3xl), y la unidad pasa a la línea siguiente en vez de salirse */}
           <div className="flex flex-wrap items-baseline gap-x-2 min-w-0">
             <span className="text-[clamp(1.25rem,2.1vw,1.875rem)] leading-tight font-bold text-gray-900 group-hover:text-gray-800 transition-colors duration-300 min-w-0">
-              {value}
+              {showValue(value)}
             </span>
             {unit && (
               <span className="text-lg font-medium text-gray-500">

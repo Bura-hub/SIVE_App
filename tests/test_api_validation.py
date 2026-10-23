@@ -85,7 +85,7 @@ class KpiMetricsTests(TestCase):
         self.assertEqual(r['value'], "1.50")
         self.assertEqual(r['unit'], "MWh")
         self.assertEqual(r['status'], "positivo")  # +50%
-        self.assertIn("50.00%", r['change'])
+        self.assertIn("50,00%", r['change'])
 
     def test_balance_superavit_y_deficit(self):
         self.assertEqual(

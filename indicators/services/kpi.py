@@ -6,6 +6,7 @@ dict con el valor formateado, el cambio %, el estado y la descripción textual. 
 verbatim de ConsumptionSummaryView. Presentación pura: sin BD ni DRF.
 """
 from indicators.services.formatting import format_energy_value
+from indicators.services.formato import coma
 
 
 def summarize_inverter_status(scada_inverters):
@@ -78,17 +79,17 @@ def calculate_kpi_metrics(current_value, previous_value, title, base_unit_name, 
             status_text = "normal"
 
         if change_percentage > 0:
-            description_text += f" (+{change_percentage:.2f}%)"
+            description_text += f" (+{coma(change_percentage, 2)}%)"
         elif change_percentage < 0:
-            description_text += f" ({change_percentage:.2f}%)"
+            description_text += f" ({coma(change_percentage, 2)}%)"
     elif is_temperature:
         description_text = "Rango normal"
         status_text = "normal"
 
         if change_percentage > 0:
-            description_text += f" (+{change_percentage:.1f}%)"
+            description_text += f" (+{coma(change_percentage, 1)}%)"
         elif change_percentage < 0:
-            description_text += f" ({change_percentage:.1f}%)"
+            description_text += f" ({coma(change_percentage, 1)}%)"
     elif is_humidity:
         if 40 <= current_value <= 60:
             description_text = "Óptimo"
@@ -101,9 +102,9 @@ def calculate_kpi_metrics(current_value, previous_value, title, base_unit_name, 
             status_text = "critico"
 
         if change_percentage > 0:
-            description_text += f" (+{change_percentage:.1f}%)"
+            description_text += f" (+{coma(change_percentage, 1)}%)"
         elif change_percentage < 0:
-            description_text += f" ({change_percentage:.1f}%)"
+            description_text += f" ({coma(change_percentage, 1)}%)"
     elif is_wind_speed:
         if current_value < 10:
             description_text = "Bajo"
@@ -116,9 +117,9 @@ def calculate_kpi_metrics(current_value, previous_value, title, base_unit_name, 
             status_text = "critico"
 
         if change_percentage > 0:
-            description_text += f" (+{change_percentage:.1f}%)"
+            description_text += f" (+{coma(change_percentage, 1)}%)"
         elif change_percentage < 0:
-            description_text += f" ({change_percentage:.1f}%)"
+            description_text += f" ({coma(change_percentage, 1)}%)"
     elif is_irradiance:
         if current_value < 200:
             description_text = "Baja"
@@ -131,9 +132,9 @@ def calculate_kpi_metrics(current_value, previous_value, title, base_unit_name, 
             status_text = "optimo"
 
         if change_percentage > 0:
-            description_text += f" (+{change_percentage:.1f}%)"
+            description_text += f" (+{coma(change_percentage, 1)}%)"
         elif change_percentage < 0:
-            description_text += f" ({change_percentage:.1f}%)"
+            description_text += f" ({coma(change_percentage, 1)}%)"
 
     else:  # Para consumo y generación
         if change_percentage > 0:
@@ -143,9 +144,9 @@ def calculate_kpi_metrics(current_value, previous_value, title, base_unit_name, 
         else:
             status_text = "normal"
 
-        description_text = f"{'+' if change_percentage >= 0 else ''}{change_percentage:.2f}% vs mes pasado"
+        description_text = f"{'+' if change_percentage >= 0 else ''}{coma(change_percentage, 2)}% vs mes pasado"
 
-    change_text = f"{'+' if change_percentage >= 0 else ''}{change_percentage:.2f}% vs mes pasado"
+    change_text = f"{'+' if change_percentage >= 0 else ''}{coma(change_percentage, 2)}% vs mes pasado"
 
     return {
         "title": title,

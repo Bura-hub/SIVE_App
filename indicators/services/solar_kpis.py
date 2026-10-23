@@ -13,6 +13,7 @@ from indicators.institution_config import (
     ARBOLES_POR_TONELADA_CO2, DISENO_IRRADIACION_KWH_M2_DIA, DISENO_KWH_DIA, DISENO_PERDIDAS,
     FACTOR_CO2_KG_KWH, config_institucion,
 )
+from indicators.services.formato import coma
 from indicators.services.institution_energy import (
     HORA_FIN_DIA_SOLAR, HORA_INICIO_DIA_SOLAR, MUESTRAS_HORA, dias_pr, energia_diaria_para_pr, energia_horaria,
     irradiacion_diaria,
@@ -196,7 +197,7 @@ def _resumen(clave, acc, kwp, acumulada, cfg):
 
 def _supuestos(cfg):
     s = [
-        f'Capacidad instalada: {cfg["kwp"]} kWp (30 módulos de 585 Wp).',
+        f'Capacidad instalada: {coma(cfg["kwp"])} kWp (30 módulos de 585 Wp).',
         'Energía de cada hora = Σ potencia × 2 min. Si la hora tiene al menos 15 de sus 30 lecturas, las que faltan '
         'se reponen con la media de las presentes; con menos (amanecer, caídas de datos) no se repone nada. La '
         'disponibilidad y la cobertura de lecturas dicen cuánto falta.',
@@ -207,10 +208,10 @@ def _supuestos(cfg):
         MOTIVO_EFICIENCIA,
         f'Ahorro = energía autoconsumida × CU mensual de {cfg["comercializador"].upper()} (nivel de tensión 2, sin '
         'contribución). Los meses sin tarifa publicada usan la última disponible (marcados como extrapolados).',
-        f'CO₂ evitado = generación × {FACTOR_CO2_KG_KWH} kgCO₂/kWh (factor del SIN, UPME Res. 0705/2024); '
+        f'CO₂ evitado = generación × {coma(FACTOR_CO2_KG_KWH)} kgCO₂/kWh (factor del SIN, UPME Res. 0705/2024); '
         'árboles: 545 por cada 12 t (Informe Técnico 2).',
-        f'Producción esperada según el diseño: {DISENO_KWH_DIA} kWh/día por sistema '
-        f'({DISENO_IRRADIACION_KWH_M2_DIA} kWh/m²/día de irradiación y {int(DISENO_PERDIDAS * 100)} % de pérdidas; '
+        f'Producción esperada según el diseño: {coma(DISENO_KWH_DIA)} kWh/día por sistema '
+        f'({coma(DISENO_IRRADIACION_KWH_M2_DIA)} kWh/m²/día de irradiación y {int(DISENO_PERDIDAS * 100)} % de pérdidas; '
         'Informe Técnico 2). «Frente a lo esperado» = generación / producción esperada.',
     ]
     if cfg['tipo_medidor'] == 'gross':
