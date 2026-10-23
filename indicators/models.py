@@ -104,7 +104,7 @@ class ElectricMeterIndicators(models.Model):
     
     # 3.7. Distorsión Armónica Total (THD) y Demanda de Distorsión Total (TDD)
     max_voltage_thd_pct = models.FloatField(default=0.0, help_text="THD máximo de tensión en porcentaje.")
-    max_current_thd_pct = models.FloatField(default=0.0, help_text="THD máximo de corriente en porcentaje.")
+    max_current_thd_pct = models.FloatField(default=0.0, help_text="THD máximo de corriente en porcentaje, por fase y solo con fundamental estimada ≥ 1 A. Con generación FV detrás del medidor la fundamental neta es pequeña a mediodía y el THD supera a menudo el 100 %: es un valor real, no un error. Para la calidad de la corriente use el TDD (IEEE 519).")
     max_current_tdd_pct = models.FloatField(default=0.0, help_text="TDD máximo de corriente en porcentaje.")
     
     # Metadatos
@@ -369,7 +369,7 @@ class HourlyMeterIndicators(models.Model):
 
     # 3.7. Distorsión Armónica Total (THD) y Demanda de Distorsión Total (TDD) (de la hora)
     max_voltage_thd_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="THD máximo de tensión de la hora en porcentaje.")
-    max_current_thd_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="THD máximo de corriente de la hora en porcentaje.")
+    max_current_thd_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="THD máximo de corriente de la hora en porcentaje. Con generación FV detrás del medidor puede superar el 100 % a baja carga neta; para la calidad de la corriente use el TDD (IEEE 519).")
     max_current_tdd_pct = models.FloatField(default=0.0, null=True, blank=True, help_text="TDD máximo de corriente de la hora en porcentaje.")
 
     # Metadatos

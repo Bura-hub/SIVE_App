@@ -76,6 +76,11 @@ La energía de cada mes se guarda en caché (26 h para los meses cerrados, 10 mi
   corriente, por fase y solo si la fundamental estimada, I_rms / √(1 + (THD/100)²), llega a 1 A (`31edea7`): con FV detrás
   del medidor la fundamental neta cae casi a cero a mediodía y el THD se disparaba hasta 999,9 %. Aun así sigue por encima
   del 100 % a baja carga neta, por lo que el reporte «Calidad de Potencia» da el TDD (`80535b5`).
+  **Ese THD alto es real y se guarda tal cual** (decisión del autor, 22-oct-2026). Con FV detrás del medidor, la
+  fundamental neta es pequeña buena parte del día. En sep-2026, de 19 medidores con datos, superaban el 100 % el máximo
+  mensual de 15, el percentil 99 de 8, el percentil 95 (criterio de IEEE 519) de 6 y la mediana de 2. Un umbral relativo
+  (fundamental ≥ 20 % de la máxima del mes) dejaba 7. Ningún criterio razonable lo baja del 100 %: para la calidad de la
+  corriente se usa el TDD.
 - **«Todos» los medidores (C20).** La demanda media del conjunto es la suma de las medias; el pico, la suma de los
   picos de cada medidor (una cota superior, porque los picos no tienen por qué coincidir); el FC, Σ medias / Σ picos.
   Las energías se suman, el FP se promedia y los desbalances, THD y TDD toman el máximo.
