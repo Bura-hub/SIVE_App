@@ -122,10 +122,10 @@ export const KpiCard = ({ title, value, unit, change, status, description, icon,
 
         {/* Valor principal con animación */}
         <div className="mb-4">
-          {/* flex-wrap: en tarjetas estrechas (p. ej. a 1280 px con el menú lateral) la unidad pasa a la
-              línea siguiente en vez de salirse por el borde */}
+          {/* En tarjetas estrechas (de 1024 a 1280 px, con el menú lateral) la cifra se achica con el ancho de la
+              ventana, hasta el tamaño normal (text-3xl), y la unidad pasa a la línea siguiente en vez de salirse */}
           <div className="flex flex-wrap items-baseline gap-x-2 min-w-0">
-            <span className="text-3xl font-bold text-gray-900 group-hover:text-gray-800 transition-colors duration-300 break-words min-w-0">
+            <span className="text-[clamp(1.25rem,2.1vw,1.875rem)] leading-tight font-bold text-gray-900 group-hover:text-gray-800 transition-colors duration-300 min-w-0">
               {value}
             </span>
             {unit && (
