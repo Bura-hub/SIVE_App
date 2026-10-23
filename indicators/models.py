@@ -6,13 +6,13 @@ class MonthlyConsumptionKPI(models.Model):
     Solo debe haber una instancia de este modelo.
     """
     total_consumption_current_month = models.FloatField(default=0.0, help_text="Demanda D del mes en curso (del día 1 hasta el cálculo) en kWh: suma, por planta del proyecto, de la demanda del circuito del Medidor 1 (en medidores netos, medida + generación aguas abajo), solo en las horas con al menos 15 de 30 lecturas del medidor. Ver indicators/services/institution_energy.py.")
-    total_consumption_previous_month = models.FloatField(default=0.0, help_text="Demanda D del mes anterior en kWh, en la misma ventana transcurrida que el mes en curso (C11). Misma definición que total_consumption_current_month.")
+    total_consumption_previous_month = models.FloatField(default=0.0, help_text="Demanda D del mes anterior en kWh, en la misma ventana transcurrida que el mes en curso. Misma definición que total_consumption_current_month.")
 
     total_gross_consumption_current_month = models.FloatField(default=0.0, help_text="Energía tomada de la red en el mes en curso en kWh: demanda D menos el autoconsumo de la generación solar, por planta del proyecto y solo en las horas válidas del medidor.")
-    total_gross_consumption_previous_month = models.FloatField(default=0.0, help_text="Energía tomada de la red en el mes anterior en kWh, en la misma ventana transcurrida que el mes en curso (C11).")
+    total_gross_consumption_previous_month = models.FloatField(default=0.0, help_text="Energía tomada de la red en el mes anterior en kWh, en la misma ventana transcurrida que el mes en curso.")
 
     total_generation_current_month = models.FloatField(default=0.0, help_text="Generación G de las plantas del proyecto en el mes en curso en kWh (inversores de generación, con reposición de lecturas sueltas en horas con al menos 15 de 30 lecturas, C21).")
-    total_generation_previous_month = models.FloatField(default=0.0, help_text="Generación G de las plantas del proyecto en el mes anterior en kWh, en la misma ventana transcurrida que el mes en curso (C11).")
+    total_generation_previous_month = models.FloatField(default=0.0, help_text="Generación G de las plantas del proyecto en el mes anterior en kWh, en la misma ventana transcurrida que el mes en curso.")
 
     avg_instantaneous_power_current_month = models.FloatField(default=0.0, help_text="Potencia media de la flota en el mes en curso en W: generación G × 1000 / horas transcurridas (noches incluidas).")
     avg_instantaneous_power_previous_month = models.FloatField(default=0.0, help_text="Potencia media de la flota en el mes anterior en W, en la misma ventana transcurrida que el mes en curso.")

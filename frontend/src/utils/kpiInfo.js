@@ -32,7 +32,7 @@ export const DASHBOARD_KPI_INFO = {
   totalGeneration: {
     title: "Generación de las plantas FV",
     description: "Energía AC entregada en el mes por los inversores de las cinco plantas del proyecto (17,55 kWp cada una).",
-    calculation: "Σ acPower × 2 min / 1000 de cada inversor de planta, por hora. Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes (C21); con menos, una lectura que no llegó no suma. Udenar antes del 2025-09-03: Fronius 1 × 1,2054 (CAL-44).",
+    calculation: "Σ acPower × 2 min / 1000 de cada inversor de planta, por hora. Si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes; con menos, una lectura que no llegó no suma. Udenar antes del 2025-09-03: Fronius 1 × 1,2054 (CAL-44).",
     dataSource: "Inversores de las plantas (conector SCADA). No incluye equipos de prueba ni inversores retirados.",
     units: "kWh (se muestra en MWh según magnitud).",
     frequency: "Muestreo ~2 min; comparación con el mismo tiempo transcurrido del mes anterior.",
@@ -116,7 +116,7 @@ export const METER_KPI_INFO = {
   peakDemand: {
     title: "Demanda Pico",
     description: "Máxima potencia demandada (media de un bloque de 15 min) alcanzada en el rango seleccionado.",
-    calculation: "Máximo de peak_demand_kw sobre los registros del rango; peak_demand_kw es la mayor media de totalActivePower en bloques de reloj de 15 min (C18). Con «Todos» se suman los picos de cada medidor, una cota superior porque no ocurren a la vez (C20).",
+    calculation: "Máximo de peak_demand_kw sobre los registros del rango; peak_demand_kw es la mayor media de totalActivePower en bloques de reloj de 15 min. Con «Todos» se suman los picos de cada medidor, una cota superior porque no ocurren a la vez.",
     dataSource: "Medidores eléctricos del conector SCADA.",
     units: "kW.",
     frequency: "Muestreo ~2 min; máximo sobre el rango de fechas.",
@@ -125,7 +125,7 @@ export const METER_KPI_INFO = {
   loadFactor: {
     title: "Factor de Carga",
     description: "Uniformidad del uso de la capacidad instalada (relación entre demanda media y demanda pico) en el rango.",
-    calculation: "load_factor = (demanda media del rango / demanda pico del rango) × 100, acotado a [0,100]. Con «Todos»: Σ medias / Σ picos de los medidores (C20).",
+    calculation: "load_factor = (demanda media del rango / demanda pico del rango) × 100, acotado a [0,100]. Con «Todos»: Σ medias / Σ picos de los medidores.",
     dataSource: "Medidores eléctricos del conector SCADA.",
     units: "%.",
     frequency: "Muestreo ~2 min; calculado sobre el rango de fechas.",
@@ -134,7 +134,7 @@ export const METER_KPI_INFO = {
   powerFactor: {
     title: "Factor de Potencia",
     description: "Factor de potencia medio reportado por los medidores en el rango.",
-    calculation: "Promedio de |totalPowerFactor| de cada lectura (C19): el medidor lo reporta con signo según el sentido del flujo y promediar con signo cancelaba valores. No se recalcula P/S.",
+    calculation: "Promedio de |totalPowerFactor| de cada lectura: el medidor lo reporta con signo según el sentido del flujo y promediar con signo cancelaba valores. No se recalcula P/S.",
     dataSource: "Medidores eléctricos del conector SCADA.",
     units: "adimensional (0–1).",
     frequency: "Muestreo ~2 min; promedio sobre el rango de fechas.",
@@ -146,7 +146,7 @@ export const INVERTER_KPI_INFO = {
   totalGeneration: {
     title: "Generación Total",
     description: "Energía AC total generada por los inversores en el rango seleccionado.",
-    calculation: "Suma de total_generated_energy_kwh sobre los registros del rango. Por hora: Σ acPower × 2 min / 1000; si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes (C21); con menos, una lectura que no llegó no suma. Es la misma energía que la generación de Indicadores Solares.",
+    calculation: "Suma de total_generated_energy_kwh sobre los registros del rango. Por hora: Σ acPower × 2 min / 1000; si la hora tiene ≥ 15 de 30 lecturas, las que faltan se reponen con la media de las presentes; con menos, una lectura que no llegó no suma. Es la misma energía que la generación de Indicadores Solares.",
     dataSource: "Inversores solares del conector SCADA.",
     units: "MWh.",
     frequency: "Muestreo ~2 min; suma sobre el rango de fechas.",
@@ -182,7 +182,7 @@ export const INVERTER_KPI_INFO = {
   performanceRatio: {
     title: "Performance Ratio",
     description: "Relación entre la energía AC generada y la que daría la planta con la irradiación medida por la estación de la institución, sin pérdidas.",
-    calculation: "PR = Σ E_AC / Σ (H × kWp / 1 kW/m²) sobre los días válidos. H = Σ irradiancia de 06:00–18:00 (0–1400 W/m²) × 2/60 / 1000; un día es válido con ≥ 80 % de las muestras diurnas de la estación, H ≤ 8 kWh/m² y H a ±25 % de la estación de referencia (Alvernia) ese día; se descartan los meses cuya mediana estación/referencia se aparta más de ±10 % (C22). kWp = 17,55 por planta.",
+    calculation: "PR = Σ E_AC / Σ (H × kWp / 1 kW/m²) sobre los días válidos. H = Σ irradiancia de 06:00–18:00 (0–1400 W/m²) × 2/60 / 1000; un día es válido con ≥ 80 % de las muestras diurnas de la estación, H ≤ 8 kWh/m² y H a ±25 % de la estación de referencia (Alvernia) ese día; se descartan los meses cuya mediana estación/referencia se aparta más de ±10 %. kWp = 17,55 por planta.",
     dataSource: "Inversor de la planta y estación meteorológica de la misma institución (conector SCADA).",
     units: "%.",
     frequency: "Por día; el del rango pondera los días válidos.",
