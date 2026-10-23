@@ -391,9 +391,8 @@ Las contribuciones son bienvenidas:
 
 ## 📄 Licencia
 
-La licencia de SIVE está pendiente de definición por la Universidad de Nariño, titular del software en el marco
-del proyecto MTE. Mientras no haya un archivo `LICENSE` en el repositorio, no se otorga ninguna licencia de uso,
-modificación ni redistribución.
+SIVE es software con todos los derechos reservados a favor de la Universidad de Nariño, titular de los derechos
+patrimoniales. Sus autores son Brayan Stiven López-Méndez y Wilson Olmedo Achicanoy-Martínez. Ver [`LICENSE`](LICENSE).
 
 ## 🙏 Agradecimientos
 
