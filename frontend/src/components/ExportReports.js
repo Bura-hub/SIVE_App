@@ -11,6 +11,9 @@ const MAX_STATUS_CHECKS = 150;
 
 // Fila del historial actualizada con la respuesta de /api/reports/status/. El tamaño y los registros salen del
 // estado del reporte terminado (antes se ponían 0 registros y el tamaño del archivo descargado en MB, «0.0 MB»).
+// Tamaño con coma decimal: los reportes guardados antes conservan el texto con punto («1.5 KB»).
+export const displayFileSize = (size) => (size == null ? '' : String(size).replace(/(\d)\.(\d)/g, '$1,$2'));
+
 export function applyStatusToExport(exp, statusInfo) {
   switch (statusInfo.status) {
     case 'completed':
@@ -1071,7 +1074,7 @@ function ExportReports({ authToken, onLogout, username, isSuperuser, navigateTo,
                         </div>
                       </td>
                       <td className="px-3 lg:px-6 py-3 lg:py-4 whitespace-nowrap text-xs lg:text-sm text-gray-500">
-                        <div>{exportItem.fileSize}</div>
+                        <div>{displayFileSize(exportItem.fileSize)}</div>
                         <div>{exportItem.recordCount.toLocaleString('es-CO')} registros</div>
                       </td>
                       <td className="px-3 lg:px-6 py-3 lg:py-4 whitespace-nowrap text-xs lg:text-sm font-medium">

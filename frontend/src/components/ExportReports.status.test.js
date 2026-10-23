@@ -1,4 +1,4 @@
-import { applyStatusToExport } from './ExportReports';
+import { applyStatusToExport, displayFileSize } from './ExportReports';
 
 const fila = { id: 't-1', status: 'Pendiente', fileSize: 'Generando...', recordCount: 0 };
 
@@ -16,4 +16,12 @@ test('fallido: marca el error', () => {
 test('pendiente y en proceso se reflejan en la fila', () => {
   expect(applyStatusToExport(fila, { status: 'pending' }).status).toBe('Pendiente');
   expect(applyStatusToExport(fila, { status: 'processing' }).status).toBe('Procesando');
+});
+
+// Los reportes guardados antes de la coma decimal conservan «1.5 KB»: la tabla los muestra con coma.
+test('el tamaño de un reporte se muestra con coma decimal', () => {
+  expect(displayFileSize('1.5 KB')).toBe('1,5 KB');
+  expect(displayFileSize('411,3 KB')).toBe('411,3 KB');
+  expect(displayFileSize('Generando...')).toBe('Generando...');
+  expect(displayFileSize(undefined)).toBe('');
 });
