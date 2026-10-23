@@ -10,6 +10,7 @@ import { IconGauge, IconRefresh } from './icons';
 import { useDeviceDetail } from '../hooks/useDeviceDetail';
 import { METER_KPI_INFO } from '../utils/kpiInfo';
 import { powerFactorLevel, POWER_FACTOR_LABEL, POWER_FACTOR_DOT } from '../utils/powerFactor';
+import { scaleUnit, formatNumber } from '../utils/unitUtils';
 
 //###########################################################################
 // Importaciones Chart.js
@@ -423,24 +424,24 @@ function ElectricalDetails({ authToken, onLogout, username, isSuperuser, navigat
       setKpiData(prev => ({
         totalEnergyConsumed: {
           ...prev.totalEnergyConsumed,
-          value: totalEnergy.toFixed(2),
+          ...scaleUnit(totalEnergy, 'kWh'),
           change: `${results.length} registros`
         },
         peakDemand: {
           ...prev.peakDemand,
-          value: peakDemand.toFixed(2),
+          ...scaleUnit(peakDemand, 'kW'),
           // Fecha sin hora: se formatea en UTC para no mostrar el día anterior en hora de Colombia.
           change: (peakRow?.date ? `Máx. ${new Date(peakRow.date).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : 'Máximo del rango')
             + (peakRow?.peak_demand_is_sum_of_devices ? ' · suma de los picos de cada medidor' : '')
         },
         loadFactor: {
           ...prev.loadFactor,
-          value: loadFactor.toFixed(1),
+          value: formatNumber(loadFactor, 1),
           change: loadFactor > 80 ? 'Excelente' : loadFactor > 60 ? 'Bueno' : 'Mejorable'
         },
         powerFactor: {
           ...prev.powerFactor,
-          value: avgPowerFactor.toFixed(2),
+          value: formatNumber(avgPowerFactor, 2),
           change: POWER_FACTOR_LABEL[powerFactorLevel(avgPowerFactor)]
         }
       }));

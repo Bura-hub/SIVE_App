@@ -12,7 +12,7 @@ describe('WeatherStationDetails, valores no disponibles', () => {
   it('null se muestra «No disponible», un 0 medido se muestra 0', () => {
     expect(fmtOrNA(null, 2)).toBe('No disponible');
     expect(fmtOrNA(undefined, 1)).toBe('No disponible');
-    expect(fmtOrNA(0, 2)).toBe('0.00');
+    expect(fmtOrNA(0, 2)).toBe('0,00');
     expect(valueOrNull(null)).toBeNull();
     expect(valueOrNull(3.5)).toBe(3.5);
   });

@@ -11,6 +11,7 @@ import { buildAxisLabel, formatAPIDateLabel } from '../utils/dateUtils';
 import { INVERTER_KPI_INFO } from '../utils/kpiInfo';
 import { IconInverter, IconScale, IconActivity, IconWaveform, IconRefresh } from './icons';
 import { powerFactorLevel, POWER_FACTOR_DOT } from '../utils/powerFactor';
+import { scaleUnit, formatNumber } from '../utils/unitUtils';
 
 //###########################################################################
 // Importaciones Chart.js
@@ -344,8 +345,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
     return {
       totalGeneration: { 
         title: "Generación Total", 
-        value: totalGenerationMWh.toFixed(1), 
-        unit: "MWh", 
+        ...scaleUnit(totalGenerationMWh * 1000, 'kWh', 1),
         change: getChangeText(totalGenerationMWh, " MWh"), 
         status: getStatus(totalGenerationMWh, { excellent: 10, good: 5, warning: 1 }), 
         icon: generationIcon,
@@ -362,8 +362,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       },
       maxPower: {
         title: "Potencia Máxima",
-        value: maxPowerKW === null ? NA : maxPowerKW.toFixed(1),
-        unit: maxPowerKW === null ? "" : "kW",
+        ...(maxPowerKW === null ? { value: NA, unit: "" } : scaleUnit(maxPowerKW, 'kW', 1)),
         change: maxPowerKW ? `${maxPowerKW.toFixed(1)} kW` : "Sin datos",
         status: maxPowerKW ? "positivo" : "normal",
         icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -376,7 +375,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       },
       performanceRatio: {
         title: "Performance Ratio",
-        value: summary.performanceRatioPct === null ? NA : summary.performanceRatioPct.toFixed(1),
+        value: summary.performanceRatioPct === null ? NA : formatNumber(summary.performanceRatioPct, 1),
         unit: summary.performanceRatioPct === null ? "" : "%",
         change: summary.performanceRatioPct === null
           ? summary.prNote
@@ -397,7 +396,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       },
       powerFactor: {
         title: "Factor de Potencia",
-        value: averagePowerFactor === null ? NA : averagePowerFactor.toFixed(3),
+        value: averagePowerFactor === null ? NA : formatNumber(averagePowerFactor, 3),
         unit: "",
         change: averagePowerFactor === null
           ? "No disponible: sin muestras con el inversor generando"
@@ -409,7 +408,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       },
       phaseUnbalance: {
         title: "Desbalance de Fases",
-        value: averagePhaseUnbalance === null ? NA : averagePhaseUnbalance.toFixed(1),
+        value: averagePhaseUnbalance === null ? NA : formatNumber(averagePhaseUnbalance, 1),
         unit: averagePhaseUnbalance === null ? "" : "%",
         change: averagePhaseUnbalance === null ? "Sin datos" : getChangeText(averagePhaseUnbalance, "%"),
         status: averagePhaseUnbalance === null ? "normal"
@@ -419,11 +418,11 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       },
       avgFrequency: {
         title: "Frecuencia Promedio",
-        value: averageFrequency === null ? NA : averageFrequency.toFixed(2),
+        value: averageFrequency === null ? NA : formatNumber(averageFrequency, 2),
         unit: averageFrequency === null ? "" : "Hz",
         change: averageFrequency === null
           ? "No disponible: sin muestras con el inversor generando"
-          : `Δ ${(averageFrequency - 60).toFixed(2)} Hz vs 60 (mientras genera)`,
+          : `Δ ${formatNumber(averageFrequency - 60, 2)} Hz vs 60 (mientras genera)`,
         status: averageFrequency === null ? "normal"
           : getStatus(Math.abs(averageFrequency - 60), { excellent: 0.1, good: 0.5, warning: 1 }, true), // Invertir lógica para frecuencia
         icon: <IconActivity size={24} />,
@@ -431,7 +430,7 @@ function InverterDetails({ authToken, onLogout, username, isSuperuser, navigateT
       },
       currentUnbalance: {
         title: "Desbalance de Corriente",
-        value: maxCurrentUnbalance === null ? NA : maxCurrentUnbalance.toFixed(1),
+        value: maxCurrentUnbalance === null ? NA : formatNumber(maxCurrentUnbalance, 1),
         unit: maxCurrentUnbalance === null ? "" : "%",
         change: maxCurrentUnbalance === null ? "Sin datos" : getChangeText(maxCurrentUnbalance, "%"),
         status: maxCurrentUnbalance === null ? "normal"

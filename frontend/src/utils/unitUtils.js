@@ -109,3 +109,33 @@ export const defaultThresholds = {
     error: 0.8
   }
 };
+
+/**
+ * Número con coma decimal (es-CO) y una cantidad fija de decimales.
+ */
+export const formatNumber = (value, decimals = 2) =>
+  new Intl.NumberFormat('es-CO', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    .format(Number(value) || 0);
+
+// Escalas por unidad base: se sube de prefijo mientras la cifra llegue a 1000.
+const UNIT_SCALES = {
+  kWh: ['kWh', 'MWh', 'GWh'],
+  kW: ['kW', 'MW', 'GW'],
+};
+
+/**
+ * Valor y unidad para una tarjeta: la unidad sube de prefijo (kWh → MWh → GWh, kW → MW → GW) para que la cifra
+ * quede por debajo de 1000, con coma decimal. Las unidades sin escala se devuelven tal cual, solo formateadas.
+ * @returns {{value: string, unit: string}}
+ */
+export const scaleUnit = (value, unit, decimals = 2) => {
+  let v = Number(value) || 0;
+  const scale = UNIT_SCALES[unit];
+  if (!scale) return { value: formatNumber(v, decimals), unit };
+  let i = 0;
+  while (Math.abs(v) >= 1000 && i < scale.length - 1) {
+    v /= 1000;
+    i += 1;
+  }
+  return { value: formatNumber(v, decimals), unit: scale[i] };
+};

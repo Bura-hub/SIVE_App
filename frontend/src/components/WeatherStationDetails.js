@@ -12,6 +12,7 @@ import { IconCloudSun, IconRefresh, IconSun, IconWind, IconDroplets } from './ic
 
 // Importaciones desde Chart.js y el plugin de zoom
 import { Chart as ChartJS } from 'chart.js';
+import { formatNumber } from '../utils/unitUtils';
 
 // Configuración de gráficos
 const CHART_OPTIONS = {
@@ -198,7 +199,7 @@ const calculateTheoreticalPVPower = (irradiance, temperature = 25) => {
 // Corrección de octubre de 2026: un valor null del backend es un dato que no se midió y se
 // muestra «No disponible»; nunca se convierte en 0.
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-export const fmtOrNA = (v, digits) => (isNum(v) ? v.toFixed(digits) : 'No disponible');
+export const fmtOrNA = (v, digits) => (isNum(v) ? formatNumber(v, digits) : 'No disponible');
 export const valueOrNull = (v) => (isNum(v) ? v : null);
 
 // Potencia FV teórica de una fila. Diario/mensual: `theoretical_pv_power_w` del backend
@@ -376,7 +377,7 @@ function WeatherStationDetails({ authToken, onLogout, username, isSuperuser, nav
         title: "Irradiancia Acumulada",
         value: fmtOrNA(latestData.daily_irradiance_kwh_m2, 2),
         unit: isNum(latestData.daily_irradiance_kwh_m2) ? "kWh/m²" : "",
-        change: isNum(latestData.daily_hsp_hours) ? `≈ ${latestData.daily_hsp_hours.toFixed(1)} HSP` : "Sin irradiancia válida",
+        change: isNum(latestData.daily_hsp_hours) ? `≈ ${formatNumber(latestData.daily_hsp_hours, 1)} HSP` : "Sin irradiancia válida",
         status: "normal",
         icon: initialKpiData.irradiance.icon,
         color: initialKpiData.irradiance.color
