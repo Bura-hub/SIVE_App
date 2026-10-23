@@ -213,7 +213,8 @@ function Wait-Healthy {
 function Invoke-DeployServices {
     Write-LogInfo "Deploying services..."
     try {
-        Invoke-Compose up -d db redis
+        # --no-recreate: no recrea postgres ni redis aunque el pull traiga una imagen nueva.
+        Invoke-Compose up -d --no-recreate db redis
         Write-LogInfo "Starting backend (runs migrate and collectstatic on start)..."
         Invoke-Compose up -d --no-deps backend
     }
@@ -307,7 +308,8 @@ function Invoke-Rollback {
 # Cleanup: solo imágenes colgantes (las etiquetadas antes-* se conservan para el rollback)
 function Invoke-Cleanup {
     Write-LogInfo "Cleaning up dangling Docker images..."
-    & docker image prune -f | Out-Null
+    # Solo las del proyecto: un prune sin filtro borraría también las de otros proyectos.
+    & docker image prune -f --filter "label=com.docker.compose.project=$PROJECT_NAME" | Out-Null
     if ($LASTEXITCODE -eq 0) { Write-LogSuccess "Cleanup completed" } else { Write-LogWarning "Cleanup failed" }
 }
 

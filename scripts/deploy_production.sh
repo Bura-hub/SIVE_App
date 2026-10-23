@@ -208,7 +208,9 @@ wait_healthy() {
 deploy_services() {
     log_info "Deploying services..."
 
-    if ! dc up -d db redis; then
+    # --no-recreate: si el pull trajo una imagen nueva de postgres o redis, no se recrean (no se reinicia la base
+    # en un despliegue de la aplicación); solo se arrancan si estaban detenidos.
+    if ! dc up -d --no-recreate db redis; then
         log_error "Failed to start database and Redis"
         exit 1
     fi
@@ -324,7 +326,8 @@ post_deployment() {
 # Cleanup: solo imágenes colgantes (las etiquetadas antes-* se conservan para el rollback)
 cleanup() {
     log_info "Cleaning up dangling Docker images..."
-    if docker image prune -f; then
+    # Solo las del proyecto: un prune sin filtro borraría también las de otros proyectos del servidor.
+    if docker image prune -f --filter "label=com.docker.compose.project=$PROJECT_NAME"; then
         log_success "Cleanup completed"
     else
         log_warning "Cleanup failed"
