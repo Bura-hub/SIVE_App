@@ -11,9 +11,9 @@
 **Comandos disponibles:**
 - `deploy` - Despliegue completo en producción
 - `health` - Verificar salud de servicios
-- `backup` - Crear backup de la base de datos
+- `backup` - Respaldo verificado de la base (`manual_sive_db_*.dump`), del volumen de media y etiqueta `antes-<marca>` de las imágenes
 - `ssl` - Crear certificados SSL
-- `rollback` - Rollback a versión anterior
+- `rollback` - Volver a las imágenes del último despliegue (`backups/ultimo_despliegue.txt`); con `-ConBase` (`--con-base` en Bash), además restaura la base con `pg_restore`
 - `help` - Mostrar ayuda
 
 **Características:**
@@ -63,8 +63,8 @@ chmod +x scripts/deploy_production.sh
 **Comandos disponibles:**
 - `deploy` - Despliegue completo en producción
 - `health` - Verificar salud de servicios
-- `backup` - Crear backup de la base de datos
-- `rollback` - Rollback a versión anterior
+- `backup` - Respaldo verificado de la base (`manual_sive_db_*.dump`), del volumen de media y etiqueta `antes-<marca>` de las imágenes
+- `rollback` - Volver a las imágenes del último despliegue (`backups/ultimo_despliegue.txt`); con `-ConBase` (`--con-base` en Bash), además restaura la base con `pg_restore`
 
 **Características:**
 - ✅ Script completo con todas las funcionalidades
