@@ -84,3 +84,20 @@ test('el bloqueo se levanta solo al vencer, sin recargar la página', () => {
     localStorage.removeItem('loginBlockUntil');
   }
 });
+
+test('el aviso de bloqueo no termina con dos puntos seguidos («p. m..»)', async () => {
+  const hasta = new Date(Date.now() + 30 * 60 * 1000);
+  global.fetch = respuestaLogin(401, { error: 'Credenciales inválidas', locked_until: hasta.toISOString() });
+  try {
+    render(<LoginPage onLoginSuccess={() => {}} />);
+    await intentarLogin();
+    const aviso = await screen.findByText(/quedó bloqueada hasta las/);
+    expect(aviso.textContent).not.toMatch(/\.\./);
+    await intentarLogin();
+    const otro = await screen.findByText(/Intenta de nuevo en/);
+    expect(otro.textContent).not.toMatch(/\.\./);
+  } finally {
+    localStorage.removeItem('loginFailedAttempts');
+    localStorage.removeItem('loginBlockUntil');
+  }
+});

@@ -15,6 +15,8 @@ export const PASSWORD_RECOVERY_MESSAGE =
 // reason (opcional): por qué se pidió iniciar sesión (p. ej. «para exportar reportes»).
 // Hora de desbloqueo en español y sin segundos («10:08 p. m.»).
 const formatHour = (date) => date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+// Cierra una frase con punto sin duplicarlo cuando la hora ya termina en «m.»
+const withPeriod = (text) => (text.endsWith('.') ? text : `${text}.`);
 
 function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
     const [username, setUsername] = useState('');
@@ -348,7 +350,7 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
         if (isBlocked && blockUntil) {
             const minutes = Math.max(1, Math.ceil((blockUntil.getTime() - Date.now()) / 60000));
             setMessage({
-                text: `Tu cuenta está bloqueada hasta las ${formatHour(blockUntil)}. Intenta de nuevo en ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}.`,
+                text: `${withPeriod(`Tu cuenta está bloqueada hasta las ${formatHour(blockUntil)}`)} Intenta de nuevo en ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}.`,
                 type: 'error'
             });
             return;
@@ -427,11 +429,11 @@ function LoginPage({ onLoginSuccess, onContinueAsGuest = null, reason = '' }) {
                 errorMessage = 'Usuario o contraseña incorrectos.';
                 shouldIncrementAttempts = true;
                 if (error.lockedUntil) {
-                    errorMessage = `Usuario o contraseña incorrectos. Tu cuenta quedó bloqueada hasta las ${formatHour(new Date(error.lockedUntil))}.`;
+                    errorMessage = withPeriod(`Usuario o contraseña incorrectos. Tu cuenta quedó bloqueada hasta las ${formatHour(new Date(error.lockedUntil))}`);
                 }
             } else if (status === 423 || serverMsg.includes('bloqueada')) {
                 errorMessage = error.lockedUntil
-                    ? `Tu cuenta está bloqueada hasta las ${formatHour(new Date(error.lockedUntil))}.`
+                    ? withPeriod(`Tu cuenta está bloqueada hasta las ${formatHour(new Date(error.lockedUntil))}`)
                     : 'Tu cuenta está temporalmente bloqueada. Intenta más tarde.';
             } else if (serverMsg.includes('Cambio de contraseña')) {
                 errorMessage = 'Debes cambiar tu contraseña antes de continuar.';
