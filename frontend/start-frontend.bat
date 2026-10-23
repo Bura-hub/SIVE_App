@@ -1,10 +1,8 @@
 @echo off
-echo Configurando variables de entorno para MTE SIVE...
-set REACT_APP_API_URL=http://192.168.1.25:3504
-set REACT_APP_FRONTEND_URL=http://192.168.1.25:3503
-echo Variables configuradas:
-echo REACT_APP_API_URL=%REACT_APP_API_URL%
-echo REACT_APP_FRONTEND_URL=%REACT_APP_FRONTEND_URL%
+rem Servidor de desarrollo del frontend (Vite). VITE_API_URL es la URL base del backend.
+echo Configurando variables de entorno para SIVE...
+set VITE_API_URL=http://localhost:3504
+echo VITE_API_URL=%VITE_API_URL%
 echo.
 echo Iniciando servidor de desarrollo...
-npm start
+npm run dev

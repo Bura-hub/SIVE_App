@@ -15,8 +15,8 @@ npm run build                                  # compilación de producción en 
 ```
 
 `VITE_API_URL` es la URL base de la API (`src/config.js`). Vite la escribe en el JavaScript al compilar. Vacía, el
-frontend llama a la API en su mismo origen. `start-frontend.bat` fija `REACT_APP_API_URL`, que Vite no lee, así que no
-sirve para este propósito.
+frontend llama a la API en su mismo origen. En Windows, `start-frontend.bat` la fija en `http://localhost:3504` y arranca
+el servidor de desarrollo.
 
 ## Imagen de producción
 

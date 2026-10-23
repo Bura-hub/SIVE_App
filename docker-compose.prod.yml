@@ -119,7 +119,7 @@ services:
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
-      # Subpath HTTPS detrás de Apache (DEPLOY_SIVE_SUBPATH.md); vacíos/False = raíz
+      # Subpath HTTPS detrás de Apache (DEPLOYMENT_PRODUCTION.md); vacíos/False = raíz
       - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
       - STATIC_URL=${STATIC_URL:-static/}
       - USE_X_FORWARDED_HOST=${USE_X_FORWARDED_HOST:-False}
